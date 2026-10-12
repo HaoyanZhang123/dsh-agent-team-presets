@@ -4,8 +4,14 @@
 
 English | [中文](README.zh.md)
 
-> **Status: community plugin v0.1.3.** Install the pinned release with
-> `dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.3`.
+> **Status: community plugin v0.1.3**, published to npm as
+> [`dsh-agent-team-presets`](https://www.npmjs.com/package/dsh-agent-team-presets).
+> Install it with `dsh plugin --profile <profile> add dsh-agent-team-presets`, or
+> from GitHub unpinned with `... add github:bloodarea/dsh-agent-team-presets` —
+> those are the two forms the plugin market can offer updates for; to reproduce one
+> exact release, pin the ref with `#v0.1.3` instead, and note that a pinned install
+> is compared only against that same ref, so the market never offers an update for
+> it, by design.
 > The supported Harness peer range is `>=0.2.0-rc.1 <0.3.0`, checked by the plugin
 > manager; the Harness version is not this plugin's version. Plugin details for
 > `dsh-agent-team-presets` should show `v0.1.3`. A card naming
@@ -85,14 +91,34 @@ Install the bundle into a profile that already composes `@deepseek-ai/dsh-experi
 
 ### Install, upgrade, and verify the version
 
+From npm — the form with the cleanest update semantics, because the market
+compares the registry's `latest` tag against the installed version:
+
+```sh
+dsh plugin --profile <profile> add dsh-agent-team-presets
+```
+
+From GitHub, unpinned — updates then follow this repository's own `package.json`
+version: the market compares that version against the installed one, so a release
+is advertised when the version moves, and a commit that does not bump it is not
+offered:
+
+```sh
+dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets
+```
+
+To reproduce one exact release, pin the ref instead — and note that a pinned
+install is compared only against that same ref, so the market never offers an
+update for it, by design:
+
 ```sh
 dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.3
 ```
 
 Replace `<profile>` with the profile the GUI actually runs (for example, `web`).
-Releases do not update installed plugins automatically: back up the profile and
-its Team configuration, remove the installed package, then install the pinned
-release into the same profile. If the old package is the development link, remove
+To move a profile from the development link to this release by hand, back up the
+profile and its Team configuration, remove the installed package, then install
+this one into the same profile. If the old package is the development link, remove
 `@deepseek-ai/dsh-experimental-agent-team-presets`, not `dsh-agent-team-presets`.
 Do not enable both packages: they own the same `agent-team-presets` settings and
 client registrations. When migrating a development profile, keep the Team

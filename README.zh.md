@@ -4,8 +4,12 @@
 
 [English](README.md) | 中文
 
-> **状态：社区插件 v0.1.3。** 固定版本安装：
-> `dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.3`。
+> **状态：社区插件 v0.1.3**，已发布到 npm：
+> [`dsh-agent-team-presets`](https://www.npmjs.com/package/dsh-agent-team-presets)。
+> 安装：`dsh plugin --profile <profile> add dsh-agent-team-presets`，或从 GitHub
+> 浮动安装 `... add github:bloodarea/dsh-agent-team-presets` —— 只有这两种形式，
+> 插件市场才能提示更新；要复现某个确切版本，才用 `#v0.1.3` 固定 ref，并注意：
+> 带 ref 的安装只与同一个 ref 比对，市场因此永远不会为它提示更新（设计如此）。
 > 支持的 Harness peer 范围为 `>=0.2.0-rc.1 <0.3.0`，由插件管理器校验；Harness 版本不是本插件版本。
 > 包名为 `dsh-agent-team-presets` 的插件详情应显示 `v0.1.3`。
 > 若卡片显示 `@deepseek-ai/dsh-experimental-agent-team-presets`，加载的是 monorepo 开发包，
@@ -83,14 +87,31 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力，但�
 
 ### 安装、升级与版本确认
 
+从 npm 安装 —— 更新语义最干净的一种，市场直接拿 registry 的 `latest` 与已装版本比 semver：
+
+```sh
+dsh plugin --profile <profile> add dsh-agent-team-presets
+```
+
+从 GitHub 浮动安装 —— 更新跟随本仓自己的版本号（市场读仓库 `package.json`）：
+只有版本号变动才会被提示，只推 commit 不 bump 版本不会被提示：
+
+```sh
+dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets
+```
+
+要复现某个确切版本，才固定 ref，并注意：带 ref 的安装只与同一个 ref 比对，
+市场因此永远不会为它提示更新（设计如此）：
+
 ```sh
 dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.3
 ```
 
-把 `<profile>` 替换为 GUI 实际运行的 profile（例如 `web`）。发布新版不会自动更新已安装插件：
-先备份 profile 与团队配置，再移除已安装包，并在同一 profile 安装固定版本。
-若旧包是开发链接，应移除 `@deepseek-ai/dsh-experimental-agent-team-presets`，
-而不是 `dsh-agent-team-presets`。不要同时启用两个包：它们共享 `agent-team-presets`
+把 `<profile>` 替换为 GUI 实际运行的 profile（例如 `web`）。
+手工把 profile 从开发链接迁移到本发布版：先备份 profile 与团队配置，再移除已安装包，
+然后在同一 profile 安装本包。若旧包是开发链接，应移除
+`@deepseek-ai/dsh-experimental-agent-team-presets`，而不是 `dsh-agent-team-presets`。
+不要同时启用两个包：它们共享 `agent-team-presets`
 设置入口与客户端注册。迁移开发 profile 时，保留该入口 id 下的团队配置和会话选择记录，
 将模块名与启用的 bundle 改为 `dsh-agent-team-presets`。
 
