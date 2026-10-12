@@ -4,6 +4,8 @@
 
 [English](README.md) | 中文
 
+<!-- 维护者注意：本区块与下方固定 tag 的安装命令都写死了版本号，
+     每次发版请与 package.json 一起同步。 -->
 > **状态：社区插件 v0.1.3**，已发布到 npm：
 > [`dsh-agent-team-presets`](https://www.npmjs.com/package/dsh-agent-team-presets)。
 > 安装：`dsh plugin --profile <profile> add dsh-agent-team-presets`，或从 GitHub

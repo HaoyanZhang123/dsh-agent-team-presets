@@ -4,6 +4,8 @@
 
 English | [中文](README.zh.md)
 
+<!-- Maintainers: this block and the pinned `#vX.Y.Z` install command further down both
+     hardcode the release version — bump them together with package.json on every release. -->
 > **Status: community plugin v0.1.3**, published to npm as
 > [`dsh-agent-team-presets`](https://www.npmjs.com/package/dsh-agent-team-presets).
 > Install it with `dsh plugin --profile <profile> add dsh-agent-team-presets`, or
