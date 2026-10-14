@@ -60,7 +60,7 @@ describe('captain tool permissions', () => {
             .mockReturnValueOnce(disposeBriefing),
           getSectionOrder: () => 0,
         },
-        tools: { restrict },
+        tools: { restrict, guard: () => () => {}, presentAs: () => () => {}, get: () => undefined },
       },
     })
     expect(() => applyTeamToAgent(new Context(), agent, preset(['removed']), { fresh: 'fresh', fork: 'fork' }))
@@ -117,7 +117,7 @@ describe('captain tool permissions', () => {
       expect(options.toolFilter).toEqual({ allow: [] })
       return { member: { name: 'reviewer', status: 'inactive' } }
     })
-    ctx.provide('agentTeams', { spawnTeammate })
+    ctx.provide('agentTeams', { spawnTeammate, listMembers: () => [] })
     const memberTool = fixtureTool('member-only-global-tool', () => 'unexpected')
     const agent = { id: 'captain-with-member-tool' } as Agent
     let scope!: Scope
@@ -127,7 +127,7 @@ describe('captain tool permissions', () => {
     ))
     scope.ctx.tools.register(memberTool)
     Object.assign(agent, { ctx: scope.ctx })
-    const application = applyTeamToAgent(ctx, agent, preset([], 'custom', [member([])]), { fresh: 'fresh', fork: 'fork' })
+    const application = applyTeamToAgent(ctx, agent, preset(['spawn_team_member'], 'custom', [member([])]), { fresh: 'fresh', fork: 'fork' })
     expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain('member-only-global-tool')
     const result = await execute(ctx, agent, 'spawn_team_member', { member: 'reviewer', task: 'review' })
     expect(result.isError).toBe(false)

@@ -327,6 +327,7 @@ export function captainFromTransfer(slot: TeamSlotTransfer): TeamCaptainPreset {
 export function memberFromTransfer(slot: TeamSlotTransfer): TeamAgentPreset {
   return {
     ...captainFromTransfer(slot),
+    id: crypto.randomUUID(),
     provider: '',
     model: '',
     reasoningEffort: '',

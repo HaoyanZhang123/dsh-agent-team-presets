@@ -16,7 +16,7 @@ import {
   emptyCaptainPreset,
   sameTeam,
 } from '../src/client/team-presets-controller.ts'
-import { executionStateOf } from '../src/client/team-presets-controller.ts'
+import { executionStateOf, unnamedTeamsOf } from '../src/client/team-presets-controller.ts'
 import type { ExternalUpdateNotice, TeamPresetImportPlan } from '../src/client/team-presets-controller.ts'
 import { EXECUTION_NOTICE_KEYS, en, zh } from '../src/client/locales.ts'
 import { serializeTeamPreset } from '../src/preset-transfer.ts'
@@ -56,7 +56,12 @@ const CATALOG: ModelCatalog = {
   }],
 }
 
-const TOOLS: readonly ToolChoice[] = [{ name: 'read', description: 'Read a file' }]
+const TOOLS: readonly ToolChoice[] = [
+  { name: 'read', description: 'Read a file' },
+  // The role restriction must survive the controller's projection, or a member
+  // page offers captain-only tools as freely grantable.
+  { name: 'interrupt_agent', description: 'Stop a teammate', captainOnly: true },
+]
 
 /**
  * One catalogue carrying the supplied provider groups and provider failures.
@@ -272,7 +277,7 @@ describe('Team preset identity helpers', () => {
     expect(emptyCaptainPreset()).toEqual({
       name: '', color: '', description: '', toolMode: 'all', tools: [], systemPrompt: '',
     })
-    expect(emptyAgentPreset()).toEqual({ ...emptyCaptainPreset(), provider: '', model: '', reasoningEffort: '' })
+    expect(emptyAgentPreset()).toEqual({ ...emptyCaptainPreset(), id: expect.any(String), provider: '', model: '', reasoningEffort: '' })
   })
 
   it('compares stored and staged Teams by their serialized form', () => {
@@ -1217,7 +1222,7 @@ describe('the injected business face', () => {
     const op = form.mutations[0]?.ops[0]
     expect(op).toMatchObject({ op: 'set', path: ['teams'] })
     const written = JSON.stringify(op)
-    expect(written).toContain('"members":[{"name":"reviewer","color":"","description":"","provider":"deepseek"')
+    expect(op).toMatchObject({ value: [{ members: [{ id: expect.any(String), name: 'reviewer', provider: 'deepseek' }] }] })
     expect(written).toContain('"model":"deepseek-chat","reasoningEffort":"high","toolMode":"custom"')
     // A captain leads on the Session's own model, so its stored record carries
     // only the slot fields and never restates a route.
@@ -1564,5 +1569,33 @@ describe('teamAppearance', () => {
 
   it('resolves nothing for another Session', () => {
     expect(teamAppearance([colored()], [selection('team-1')], 's2')).toBeUndefined()
+  })
+})
+
+describe('refusing to save an unnamed Team', () => {
+  it('finds no offender while every Team is named', () => {
+    expect(unnamedTeamsOf([preset(), { ...preset(), id: 'team-2', name: 'Other' }])).toEqual([])
+  })
+
+  it('reports an empty name, because the UI would otherwise show the raw id', () => {
+    const unnamed = { ...preset(), id: 'team-2', name: '' }
+    expect(unnamedTeamsOf([preset(), unnamed])).toEqual([unnamed])
+  })
+
+  it('treats a whitespace-only name as unnamed, matching what the field renders', () => {
+    const blank = { ...preset(), id: 'team-3', name: '   ' }
+    expect(unnamedTeamsOf([blank])).toEqual([blank])
+  })
+
+  it('keeps page order so the footer names every offender in the order it shows them', () => {
+    const first = { ...preset(), id: 'team-1', name: '' }
+    const second = { ...preset(), id: 'team-2', name: '   ' }
+    const named = { ...preset(), id: 'team-3', name: 'Team' }
+    expect(unnamedTeamsOf([first, named, second]).map(team => team.id)).toEqual(['team-1', 'team-2'])
+  })
+
+  it('carries a placeholder the footer can fill with the offenders', () => {
+    expect(en.teamNameRequired).toContain('{teams}')
+    expect(zh.teamNameRequired).toContain('{teams}')
   })
 })

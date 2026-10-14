@@ -165,4 +165,3 @@ export type TeamPresetImportConflicts = {
  * @returns the colliding Team, its conflicting agent names, and free replacement names.
  */
 export declare function importConflicts(teams: readonly TeamPreset[], transfer: TeamPresetTransfer): TeamPresetImportConflicts;
-//# sourceMappingURL=preset-transfer.d.ts.map

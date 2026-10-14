@@ -150,7 +150,9 @@ describe('the shared Team document', () => {
 
 describe('building local agents from a document', () => {
   it('gives the imported Team the local defaults the document does not carry', () => {
-    expect(teamFromTransfer(DOCUMENT, 'team-9')).toEqual({
+    const imported = teamFromTransfer(DOCUMENT, 'team-9')
+    expect(imported.members[0]?.id).toEqual(expect.any(String))
+    expect({ ...imported, members: imported.members.map(({ id: _id, ...member }) => member) }).toEqual({
       id: 'team-9',
       name: 'Review team',
       description: 'Reviews changes before they land',

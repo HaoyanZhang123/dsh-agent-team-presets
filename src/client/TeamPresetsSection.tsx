@@ -13,7 +13,7 @@ import { TeamEditorView } from './TeamEditorView.tsx'
 import type { AgentSlot } from './TeamEditorView.tsx'
 import { TeamImportDialog } from './TeamImportDialog.tsx'
 import { TeamListView } from './TeamListView.tsx'
-import { defaultImportResolution, executionStateOf } from './team-presets-controller.ts'
+import { defaultImportResolution, executionStateOf, unnamedTeamsOf } from './team-presets-controller.ts'
 import type {
   ExternalUpdateNotice, TeamPresetImportPlan, TeamPresetsInjected,
 } from './team-presets-controller.ts'
@@ -171,6 +171,10 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   // The page promises when a save takes effect, so the footer reports the
   // execution state of the Team being edited — never a state it cannot support.
   const execution = team === undefined ? undefined : executionStateOf(state, team.id)
+  // An unnamed Team has no identity anywhere it is shown — the list falls back to
+  // its id, so do the composer and this page's own breadcrumb. The save is
+  // withheld and the offender is named rather than letting an id leak into the UI.
+  const unnamedTeams = unnamedTeamsOf(teamList)
   const memberSlot = active.kind === 'agent' && active.slot !== 'captain' ? active.slot : undefined
   const agent = team === undefined || active.kind !== 'agent'
     ? undefined
@@ -269,27 +273,34 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             </span>
           )}
           {state.failed ? <span className={css.warn} role="status">{t('saveFailed')}</span> : null}
+          {unnamedTeams.length === 0 ? null : (
+            <span className={css.warn} role="status">
+              {t('teamNameRequired', { teams: unnamedTeams.map(entry => entry.id).join(', ') })}
+            </span>
+          )}
           {state.externalUpdate === undefined ? null : (
             <span className={css.warn} role="status">{externalUpdateText(state.externalUpdate, t)}</span>
           )}
           {state.dirty ? <span className={css.footerNote}>{t('unsaved')}</span> : null}
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={!state.dirty || state.saving}
-          onClick={() => { props.discard() }}
-        >
-          {t('discard')}
-        </Button>
-        <Button
-          size="sm"
-          variant="primary"
-          disabled={!state.dirty || state.saving || disabled}
-          onClick={() => { void props.save() }}
-        >
-          {state.saving ? t('saving') : t('save')}
-        </Button>
+        <div className={css.footerActions}>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!state.dirty || state.saving}
+            onClick={() => { props.discard() }}
+          >
+            {t('discard')}
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={!state.dirty || state.saving || disabled || unnamedTeams.length > 0}
+            onClick={() => { void props.save() }}
+          >
+            {state.saving ? t('saving') : t('save')}
+          </Button>
+        </div>
       </footer>
     </div>
   )

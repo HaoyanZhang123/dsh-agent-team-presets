@@ -24,4 +24,3 @@ export interface TeamImportDialogProps {
  * @returns the dialog; the caller mounts it only while an import is pending.
  */
 export declare function TeamImportDialog(props: TeamImportDialogProps): import("react").JSX.Element;
-//# sourceMappingURL=TeamImportDialog.d.ts.map

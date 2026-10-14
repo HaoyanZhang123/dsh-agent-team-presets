@@ -30,10 +30,14 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
   const state = props.useTeamPresets(snapshot => snapshot)
   const [open, setOpen] = useState(false)
 
+  const selection = state.selections.find(row => row.sessionId === String(sessionId))
   const active = selectedTeam(state.teams, state.selections, String(sessionId))
+  const missing = selection !== undefined && active === undefined
+  const missingLabel = t('composerMissing').replace('{team}', selection?.teamId ?? '')
   const writable = state.status === 'ready' && state.writable
   const items: MenuEntry[] = [
     { id: '', label: t('composerNone') },
+    ...(missing ? [{ id: selection.teamId, label: missingLabel, disabled: true }] : []),
     ...state.teams.map(team => ({ id: team.id, label: team.name === '' ? team.id : team.name })),
   ]
 
@@ -41,7 +45,7 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
     <Menu
       open={open}
       items={items}
-      selectedId={active?.id ?? ''}
+      selectedId={selection?.teamId ?? ''}
       onSelect={(id) => {
         setOpen(false)
         void props.selectTeam(String(sessionId), id === '' ? undefined : id)
@@ -57,7 +61,7 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
           disabled={!writable}
           aria-haspopup="listbox"
           aria-expanded={open}
-          title={t('composerHint')}
+          title={missing ? `${missingLabel}. ${t('composerMissingHint')}` : t('composerHint')}
           onClick={() => { setOpen(value => !value) }}
         >
           {active === undefined || active.captain.color === ''
@@ -70,7 +74,7 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
               />
             )}
           <span className={css.triggerLabel} aria-label={t('composerTitle')}>
-            {active === undefined ? t('composerTitle') : (active.name === '' ? active.id : active.name)}
+            {missing ? missingLabel : active === undefined ? t('composerTitle') : (active.name === '' ? active.id : active.name)}
           </span>
           <span className={css.triggerIcon}><IconChevronDownOutlineRegular size={14} /></span>
         </button>

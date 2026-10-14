@@ -38,4 +38,3 @@ export declare function hasDirectHumanInput(agent: Agent, openTurnStartSeq: numb
  * @returns the disposer that removes both tools.
  */
 export declare function registerPresetTools(ctx: Context, agent: Agent, config: Config, namespace: string, appliedTeamId?: (root: Agent) => string | undefined): () => void;
-//# sourceMappingURL=preset-tools.d.ts.map

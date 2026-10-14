@@ -8,19 +8,20 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { ApprovalService } from '@deepseek-ai/dsh-user-approval'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { apply, inject } from '../src/index.ts'
 import type { Config } from '../src/config.ts'
 import { registerPresetTools } from '../src/preset-tools.ts'
 import type { TeamPreset, TeamSelectionRecord } from '../src/types.ts'
-import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { MockAdapter, textResponse, toolCallResponse } from './fixtures/mock-adapter.ts'
 import { slot, team } from './fixtures/team-presets.ts'
 
 const NAMESPACE = 'agent-team-presets'
 
 /** The Team every case edits unless it configures another. */
 const REVIEWS: TeamPreset = {
-  ...team([slot({ name: 'Reviewer', description: 'checks diffs', systemPrompt: 'You review diffs.' })], {
+  ...team([slot({ id: 'reviewer-role', name: 'Reviewer', description: 'checks diffs', systemPrompt: 'You review diffs.' })], {
     description: 'leads the release review',
   }),
   name: 'Reviews',
@@ -79,12 +80,19 @@ async function setup(options: {
   script?: ConstructorParameters<typeof MockAdapter>[0]
   origin?: 'subagent'
   members?: readonly { role: string; status: string }[]
+  approval?: 'allowed-once' | 'rejected' | 'unavailable' | 'cancelled'
+  realApprovalPolicy?: 'ask' | 'never'
+  noApprovalService?: boolean
 } = {}): Promise<Harness> {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
-  let members = [...options.members ?? []]
+  if (options.realApprovalPolicy !== undefined) await ctx.plugin(ApprovalService, { policy: options.realApprovalPolicy })
+  else if (options.noApprovalService !== true) ctx.provide('approval', { request: vi.fn(async () => options.approval ?? 'allowed-once') })
+  // Mount on an idle baseline; busy-at-first-mount is intentionally quarantined
+  // and is covered by application-freeze, not by these tool-handler cases.
+  let members: { role: string; status: string }[] = []
   ctx.provide('agentTeams', {
     spawnTeammate: async () => ({ member: { name: 'member', status: 'active' } }),
     tryMembership: () => ({ root: 'root', id: 's1', role: 'lead', name: 'lead' }),
@@ -128,6 +136,7 @@ async function setup(options: {
     forkProvider: 'fork',
   } satisfies Config
   await ctx.plugin(Object.assign((inner: Context) => { apply(inner, config) }, { inject }))
+  members = [...options.members ?? []]
 
   const results: RecordedResult[] = []
   ctx.on('session/event', (_session, event: SessionEvent) => {
@@ -180,7 +189,7 @@ async function captainPrompt(ctx: Context, agent: Agent): Promise<string> {
 }
 
 describe('preset tool registration', () => {
-  it('offers both tools to a Session root that selected no Team', async () => {
+  it('offers both tools to a Session root that selected no Team, so it can ask which one', async () => {
     const h = await setup({ teams: [REVIEWS] })
     expect(h.ctx.tools.get('get_team_preset', h.agent)).toBeDefined()
     expect(h.ctx.tools.get('update_team_preset', h.agent)).toBeDefined()
@@ -276,6 +285,33 @@ describe('update_team_preset authority', () => {
 })
 
 describe('update_team_preset writes', () => {
+  it.each(['never', 'ask', 'missing'] as const)('a non-Team opt-in edit with approval %s writes nothing and keeps ordinary tools usable', async mode => {
+    const h = await setup({ teams: [REVIEWS],
+      ...(mode === 'missing' ? { noApprovalService: true } : { realApprovalPolicy: mode }),
+      script: [toolCallResponse('edit-denied', 'update_team_preset', { team_id: 'team-1', revision: 0, team_description: 'not authorized' }),
+        toolCallResponse('plain-after-denial', 'ordinary', {}), textResponse('done')] })
+    const body = vi.fn(async () => 'ordinary still works')
+    h.ctx.tools.register({ name: 'ordinary', description: 'ordinary', parameters: {}, output: { schema: { type: 'string' }, render: () => [] }, execute: body })
+    await runEditTurn(h)
+    expect(h.writes).toHaveLength(0)
+    expect(h.results[0]?.isError).toBe(true)
+    expect(h.results[1]?.isError).toBe(false)
+    expect(body).toHaveBeenCalledOnce()
+    const events = h.agent.session.ownEvents().filter(event => event.type === 'approval/decided')
+    if (mode === 'never') expect(JSON.stringify(events)).toContain('rejected')
+    if (mode === 'ask') expect(JSON.stringify(events)).toContain('unavailable')
+    if (mode === 'missing') expect(events).toHaveLength(0)
+  })
+
+  it.each(['rejected', 'unavailable', 'cancelled'] as const)('refuses a human-started edit when exact Host approval is %s', async approval => {
+    const h = await setup({ teams: [REVIEWS], selections: [{ sessionId: 's1', teamId: 'team-1' }], approval,
+      script: [toolCallResponse('ordinary-dev-injection', 'update_team_preset', { revision: 0, team_description: 'injected persistent role' }), textResponse('done')] })
+    h.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Fix the application bug.' }], source: { kind: 'user' } }))
+    await h.agent.whenIdle()
+    expect(h.writes).toHaveLength(0)
+    expect(h.results[0]?.isError).toBe(true)
+    expect(h.results[0]?.text).toContain('not approved')
+  })
   it('applies a user-requested Team description and hot-reloads the captain briefing', async () => {
     const h = await setup({
       teams: [REVIEWS],

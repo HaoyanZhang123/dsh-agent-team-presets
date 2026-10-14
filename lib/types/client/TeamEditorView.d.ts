@@ -29,4 +29,3 @@ export interface TeamEditorViewProps {
  * @returns the back row, the Team identity fields, and the roster.
  */
 export declare function TeamEditorView(props: TeamEditorViewProps): import("react").JSX.Element;
-//# sourceMappingURL=TeamEditorView.d.ts.map

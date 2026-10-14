@@ -49,7 +49,7 @@ function definition(marker: string, member: string): TeamPreset {
       name: `captain-${marker}`,
       systemPrompt: `Captain prompt ${marker}`,
       toolMode: 'custom',
-      tools: [ALLOWED_TOOL],
+      tools: [ALLOWED_TOOL, 'spawn_team_member', 'get_team_preset', 'update_team_preset'],
     }),
     name: `Team ${marker}`,
   }
@@ -601,17 +601,19 @@ describe('the captain tool scope a Team applies', () => {
     expect(allowed.isError).toBe(false)
   })
 
-  it('reports a preset this Session cannot apply instead of keeping the old one', async () => {
+  it('keeps the last effective restriction when a stored update is invalid', async () => {
     const h = await setup({ teams: [definition('A', 'alpha')], selections: SELECTED })
     const captain = await h.create('s1')
     const warn = vi.spyOn(h.ctx.logger, 'warn')
 
     h.teams([invalidDefinition('B', 'beta')])
     expect(warn.mock.calls.map(call => String(call[0])).join('\n')).toContain('was refused')
-    // The Session does not keep running the definition the Host replaced, and
-    // no half-applied registration survives the refusal.
-    expect(h.ctx.tools.get('spawn_team_member', captain)).toBeUndefined()
-    expect(h.ctx.tools.schemas(captain).map(schema => schema.name)).toContain(DENIED_TOOL)
+    expect(h.ctx.tools.get('spawn_team_member', captain)).toBeDefined()
+    expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt A')
+    const denied = await h.ctx.tools.execute({
+      callId: ToolCallId('invalid-update-denied'), name: DENIED_TOOL, arguments: {}, agent: captain, signal: new AbortController().signal,
+    })
+    expect(denied.isError).toBe(true)
 
     // Fixing the stored Team restores the Session.
     h.teams([definition('B', 'beta')])
@@ -620,6 +622,62 @@ describe('the captain tool scope a Team applies', () => {
 })
 
 describe('application lifecycle across status edges', () => {
+  it('does not lift a frozen policy mid-turn when No team is selected, then restores ordinary tools', async () => {
+    const h = await setup({ teams: [definition('A', 'alpha')], selections: SELECTED })
+    const captain = await h.create('s1')
+    h.wake(captain)
+    h.selections([])
+    const call = () => h.ctx.tools.execute({ callId: ToolCallId('deselect'), name: DENIED_TOOL, arguments: {}, agent: captain, signal: new AbortController().signal })
+    expect((await call()).isError).toBe(true)
+    expect(h.ctx.tools.get('get_team_preset', captain)).toBeDefined()
+    await h.release()
+    expect((await call()).isError).toBe(false)
+    // Deselection lifts the Team policy; the discovery tools stay.
+    expect(h.ctx.tools.get('get_team_preset', captain)).toBeDefined()
+    expect(h.ctx.tools.get('update_team_preset', captain)).toBeDefined()
+    expect(h.ctx.tools.get('spawn_team_member', captain)).toBeUndefined()
+  })
+
+  it('quarantines a first invalid application instead of exposing default tools', async () => {
+    const h = await setup({ teams: [invalidDefinition('A', 'alpha')], selections: SELECTED })
+    const captain = await h.create('s1')
+    const denied = await h.ctx.tools.execute({ callId: ToolCallId('initial-invalid'), name: DENIED_TOOL, arguments: {}, agent: captain, signal: new AbortController().signal })
+    expect(denied.isError).toBe(true)
+    expect(resultText(denied)).toContain('application failed')
+    h.teams([definition('A', 'alpha')])
+    const allowed = await h.ctx.tools.execute({ callId: ToolCallId('recovered'), name: ALLOWED_TOOL, arguments: {}, agent: captain, signal: new AbortController().signal })
+    expect(allowed.isError).toBe(false)
+  })
+
+  it('retains restrictions after a partial registration failure', async () => {
+    const h = await setup({ teams: [definition('A', 'alpha')], selections: SELECTED })
+    const captain = await h.create('s1')
+    const register = vi.spyOn(captain.ctx.tools, 'register').mockImplementationOnce(() => { throw new Error('partial registration failure') })
+    h.teams([definition('B', 'beta')])
+    register.mockRestore()
+    const denied = await h.ctx.tools.execute({ callId: ToolCallId('partial-denied'), name: DENIED_TOOL, arguments: {}, agent: captain, signal: new AbortController().signal })
+    expect(denied.isError).toBe(true)
+    expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt A')
+  })
+
+  it('quarantines a remounted running Session until its task boundary', async () => {
+    const h = await setup({ teams: [definition('A', 'alpha')], selections: SELECTED })
+    const captain = await h.create('s1')
+    h.wake(captain)
+    const widened = definition('B', 'beta')
+    widened.captain.tools = [...widened.captain.tools, DENIED_TOOL]
+    h.teams([widened])
+    await h.fiber.dispose()
+    const restarted = await h.ctx.plugin(Object.assign((inner: Context) => { apply(inner, h.config) }, { inject }))
+    const execute = (name: string) => h.ctx.tools.execute({ callId: ToolCallId('busy-reload'), name, arguments: {}, agent: captain, signal: new AbortController().signal })
+    expect((await execute(DENIED_TOOL)).isError).toBe(true)
+    expect((await execute(ALLOWED_TOOL)).isError).toBe(true)
+    await h.release()
+    expect((await execute(DENIED_TOOL)).isError).toBe(false)
+    expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
+    await restarted.dispose()
+  })
+
   it('adopts the latest definition after a failed turn', async () => {
     const h = await setup({ teams: [definition('A', 'alpha')], selections: SELECTED })
     const captain = await h.create('s1')
@@ -676,5 +734,67 @@ describe('application lifecycle across status edges', () => {
     expect(h.ctx.tools.get('spawn_team_member', captain)).toBeUndefined()
     h.teams([definition('C', 'gamma')])
     expect(h.ctx.tools.get('spawn_team_member', captain)).toBeUndefined()
+  })
+
+  it('mounts beside an already-live unmanaged child by quarantining it, never by throwing', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    const adapter = new GatedAdapter()
+    ctx.llm.registerAdapter(['fixture'], adapter)
+    for (const name of [ALLOWED_TOOL, DENIED_TOOL]) ctx.tools.register({
+      name,
+      description: `${name} probe`,
+      parameters: {},
+      output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: name }] },
+      async execute() { return name },
+    })
+    let root!: Agent
+    ctx.provide('agentTeams', {
+      spawnTeammate: async (_caller: Agent, request: SpawnTeammateRequest) => ({ member: { name: request.name, status: 'active' } }),
+      // Only the Session root is a Team member; the child is ordinary and unmanaged.
+      tryMembership: (agent: Agent) => agent === root
+        ? { root: agent, id: TeamId(agent.id), role: 'lead' as const, name: 'lead' }
+        : undefined,
+      listMembers: () => [],
+    })
+    ctx.provide('settings', {
+      configure: () => () => {},
+      describe: () => [{ ns: 'agent-team-presets', revision: 0 }],
+      update: async () => {},
+    })
+    root = (await ctx.agents.create({ sessionId: SessionId('s1'), agentOptions: { provider: 'fixture', model: 'fixture' } })).agent
+    const child = (await ctx.agents.create({
+      sessionId: SessionId('child'),
+      parentAgent: root,
+      meta: { parentSession: root.session.id, origin: 'subagent' },
+      agentOptions: { provider: 'fixture', model: 'fixture' },
+    })).agent
+    const config = {
+      teams: { get: () => [definition('A', 'alpha')] },
+      selections: { get: () => SELECTED },
+      freshProvider: 'spawn',
+      forkProvider: 'fork',
+    } satisfies Config
+
+    // The creation veto belongs to the serial `agent/created` transaction. An
+    // activation that already installed root registrations must not throw here,
+    // because those registrations live on `agent.ctx` and would leak.
+    const fiber = await ctx.plugin(Object.assign((inner: Context) => { apply(inner, config) }, { inject }))
+    const denied = await ctx.tools.execute({
+      callId: ToolCallId('child-quarantined'), name: DENIED_TOOL, arguments: {}, agent: child,
+      signal: new AbortController().signal,
+    })
+    expect(denied.isError).toBe(true)
+    expect((await ctx.tools.execute({
+      callId: ToolCallId('root-allowed'), name: ALLOWED_TOOL, arguments: {}, agent: root,
+      signal: new AbortController().signal,
+    })).isError).toBe(false)
+
+    // The teardown owner must drain every registration the mount installed.
+    await fiber.dispose()
+    expect(ctx.tools.get('spawn_team_member', root)).toBeUndefined()
+    expect(ctx.tools.get('get_team_preset', root)).toBeUndefined()
   })
 })

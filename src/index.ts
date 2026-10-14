@@ -27,11 +27,12 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import { applyTeamToAgent, assertTeamApplicable } from './application.ts'
 import type { TeamApplication } from './application.ts'
 import type { Config } from './config.ts'
-import { LEGACY_CAPTAIN_ROUTE_KEYS, withoutCaptainRoutes } from './config.ts'
+import { teamSettingsMigration } from './settings-migration.ts'
 import { isSessionRoot, TeamExecutionMonitor, teammatesBusy } from './execution.ts'
 import { registerPresetTools } from './preset-tools.ts'
 import { definitionFingerprint, findTeam, selectedTeam } from './presets.ts'
 import TeamPresetsToolCatalog from './tool-catalog.ts'
+import { descriptorPolicy, guardPolicy, hasLegacyPresetBriefing, policyOf } from './tool-policy.ts'
 
 export type * from './types.ts'
 export { Config } from './config.ts'
@@ -55,28 +56,6 @@ export const inject = ['agents', 'agentTeams', 'tools', 'systemPrompt', 'session
 const LOG = 'agent-team-presets'
 
 /**
- * Drop the captain route a Team stored before captains stopped owning one.
- *
- * An older document keeps `provider`, `model`, and `reasoningEffort` on every
- * captain, because the settings schema preserves members it does not declare.
- * The rewrite is an ordinary settings write, so the running configuration, the
- * profile patch, and every open Settings page agree on what a captain owns.
- * @param ctx - the plugin context providing `settings`.
- * @param config - the live configuration to inspect.
- * @returns once the document was rewritten, or immediately when it was already clean.
- */
-async function dropStoredCaptainRoutes(ctx: Context, config: Config): Promise<void> {
-  const teams = config.teams.get()
-  const cleaned = withoutCaptainRoutes(teams)
-  if (cleaned.every((team, index) => team === teams[index])) return
-  try {
-    await ctx.settings.update(NAMESPACE, { teams: cleaned })
-  } catch (error: unknown) {
-    ctx.logger.warn(`${LOG}: stored captains still carry %s because the rewrite was refused: %s`, LEGACY_CAPTAIN_ROUTE_KEYS.join('/'), String(error))
-  }
-}
-
-/**
  * Apply one valid Team preset to one live Session, and keep it current between
  * that Session's Team tasks.
  * @param ctx - the plugin context providing the Session, Team, tool, prompt, and settings services.
@@ -85,8 +64,72 @@ async function dropStoredCaptainRoutes(ctx: Context, config: Config): Promise<vo
 export function apply(ctx: Context, config: Config): void {
   const providers = { fresh: config.freshProvider, fork: config.forkProvider }
   const applications = new Map<Agent, TeamApplication>()
-  // The preset tools belong to the Session rather than to one selected Team, so
-  // a captain can read and adjust a stored preset before any Team is selected.
+  const definitions = new Map<Agent, ReturnType<typeof selectedTeam>>()
+  const quarantines = new Map<Agent, { reason: string; dispose: () => void }>()
+  const childPolicies = new Map<Agent, () => void>()
+  const childEnvelopes = new Map<Agent, ReturnType<typeof policyOf>>()
+  const quarantine = (agent: Agent, reason: string): void => {
+    const previous = quarantines.get(agent)
+    if (previous !== undefined) { previous.reason = reason; return }
+    const state = { reason, dispose: () => {} }
+    state.dispose = agent.ctx.tools.guard(() => state.reason)
+    quarantines.set(agent, state)
+  }
+  const recovery = 'Choose another valid Team or "No team" in this Session\'s composer Team control. Changes apply once the captain and its teammates are idle.'
+  const initializeChild = (agent: Agent, live: boolean): void => {
+    if (isSessionRoot(agent) || childPolicies.has(agent)) return
+    const membership = ctx.agentTeams.tryMembership(agent)
+    // Upstream native teammates are not this plugin's legacy continuations.
+    // Upgrade only the historical briefing this plugin authored.
+    const legacyPreset = membership?.role === 'teammate' && hasLegacyPresetBriefing(agent)
+    const declared = descriptorPolicy(agent, legacyPreset)
+    if (declared !== undefined) {
+      childPolicies.set(agent, guardPolicy(agent, declared))
+      childEnvelopes.set(agent, declared)
+      return
+    }
+    const parentId = agent.session.header.parentSession
+    const parent = parentId === undefined ? undefined : ctx.agents.get(parentId)
+    if (parent === undefined) return
+    // A child that is already live cannot be refused retroactively without
+    // leaking the registrations this plugin installed for its parent on the
+    // same failed activation, so the startup scan quarantines it instead.
+    // Only the serial `agent/created` transaction may veto before a request.
+    const refuse = (reason: string): void => {
+      if (!live) throw new Error(reason)
+      ctx.logger.warn(`${LOG}: %s`, reason)
+      quarantine(agent, reason)
+    }
+    if (quarantines.has(parent)) {
+      refuse('Parent Team policy is quarantined; child creation is refused.')
+      return
+    }
+    // A legacy all-tools Team member is intentionally independent of its
+    // captain's custom policy. Ordinary descendants, unlike Team slots, inherit.
+    if (membership?.role === 'teammate') {
+      if (!legacyPreset) {
+        // Ordinary native Teams below unselected/all-tools roots stay upstream-
+        // owned. Under a strict root, an unmarked creation is not an escape.
+        const parentDefinition = definitions.get(parent)
+        if (parentDefinition !== undefined && policyOf(parentDefinition.id, parentDefinition.captain).mode === 'custom') {
+          refuse('Custom Team policy requires preset-managed child creation; unmarked native members are refused.')
+        }
+        return
+      }
+      const legacyAll = { teamId: 'legacy-team', mode: 'all' as const, allow: [] }
+      childPolicies.set(agent, guardPolicy(agent, legacyAll))
+      childEnvelopes.set(agent, legacyAll)
+      return
+    }
+    const parentDeclared = childEnvelopes.get(parent) ?? descriptorPolicy(parent)
+    const rootDefinition = definitions.get(parent)
+    const inherited = parentDeclared ?? (rootDefinition === undefined ? undefined : policyOf(rootDefinition.id, rootDefinition.captain))
+    if (inherited?.mode === 'custom') {
+      refuse('Custom Team policy requires preset-managed child creation; ordinary delegation cannot preserve its strict policy.')
+    }
+  }
+  // Editing tools belong only to selected/applied Team roots by default.
+  // Pre-selection editing is an explicit legacy compatibility opt-in.
   const presetTools = new Map<Agent, () => void>()
   /** Session roots whose durable roster settlement waits for the next microtask. */
   const pendingRoster = new Set<Agent>()
@@ -153,16 +196,34 @@ export function apply(ctx: Context, config: Config): void {
    */
   const adopt = (agent: Agent, startingTask: boolean): void => {
     if (disposed) return
+    const selectedId = config.selections.get().find(row => row.sessionId === agent.session.id)?.teamId
+    // The preset tools are the discovery path, not a Team capability: a user can
+    // ask the captain to adjust "the Team preset" before this Session selects
+    // one, and the captain must be able to read the configured Teams and ask
+    // which one. They therefore belong to every Session root, exactly as before
+    // any Team is selected.
     if (!presetTools.has(agent)) {
       presetTools.set(agent, registerPresetTools(ctx, agent, config, NAMESPACE, root => applications.get(root)?.teamId))
     }
     const busy = startingTask ? teammatesBusy(ctx, agent) : agent.status === 'running' || teammatesBusy(ctx, agent)
-    if (busy) return
+    if (busy) {
+      // A remount cannot reconstruct the previous frozen root definition from
+      // current Settings. Quarantine until a task boundary, never adopt a newly
+      // widened policy into an already-running task.
+      if (!applications.has(agent) && selectedId !== undefined) quarantine(agent, `Team "${selectedId}" cannot be safely restored into an already-running task; tools are paused until its task boundary. ${recovery}`)
+      return
+    }
     const team = selectedTeam(config.teams.get(), config.selections.get(), agent.session.id)
     const current = applications.get(agent)
     if (team === undefined) {
       current?.dispose()
       applications.delete(agent)
+      definitions.delete(agent)
+      quarantines.get(agent)?.dispose()
+      quarantines.delete(agent)
+      if (selectedId !== undefined) {
+        quarantine(agent, `Selected Team "${selectedId}" no longer exists. This is not "No team"; tool access stays denied. ${recovery}`)
+      }
       return
     }
     const fingerprint = definitionFingerprint(team)
@@ -172,13 +233,14 @@ export function apply(ctx: Context, config: Config): void {
     try {
       assertTeamApplicable(agent, team)
     } catch (error: unknown) {
-      // The Session must not keep running the definition the Host replaced, so
-      // a refused preset leaves it explicitly without one, and says why.
-      current?.dispose()
-      applications.delete(agent)
+      // A rejected update must never lift the last effective capability policy.
+      // Keep the previous application; a first application failure is quarantined
+      // below until Settings supplies a valid definition.
+      if (current === undefined) quarantine(agent, `Team "${team.id}" application failed validation; no tools were granted. ${recovery}`)
       ctx.logger.warn(`${LOG}: Team "%s" was refused for Session "%s": %s`, team.id, agent.session.id, String(error))
       return
     }
+    const previous = definitions.get(agent)
     current?.dispose()
     applications.delete(agent)
     try {
@@ -186,24 +248,64 @@ export function apply(ctx: Context, config: Config): void {
       // a member's model route is recovery-relevant and outside the definition a
       // running Team task freezes.
       applications.set(agent, applyTeamToAgent(ctx, agent, team, providers, () => findTeam(config.teams.get(), team.id)))
+      definitions.set(agent, team)
+      quarantines.get(agent)?.dispose()
+      quarantines.delete(agent)
     } catch (error: unknown) {
+      if (previous !== undefined) {
+        try {
+          applications.set(agent, applyTeamToAgent(ctx, agent, previous, providers, () => findTeam(config.teams.get(), previous.id)))
+        } catch { quarantine(agent, `Team "${team.id}" application failed and the previous policy could not be restored; tools remain denied. ${recovery}`) }
+      } else quarantine(agent, `Team "${team.id}" application failed; tools remain denied. ${recovery}`)
       ctx.logger.warn(`${LOG}: applying Team "%s" to Session "%s" failed: %s`, team.id, agent.session.id, String(error))
     }
   }
 
+  // The teardown owner is installed before any existing Agent is initialized.
+  // Registrations go through `agent.ctx`, whose lifetime outlives a failing
+  // plugin fiber, so a throw during the scan would otherwise leave guards and
+  // exact-Agent tools installed with no disposer to drain them.
+  ctx.effect(() => () => {
+    disposed = true
+    monitor.dispose()
+    for (const application of applications.values()) application.dispose()
+    applications.clear()
+    definitions.clear()
+    for (const state of quarantines.values()) state.dispose()
+    quarantines.clear()
+    for (const dispose of childPolicies.values()) dispose()
+    childPolicies.clear()
+    childEnvelopes.clear()
+    for (const dispose of presetTools.values()) dispose()
+    presetTools.clear()
+    pendingRoster.clear()
+  }, 'agent-team-presets: session applications')
+
   // A document stored while captains still owned a route is cleaned once, so a
   // Session is never composed from a Team shape this plugin no longer applies.
-  void dropStoredCaptainRoutes(ctx, config)
+  // HMR can mount after Host ready. The next task crosses Cordis activation,
+  // whose LOADING entry is intentionally absent from settings.describe().
+  const migration = teamSettingsMigration(ctx, config, NAMESPACE)
+  const migrationTimer = setTimeout(() => { if (!disposed) void migration.request() }, 0)
+  ctx.effect(() => () => { clearTimeout(migrationTimer); migration.dispose() }, 'agent-team-presets: migration readiness')
 
   for (const agent of ctx.agents.list()) {
     if (isSessionRoot(agent)) reconcile(agent)
+    else initializeChild(agent, true)
   }
   ctx.on('agent/created', ({ agent }) => {
     if (isSessionRoot(agent)) reconcile(agent)
+    else initializeChild(agent, false)
   })
   ctx.on('agent/disposed', ({ agent }) => {
     applications.get(agent)?.dispose()
     applications.delete(agent)
+    definitions.delete(agent)
+    quarantines.get(agent)?.dispose()
+    quarantines.delete(agent)
+    childPolicies.get(agent)?.()
+    childPolicies.delete(agent)
+    childEnvelopes.delete(agent)
     presetTools.get(agent)?.()
     presetTools.delete(agent)
     pendingRoster.delete(agent)
@@ -213,6 +315,7 @@ export function apply(ctx: Context, config: Config): void {
     for (const agent of ctx.agents.list()) {
       if (isSessionRoot(agent)) reconcile(agent)
     }
+    if (!disposed) void migration.request()
     // A stored change moves the frame even when no Session is online to adopt it.
     monitor.invalidate()
   })
@@ -243,13 +346,4 @@ export function apply(ctx: Context, config: Config): void {
       for (const root of roots) reconcile(root)
     })
   })
-  ctx.effect(() => () => {
-    disposed = true
-    monitor.dispose()
-    for (const application of applications.values()) application.dispose()
-    applications.clear()
-    for (const dispose of presetTools.values()) dispose()
-    presetTools.clear()
-    pendingRoster.clear()
-  }, 'agent-team-presets: session applications')
 }

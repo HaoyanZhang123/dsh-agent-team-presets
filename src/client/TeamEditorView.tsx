@@ -104,7 +104,7 @@ export function TeamEditorView(props: TeamEditorViewProps) {
         {team.members.length === 0 ? <p className={css.hint}>{t('emptyMembers')}</p> : (
           <ul className={css.plainRows}>
             {team.members.map((member, index) => (
-              <li key={`${team.id}-member-${String(index)}`} className={css.entry}>
+              <li key={member.id ?? `${team.id}-member-${String(index)}`} className={css.entry}>
                 <button type="button" className={css.entryRow} onClick={() => { props.onOpenAgent(index) }}>
                   <span
                     className={css.dot}

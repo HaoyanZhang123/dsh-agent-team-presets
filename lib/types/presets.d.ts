@@ -108,4 +108,3 @@ export declare function captainBriefing(team: TeamPreset): string;
  * @returns the persona text for the summoned member; it always names the Team it joined.
  */
 export declare function memberBriefing(team: TeamPreset, member: TeamAgentPreset, target: string): string;
-//# sourceMappingURL=presets.d.ts.map

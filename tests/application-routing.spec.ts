@@ -39,7 +39,8 @@ async function setup(options: {
   const harness = await mountAgentLoopTestHarness(ctx)
   ctx.llm.registerAdapter(['fixture'], new FixtureAdapter())
   const agent = await harness.create(SessionId('captain'), { provider: 'fixture', model: 'fixture' })
-  ctx.provide('agentTeams', { spawnTeammate: options.spawnTeammate ?? (async () => ({ member: { name: 'member', status: 'active' } })) })
+  ctx.tools.register({ name: 'read', description: 'Read fixture', parameters: {}, output: { schema: { type: 'string' }, render: () => [] }, async execute() { return '' } })
+  ctx.provide('agentTeams', { listMembers: () => [], spawnTeammate: options.spawnTeammate ?? (async () => ({ member: { name: 'member', status: 'active' } })) })
   return { ctx, agent }
 }
 
@@ -61,6 +62,29 @@ function resultText(result: { content: readonly { type: string; text?: string }[
 }
 
 describe('spawn_team_member arguments', () => {
+  it('keeps a Chinese-named member route attached to its identity after reorder', async () => {
+    const spawnTeammate = vi.fn(async (_caller: Agent, _request: SpawnTeammateRequest) => ({ member: { name: 'member-1', status: 'active' } }))
+    const { ctx, agent } = await setup({ spawnTeammate })
+    const first = slot({ id: 'architect-id', name: '架构师', provider: 'deepseek', model: 'old-architect' })
+    const other = slot({ id: 'review-id', name: '评审员', provider: 'deepseek', model: 'review-model' })
+    const stored = team([other, { ...first, model: 'new-architect' }])
+    const application = applyTeamToAgent(ctx, agent, team([first, other]), { fresh: 'spawn', fork: 'fork' }, () => stored)
+    await callMemberTool(ctx, agent, { member: 'member-1', task: 'check the contract' })
+    expect(spawnTeammate.mock.calls[0]?.[1].agentOptions).toMatchObject({ model: 'new-architect' })
+    application.dispose()
+  })
+
+  it('does not infer a route from an ambiguous legacy display name', async () => {
+    const spawnTeammate = vi.fn(async (_caller: Agent, _request: SpawnTeammateRequest) => ({ member: { name: 'member-1', status: 'active' } }))
+    const { ctx, agent } = await setup({ spawnTeammate })
+    const first = slot({ name: '评审员', provider: 'deepseek', model: 'frozen-review' })
+    const stored = team([{ ...first, model: 'wrong-one' }, { ...first, model: 'wrong-two' }])
+    const application = applyTeamToAgent(ctx, agent, team([first]), { fresh: 'spawn', fork: 'fork' }, () => stored)
+    await callMemberTool(ctx, agent, { member: 'member-1', task: 'review' })
+    expect(spawnTeammate.mock.calls[0]?.[1].agentOptions).toMatchObject({ model: 'frozen-review' })
+    application.dispose()
+  })
+
   it('forwards the member route, persona, description, and context mode', async () => {
     const spawnTeammate = vi.fn(async (_caller: Agent, _request: SpawnTeammateRequest) => ({ member: { name: 'reviewer', status: 'active' } }))
     const { ctx, agent } = await setup({ spawnTeammate })
@@ -76,7 +100,7 @@ describe('spawn_team_member arguments', () => {
       context: 'fork',
       provider: 'fork',
       agentOptions: { provider: 'deepseek', model: 'deepseek-reasoner', reasoningEffort: 'max' },
-      persona: 'You are "reviewer" on the Agent Team "Team".\n\nYour role: checks diffs\n\nYou review diffs.',
+      persona: expect.stringContaining('You are "reviewer" on the Agent Team "Team".\n\nYour role: checks diffs\n\nYou review diffs.'),
       toolFilter: { allow: ['read'] },
     }))
     application.dispose()
@@ -106,7 +130,7 @@ describe('spawn_team_member arguments', () => {
     const request = spawnTeammate.mock.calls[0]?.[1]
     expect(request).toMatchObject({ name: 'reviewer', description: 'reviewer', context: 'fresh', provider: 'spawn' })
     expect(request).not.toHaveProperty('agentOptions')
-    expect(request).toMatchObject({ persona: 'You are "reviewer" on the Agent Team "Team".' })
+    expect(request).toMatchObject({ persona: expect.stringContaining('You are "reviewer" on the Agent Team "Team".') })
     expect(request).not.toHaveProperty('toolFilter')
     application.dispose()
   })
@@ -185,7 +209,7 @@ describe('application composition', () => {
   it('registers no persona or briefing for a Team that states nothing', async () => {
     const { ctx, agent } = await setup()
     const application = applyTeamToAgent(ctx, agent, team([], { name: '', description: '', systemPrompt: '   ' }), { fresh: 'spawn', fork: 'fork' })
-    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toEqual(['spawn_team_member'])
+    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toEqual(['read', 'spawn_team_member'])
     application.dispose()
   })
 

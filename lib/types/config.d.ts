@@ -58,6 +58,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             systemPrompt?: string | null;
         } & import("@deepseek-ai/cosmokit").Dict) | null;
         members?: ({
+            id?: string | null;
             provider?: string | null;
             model?: string | null;
             reasoningEffort?: string | null;
@@ -88,6 +89,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             systemPrompt: z<string, string, "defined">;
         }>>, "plain">;
         members: z<({
+            id?: string | null;
             provider?: string | null;
             model?: string | null;
             reasoningEffort?: string | null;
@@ -98,6 +100,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             tools?: string[] | null;
             systemPrompt?: string | null;
         } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            id: z<string, string, "plain">;
             provider: z<string, string, "defined">;
             model: z<string, string, "defined">;
             reasoningEffort: z<string, string, "defined">;
@@ -132,6 +135,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             systemPrompt?: string | null;
         } & import("@deepseek-ai/cosmokit").Dict) | null;
         members?: ({
+            id?: string | null;
             provider?: string | null;
             model?: string | null;
             reasoningEffort?: string | null;
@@ -162,6 +166,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             systemPrompt: z<string, string, "defined">;
         }>>, "plain">;
         members: z<({
+            id?: string | null;
             provider?: string | null;
             model?: string | null;
             reasoningEffort?: string | null;
@@ -172,6 +177,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             tools?: string[] | null;
             systemPrompt?: string | null;
         } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            id: z<string, string, "plain">;
             provider: z<string, string, "defined">;
             model: z<string, string, "defined">;
             reasoningEffort: z<string, string, "defined">;
@@ -193,4 +199,3 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     freshProvider: z<string, string, "defined">;
     forkProvider: z<string, string, "defined">;
 }>>, "plain">;
-//# sourceMappingURL=config.d.ts.map

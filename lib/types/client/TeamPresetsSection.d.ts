@@ -12,4 +12,3 @@ export type TeamPresetsSectionProps = PropsRuntime<'settings.section'> & PropsLo
  * @returns the current page and the shared save footer.
  */
 export declare function TeamPresetsSection(props: TeamPresetsSectionProps): import("react").JSX.Element;
-//# sourceMappingURL=TeamPresetsSection.d.ts.map

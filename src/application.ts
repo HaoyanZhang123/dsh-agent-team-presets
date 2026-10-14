@@ -23,6 +23,8 @@ import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { captainBriefing, definitionFingerprint, findMember, memberBriefing, memberTargets, toolMode } from './presets.ts'
 import type { TeamAgentPreset, TeamCaptainPreset, TeamPreset } from './types.ts'
+import { guardPolicy, inheritedFilter, policyOf, policyPersona } from './tool-policy.ts'
+import { SPAWN_TEAM_MEMBER_DESCRIPTION } from './tool-descriptions.ts'
 
 /** Output schema of one `spawn_team_member` result. */
 const SPAWN_VALUE_SCHEMA = {
@@ -95,7 +97,8 @@ function routeOptions(preset: TeamAgentPreset): RouteOptions | undefined {
  */
 function restrictCaptainTools(agent: Agent, captain: TeamCaptainPreset): (() => void) | undefined {
   if (toolMode(captain) === 'all') return undefined
-  return agent.ctx.tools.restrict({ allow: [...captain.tools] })
+  const filter = inheritedFilter(agent, policyOf('captain', captain))
+  return filter === undefined ? undefined : agent.ctx.tools.restrict(filter)
 }
 
 /**
@@ -115,7 +118,8 @@ function restrictCaptainTools(agent: Agent, captain: TeamCaptainPreset): (() => 
 export function assertTeamApplicable(agent: Agent, team: TeamPreset): void {
   const { captain } = team
   if (toolMode(captain) === 'all') return
-  agent.ctx.tools.restrict({ allow: [...captain.tools] })()
+  const filter = inheritedFilter(agent, policyOf(team.id, captain))
+  if (filter !== undefined) agent.ctx.tools.restrict(filter)()
 }
 
 /**
@@ -128,13 +132,19 @@ export function assertTeamApplicable(agent: Agent, team: TeamPreset): void {
  * runs reaches the next member the captain summons. A stored Team that is gone,
  * or that no longer carries the target, leaves the frozen route in place.
  * @param frozen - the member as the applied definition holds it.
- * @param target - the teammate target the captain summons.
  * @param stored - the latest stored definition of the applied Team, when the Host still has it.
  * @returns the member whose route this spawn uses.
  */
-function routedMember(frozen: TeamAgentPreset, target: string, stored: TeamPreset | undefined): TeamAgentPreset {
+function routedMember(frozen: TeamAgentPreset, stored: TeamPreset | undefined): TeamAgentPreset {
   if (stored === undefined) return frozen
-  return findMember(stored, target)?.member ?? frozen
+  if (frozen.id !== undefined) {
+    const identified = stored.members.filter(member => member.id === frozen.id)
+    return identified.length === 1 ? identified[0]! : frozen
+  }
+  // Legacy records have no stable identity. Match a unique display name, never
+  // the index-derived target (reordering Chinese names must not change routes).
+  const matches = stored.members.filter(member => member.name.trim() === frozen.name.trim())
+  return matches.length === 1 ? matches[0]! : frozen
 }
 
 /**
@@ -148,10 +158,11 @@ function routedMember(frozen: TeamAgentPreset, target: string, stored: TeamPrese
  */
 function registerMemberTool(ctx: Context, agent: Agent, team: TeamPreset, providers: MemberProviders, stored: StoredTeam): () => void {
   const targets = memberTargets(team)
-  const summary = targets.map(({ member, target }) => member.description.trim() === '' ? target : `${target} (${member.description.trim()})`).join('; ')
+  const summary = targets.map(({ target }) => target).join(', ')
+  const reserved = new Set<string>()
   return agent.ctx.tools.register(defineTool({
     name: 'spawn_team_member',
-    description: `Create one teammate from the active Team preset, applying that member's own system prompt, model, reasoning effort, and tool scope. Available members: ${summary.length === 0 ? '(none)' : summary}.`,
+    description: `${SPAWN_TEAM_MEMBER_DESCRIPTION} Available members: ${summary.length === 0 ? '(none)' : summary}.`,
     parameters: {
       member: { type: 'string', required: true, description: 'Member target from the active Team preset roster.' },
       task: { type: 'string', required: true, description: 'Complete initial task for the member, including every fact it needs.' },
@@ -176,28 +187,41 @@ function registerMemberTool(ctx: Context, agent: Agent, team: TeamPreset, provid
         throw new Error(`unknown Team member "${args.member}"; available members: ${targets.map(entry => entry.target).join(', ') || '(none)'}`)
       }
       const { member, target } = resolved
-      const context = args.context ?? 'fresh'
-      const task: ContentBlock[] = [{ type: 'text', text: args.task }]
-      // Read the route now, not when the Team was applied: a route corrected
-      // during this task applies to the next member it summons.
-      const route = routeOptions(routedMember(member, target, stored()))
-      const briefing = memberBriefing(team, member, target)
-      const result = await ctx.agentTeams.spawnTeammate(caller, {
-        name: target,
-        description: args.description ?? (member.description.trim() === '' ? member.name.trim() || target : member.description.trim()),
-        prompt: task,
-        context,
-        provider: context === 'fork' ? providers.fork : providers.fresh,
-        ...route === undefined ? {} : { agentOptions: route },
-        persona: briefing,
-        ...toolMode(member) === 'all' ? {} : { toolFilter: { allow: [...member.tools] } },
-        signal: exec.signal,
-      })
-      return {
-        target: result.member.name,
-        status: result.member.status === 'failed' ? 'failed' as const : 'active' as const,
-        ...result.member.model === undefined ? {} : { model: result.member.model },
+      const used = new Set(ctx.agentTeams.listMembers(caller).map(row => row.name))
+      for (const name of reserved) used.add(name)
+      let instance = target
+      let suffix = 2
+      while (used.has(instance)) {
+        const tail = `-${suffix++}`
+        instance = `${target.slice(0, 64 - tail.length).replace(/-+$/u, '')}${tail}`
       }
+      reserved.add(instance)
+      try {
+        const context = args.context ?? 'fresh'
+        const task: ContentBlock[] = [{ type: 'text', text: args.task }]
+        // Read the route now, not when the Team was applied: a route corrected
+        // during this task applies to the next member it summons.
+        const route = routeOptions(routedMember(member, stored()))
+        const policy = policyOf(team.id, member)
+        const filter = inheritedFilter(caller, policy)
+        const briefing = policyPersona(memberBriefing(team, member, instance), policy)
+        const result = await ctx.agentTeams.spawnTeammate(caller, {
+          name: instance,
+          description: args.description ?? (member.description.trim() === '' ? member.name.trim() || target : member.description.trim()),
+          prompt: task,
+          context,
+          provider: context === 'fork' ? providers.fork : providers.fresh,
+          ...route === undefined ? {} : { agentOptions: route },
+          persona: briefing,
+          ...filter === undefined ? {} : { toolFilter: filter },
+          signal: exec.signal,
+        })
+        return {
+          target: result.member.name,
+          status: result.member.status === 'failed' ? 'failed' as const : 'active' as const,
+          ...result.member.model === undefined ? {} : { model: result.member.model },
+        }
+      } finally { reserved.delete(instance) }
     },
   }))
 }
@@ -242,6 +266,7 @@ export function applyTeamToAgent(
         text: briefing,
       }))
     }
+    register(guardPolicy(agent, policyOf(team.id, captain)))
     register(restrictCaptainTools(agent, captain))
     register(registerMemberTool(ctx, agent, team, providers, stored))
   } catch (error: unknown) {
@@ -252,7 +277,7 @@ export function applyTeamToAgent(
     teamId: team.id,
     fingerprint: definitionFingerprint(team),
     dispose() {
-      for (const dispose of disposers.reverse()) void dispose()
+      for (const dispose of disposers.splice(0).reverse()) void dispose()
     },
   }
 }

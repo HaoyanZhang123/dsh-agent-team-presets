@@ -72,6 +72,22 @@ This plugin addresses five gaps:
 
 ![The model picker](docs/images/05-model-picker.png)
 
+**The captain's system prompt** — it becomes the Session prompt; complete `{{variable}}` groups interpolate against registered variables, and an unknown variable fails the request instead of degrading.
+
+![The captain's system prompt](docs/images/06-captain-system-prompt.png)
+
+**A member's system prompt** — a summoned member reads it after its Team briefing.
+
+![A member's system prompt](docs/images/07-member-system-prompt.png)
+
+**Tool permission: all tools (default)** — adds no restriction; switching modes keeps the saved custom checks.
+
+![Tool permission with all tools](docs/images/08-tools-default.png)
+
+**Tool permission: custom allowed tools** — the catalog lists built-in file tools, Team coordination tools, and plugin tools together; an unselected tool is denied at execution time, not merely discouraged in the prompt.
+
+![Tool permission with custom allowed tools](docs/images/09-tools-custom.png)
+
 ## Table of Contents
 
 - [Project introduction](#project-introduction)
@@ -135,6 +151,8 @@ Harness's own `0.2.0-rc.*` version is a separate compatibility requirement.
 
 ### Configure a Team
 
+**Unreleased 0.1.4 preparation:** custom policies cover inherited and exact-Agent tools, including coordination; the catalog includes standing-preset builtins. Custom mode denies general Node `run_code` and ordinary delegation without a strict durable policy contract. Tool-name policies are not OS/path isolation. Invalid initial applications and busy remounts without their frozen snapshot are quarantined; failed updates retain the old policy. Shared prompt edits require exact Host approval, not merely a human-started turn. These are working-tree changes, not a deployment to the current GUI. See the [remediation report](docs/evidence/0.1.4-remediation.md).
+
 Settings → Agent team presets is three stacked pages, so a narrow Settings panel never crowds:
 
 1. **Teams** — every configured Team as one row (name, member count, session model). Create, duplicate, or delete from here.
@@ -159,7 +177,7 @@ The footer reports the selected Team's execution state across online Sessions:
 | Description | The role hint the models act on: the captain reads its own description, the Team description, and every member's description, so it can pick the member whose description fits the work; a summoned member reads the Team description and its own description as its role. |
 | Provider / Model | **Members only.** Route chosen from every provider and model the deployment currently advertises. Empty runs the member on the Session route. |
 | Reasoning effort | **Members only.** Adapter-owned effort for the selected route; empty uses the model default. |
-| Allowed tools | Choose **Default: all tools** or **Custom allowed tools** separately for the captain and each member. Custom mode displays the deployment's global tools as an expanded checkbox grid, with select-all and clear controls. No checks in custom mode denies all configurable tools; default mode adds no restriction and preserves the saved checks. Captain and member policies apply independently, so a member can have tools the captain cannot use. Unavailable saved names remain removable; invalid names reject application instead of granting unrestricted access. Scoped coordination tools remain available. |
+| Allowed tools | Choose **Default: all tools** or **Custom allowed tools** separately for the captain and each member. Custom mode displays the deployment's global and inherited preset tools as an expanded checkbox grid, with select-all and clear controls. Each checkbox's hover text states what the tool actually is: a registry tool keeps its author's English description, this plugin's own three tools share one English text (the tool definition and the hover tip use the same constant), and a name neither source describes is not listed rather than given invented hover text. **Tool descriptions stay English**, because the upstream `ToolDefinition` carries a single description with no localization field and that text is model-facing first; the surrounding UI copy still follows the language setting. Tools are grouped by source: **this plugin**, each **MCP server** (grouped by the Harness-generated `mcp__<server>__<name>` form), and **other**. Groups start collapsed and show `chosen/total`; clicking a header expands or collapses it. Each group carries its own **select all**, **invert**, and **clear**, which rewrite only that group and leave every other group's selection alone. The registry records no registering package, so a native tool and a third-party plugin's tool cannot be told apart and are reported honestly under "other" rather than attributed by name; if upstream records the source at registration, that group splits by itself with no rework. Captain-only capabilities (`spawn_team_member`, `get_team_preset`, `update_team_preset`, `interrupt_agent`) are greyed out on a member page with the reason, because the Team service refuses a member call; select-all never persists them into a member allow-list, and an already-stored name stays removable. No checks in custom mode denies all configurable tools; default mode adds no restriction and preserves the saved checks. Captain and member policies apply independently, so a member can have tools the captain cannot use. Unavailable saved names remain removable; invalid names reject application instead of granting unrestricted access. Scoped coordination tools must also be selected; general code and ordinary delegation are denied in custom mode. |
 | System prompt | Registered as a prompt section template; complete `{{variable}}` groups interpolate against registered prompt variables. A summoned member reads it after its Team briefing. |
 
 ### Select a Team
@@ -176,14 +194,16 @@ An import lands in the draft first, so it reaches the settings document only whe
 
 ### Let the captain adjust a Team preset
 
-The captain of a Session also holds two tools for the case this plugin exists for: a Team ran once, and the descriptions or prompts it ran with do not yet match the work.
+Every Session root holds two preset-editing tools, whether or not it has selected a Team. They are the discovery path, not a Team capability: a user may ask the captain to adjust "the Team preset" before any Team is selected, and the captain must be able to read the configured Teams and ask which one. Selecting a Team adds the Team capability and the member tool; it does not add these.
+
+A deleted/invalid selected Team is **not** No team. The composer displays the missing Team ID rather than implying no selection; tool errors explain how to choose a valid Team or **No team**. Cancellation removes the plugin policy and the member tool once the captain and its teammates are idle, and leaves the two discovery tools in place. Already-created managed members retain their stored creation-time policy, even after the root deselects.
 
 - **`get_team_preset`** reads every editable field of this Session's Team (or of the Team a `team_id` names) with the current settings revision. When the Session selected no Team it reports `no-selection` and lists the configured Teams, so the captain asks the user which one to change instead of guessing.
 - **`update_team_preset`** replaces `team_description`, `captain_description`, `captain_system_prompt`, and per-member `description` / `system_prompt`, fenced by the revision `get_team_preset` returned.
 
 A successful tool write saves to the same settings document as the Settings page and follows the same per-Session adoption timing described above. A captain still running its current task keeps the old definition through its subsequent model steps. **An existing teammate keeps its creation-time description, persona, and tool filter**, including when resumed by a message; the updated preset supplies future new members after that Session adopts it. Send an existing teammate a new requirement to adjust its work without replacing its stored composition.
 
-Both tools register in the Session-root Agent scope only, so a teammate never sees them, and the write additionally requires a turn the user started: an automatic continuation or a teammate's report cannot rewrite the shared preset. Names, member routes, and tool permissions are outside their reach — renaming changes a teammate target and collides with Agent Teams' permanent-name rule, so the Settings page owns it.
+Both tools register in the Session-root Agent scope only, so a teammate never sees them, and the write additionally requires a user-started turn plus exact Host approval of the target, revision, and diff. Disabled, rejected, or unavailable approval writes nothing. Ordinary development input is not shared-prompt authorization; automatic continuations and teammate reports cannot rewrite the preset. Names, member routes, and tool permissions are outside their reach — renaming changes a teammate target and collides with Agent Teams' permanent-name rule, so the Settings page owns it.
 
 The tool's write policy differs from the Settings page: if any online Session that selected or still has that Team applied has a teammate `running` or `provisioning`, `update_team_preset` returns `team-busy` without saving. This conservative model-initiated write check counts teammates only, not the captain executing the tool; counting that captain would block every call. Wait for those teammates to finish, or interrupt them with `interrupt_agent`, then call `get_team_preset` again and retry with its revision. The running task keeps its original definition; the Settings page can still save changes for later adoption, and a member route saved there applies to the next member that task summons. `get_team_preset` reports the executing teammate count.
 

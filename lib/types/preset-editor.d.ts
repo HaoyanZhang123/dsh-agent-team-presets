@@ -73,4 +73,3 @@ export declare function editTeamPreset(team: TeamPreset, edit: TeamPresetEdit): 
  * @returns the failure text, or undefined when the text interpolates cleanly.
  */
 export declare function promptTemplateFailure(text: string, variables: Readonly<Record<string, string | undefined>>): string | undefined;
-//# sourceMappingURL=preset-editor.d.ts.map

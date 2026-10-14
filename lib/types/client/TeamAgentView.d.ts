@@ -36,4 +36,3 @@ export interface TeamAgentViewProps {
  * @returns the back row and the four setting cards.
  */
 export declare function TeamAgentView(props: TeamAgentViewProps): import("react").JSX.Element;
-//# sourceMappingURL=TeamAgentView.d.ts.map

@@ -25,4 +25,3 @@ export declare const inject: string[];
  * @returns disposer withdrawing the UI and the Remote contribution.
  */
 export declare function apply(ctx: ClientContext): Promise<() => Promise<void>>;
-//# sourceMappingURL=index.d.ts.map

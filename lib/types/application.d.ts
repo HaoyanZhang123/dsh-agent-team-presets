@@ -69,4 +69,3 @@ export declare function assertTeamApplicable(agent: Agent, team: TeamPreset): vo
 export declare function applyTeamToAgent(ctx: Context, agent: Agent, team: TeamPreset, providers: MemberProviders, stored?: StoredTeam): TeamApplication;
 /** Session identity helper kept with the application so both call sites brand identically. */
 export type AppliedSessionId = SessionId;
-//# sourceMappingURL=application.d.ts.map

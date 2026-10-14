@@ -80,6 +80,13 @@ describe('Agent Team preset Config', () => {
 })
 
 describe('legacy captain routes', () => {
+  it('keeps unrelated captain extension fields when removing an obsolete route', () => {
+    const [stored] = parse({ ...captainRecord('all', []), provider: 'old', extension: { setting: 1 } })
+    const cleaned = withoutCaptainRoute(stored!)
+    expect(cleaned.captain).toHaveProperty('extension', { setting: 1 })
+    expect(cleaned.captain).not.toHaveProperty('provider')
+  })
+
   it('detects a captain that still stores a route and leaves a modern one alone', () => {
     const [routed] = parse({ ...captainRecord('all', []), provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' })
     expect(hasLegacyCaptainRoute(routed!.captain)).toBe(true)

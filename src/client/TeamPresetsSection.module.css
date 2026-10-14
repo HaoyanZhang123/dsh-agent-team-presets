@@ -265,6 +265,42 @@
   width: 100%;
 }
 
+.toolGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.toolGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolGroupToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toolGroupCount {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .toolGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
@@ -390,6 +426,16 @@
   align-items: flex-start;
   gap: 2px;
   min-width: 0;
+}
+
+/* The action buttons keep their natural width: a long execution notice shrinks
+   and wraps the notes beside them instead of squeezing these into vertical text. */
+.footerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .footerNote {

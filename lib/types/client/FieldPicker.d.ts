@@ -21,4 +21,3 @@ export declare function FieldPicker(props: {
     readonly disabled: boolean;
     readonly onChange: (id: string) => void;
 }): import("react").JSX.Element;
-//# sourceMappingURL=FieldPicker.d.ts.map

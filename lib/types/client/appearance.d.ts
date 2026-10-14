@@ -17,4 +17,3 @@ import type { TeamSelectionRecordView } from './team-presets-controller.ts';
  * @returns the colors the roster draws with, or undefined when the Session selected no Team.
  */
 export declare function teamAppearance(teams: readonly TeamPreset[], selections: readonly TeamSelectionRecordView[], sessionId: string): TeamAppearance | undefined;
-//# sourceMappingURL=appearance.d.ts.map

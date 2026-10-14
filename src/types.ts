@@ -17,7 +17,7 @@ export type TeamSlotPreset = {
   description: string
   /** Independent tool policy; absent in legacy records infers custom from a nonempty list. */
   toolMode?: 'all' | 'custom'
-  /** Global tool allow-list in custom mode; empty denies all configurable tools. */
+  /** Tool allow-list in custom mode, including exact-Agent Team tools; empty denies all. */
   tools: readonly string[]
   /**
    * Standing system prompt for this agent. Registered as a prompt section
@@ -37,6 +37,8 @@ export type TeamCaptainPreset = TeamSlotPreset
 
 /** One summoned member: a slot plus the route that member runs on. */
 export type TeamAgentPreset = TeamSlotPreset & {
+  /** Stable role identity, independent of name, order, and runtime instances. */
+  id?: string
   /** LLM provider route id; empty runs the member on the Session route. */
   provider: string
   /** Provider-owned model id; empty runs the member on the Session model. */
@@ -77,15 +79,46 @@ export type TeamPresetsSection = {
 
 /** One tool a Team member's allow-list may name. */
 export type ToolChoice = {
-  /** Global tool name the restriction accepts verbatim. */
+  /** Capability name the strict execution policy accepts verbatim. */
   name: string
-  /** Model-facing description, shown beside the checkbox. */
+  /** Model-facing description, shown as the checkbox hover text. */
   description: string
+  /**
+   * Whether only the captain can exercise this capability.
+   *
+   * The Team service enforces this for `interrupt_agent` (a member call is
+   * refused with `TEAM_LEAD_REQUIRED`), and this plugin registers the preset
+   * tools on the Session root only. A member that selects such a name still
+   * cannot use it, so the page must say so instead of offering it as grantable.
+   */
+  captainOnly?: boolean
+  /**
+   * Which upstream source the capability was attributed to.
+   *
+   * The tool registry records no registering package: `register()` stores a
+   * definition under its tool name with a fixed label, so "native Harness" and
+   * "some third-party plugin" are not separable. Only two attributions are
+   * deterministic — this plugin's own registrations, and MCP tools, whose
+   * `mcp__<server>__<name>` form the Harness itself generates. Everything else
+   * is reported as `other` rather than guessed at.
+   */
+  source: ToolSource
+  /** MCP server name; present only when {@link source} is `mcp`. */
+  server?: string
 }
+
+/** The upstream source a listed capability could be attributed to. */
+export type ToolSource =
+  /** A capability this plugin registers. */
+  | 'presets'
+  /** A tool an MCP server exposes, named `mcp__<server>__<name>` by the Harness. */
+  | 'mcp'
+  /** Everything else: native Harness tools and third-party plugin tools, which the registry cannot tell apart. */
+  | 'other'
 
 /** Catalog of restrictable tools for one deployment. */
 export type ToolCatalogValue = {
-  /** Every global tool name a member allow-list can select. */
+  /** Union of deployment preset/global and fixed Team capability names. */
   tools: readonly ToolChoice[]
 }
 

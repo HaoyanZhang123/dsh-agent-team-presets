@@ -5,6 +5,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { apply, inject } from '../src/index.ts'
 import type { Config } from '../src/config.ts'
 import { TeamId } from '@deepseek-ai/dsh-experimental-agent-team'
@@ -55,7 +56,7 @@ async function setup(teams: TeamPreset[], selections: TeamSelectionRecord[]) {
   })
   const configure = vi.fn(() => () => {})
   const update = vi.fn(async (_ns: string, _patch: { teams: TeamPreset[] }) => {})
-  ctx.provide('settings', { configure, update })
+  ctx.provide('settings', { configure, update, describe: () => [{ ns: 'agent-team-presets', revision: 0 }] })
   const config = {
     teams: teamsRef.ref,
     selections: selectionsRef.ref,
@@ -177,6 +178,79 @@ describe('Team preset reconciliation', () => {
     await fiber.dispose()
     await handle.dispose()
   })
+
+  it('leaves an unselected Session unrestricted while keeping the preset tools discoverable', async () => {
+    const { ctx, config } = await setup([TEAM], [])
+    ctx.tools.register({
+      name: 'plain_tool', description: 'plain', parameters: {},
+      output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: 'ok' }] },
+      async execute() { return 'ok' },
+    })
+    const handle = await createAgent(ctx, 's1')
+    const fiber = await mount(ctx, config)
+    // A Session that selected no Team keeps every ordinary tool: no guard and no
+    // restriction is installed, so the plugin never narrows normal operation.
+    const result = await ctx.tools.execute({
+      callId: ToolCallId('plain'), name: 'plain_tool', arguments: {}, agent: handle.agent,
+      signal: new AbortController().signal,
+    })
+    expect(result.isError).toBe(false)
+    // The preset tools stay, because a user may ask the captain to adjust a
+    // stored preset before this Session selects one; only the Team capability
+    // and the member tool wait for a selection.
+    expect(ctx.tools.get('get_team_preset', handle.agent)).toBeDefined()
+    expect(ctx.tools.get('update_team_preset', handle.agent)).toBeDefined()
+    expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeUndefined()
+    await fiber.dispose()
+    await handle.dispose()
+  })
+
+  it('deselection releases strict policy only, keeping the preset tools discoverable', async () => {
+    const h = await setup([team([], { toolMode: 'custom', tools: [] })], [{ sessionId: 's1', teamId: 'team-1' }])
+    const body = vi.fn(async () => 'ordinary')
+    h.ctx.tools.register({ name: 'plain_tool', description: 'plain', parameters: {},
+      output: { schema: { type: 'string' }, render: () => [] }, execute: body })
+    const chosen = await createAgent(h.ctx, 's1')
+    const plain = await createAgent(h.ctx, 's2')
+    const fiber = await mount(h.ctx, h.config)
+    const call = (agent: Agent) => h.ctx.tools.execute({ callId: ToolCallId('ordinary'), name: 'plain_tool', arguments: {}, agent, signal: new AbortController().signal })
+    expect((await call(chosen.agent)).isError).toBe(true)
+    expect((await call(plain.agent)).isError).toBe(false)
+    h.selectionsRef.set([])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    expect((await call(chosen.agent)).isError).toBe(false)
+    expect(h.ctx.tools.get('get_team_preset', chosen.agent)).toBeDefined()
+    expect(h.ctx.tools.get('update_team_preset', chosen.agent)).toBeDefined()
+    expect(h.ctx.tools.get('spawn_team_member', chosen.agent)).toBeUndefined()
+    await fiber.dispose()
+  })
+
+  it('denies every tool while the selected Team is gone, rather than silently applying nothing', async () => {
+    // A selection whose Team no longer exists is not an explicit deselection:
+    // applying nothing would quietly hand the Session an unrestricted tool set.
+    const { ctx, config, selectionsRef } = await setup([], [{ sessionId: 's1', teamId: 'team-1' }])
+    ctx.tools.register({
+      name: 'plain_tool', description: 'plain', parameters: {},
+      output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: 'ok' }] },
+      async execute() { return 'ok' },
+    })
+    const handle = await createAgent(ctx, 's1')
+    const fiber = await mount(ctx, config)
+    const result = await ctx.tools.execute({
+      callId: ToolCallId('stale'), name: 'plain_tool', arguments: {}, agent: handle.agent,
+      signal: new AbortController().signal,
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain('Selected Team')
+    expect(JSON.stringify(result.content)).toContain('team-1')
+    expect(JSON.stringify(result.content)).toContain('composer Team control')
+    selectionsRef.set([])
+    ctx.emit('loader/volatile-update', COMMITTED)
+    expect((await ctx.tools.execute({ callId: ToolCallId('recovered'), name: 'plain_tool', arguments: {}, agent: handle.agent, signal: new AbortController().signal })).isError).toBe(false)
+    expect(ctx.tools.get('get_team_preset', handle.agent)).toBeDefined()
+    await fiber.dispose()
+    await handle.dispose()
+  })
 })
 
 describe('stored captain route migration', () => {
@@ -222,8 +296,7 @@ describe('stored captain route migration', () => {
     await settle()
 
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('stored captains still carry'),
-      'provider/model/reasoningEffort',
+      expect.stringContaining('settings migration refused'),
       String(failure),
     )
     expect(warn.mock.calls[0]?.[0]).toContain('agent-team-presets')
@@ -251,9 +324,14 @@ describe('Team tool catalog', () => {
       output: { schema: { type: 'string' }, render: () => [] },
       async execute() { return 'alpha' },
     })
-    expect(new TeamPresetsToolCatalog(ctx).catalog()).toEqual({ tools: [
-      { name: 'alpha', description: 'first' },
-      { name: 'zeta', description: 'last' },
-    ] })
+    const catalog = await new TeamPresetsToolCatalog(ctx).catalog()
+    // An unclassifiable tool is reported as `other` rather than attributed to a
+    // package the registry never recorded.
+    expect(catalog.tools).toEqual(expect.arrayContaining([
+      { name: 'alpha', description: 'first', source: 'other' },
+      { name: 'zeta', description: 'last', source: 'other' },
+    ]))
+    expect(catalog.tools.map(tool => tool.name)).toContain('spawn_team_member')
+    expect(catalog.tools.find(tool => tool.name === 'spawn_team_member')?.source).toBe('presets')
   })
 })

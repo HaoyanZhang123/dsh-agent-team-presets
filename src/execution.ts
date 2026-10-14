@@ -89,7 +89,8 @@ class FrameQueue {
     const encoded = JSON.stringify(frame)
     if (encoded === this.sent) return
     this.sent = encoded
-    this.queue.push(frame)
+    // Whole-set state, not an event journal: retain only the latest unread frame.
+    this.queue.splice(0, this.queue.length, frame)
     const wake = this.wake
     this.wake = undefined
     wake?.()

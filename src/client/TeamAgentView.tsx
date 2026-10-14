@@ -4,6 +4,7 @@
  */
 
 import { Button, Checkbox, Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useState } from 'react'
 import { AGENT_COLORS } from './team-presets-controller.ts'
 import type { ProviderChoice } from './team-presets-controller.ts'
 import { FieldPicker } from './FieldPicker.tsx'
@@ -62,9 +63,38 @@ export function TeamAgentView(props: TeamAgentViewProps) {
   const mode = toolMode(agent)
   const customTools = mode === 'custom'
   const unavailable = toolsReady ? agent.tools.filter(name => !props.tools.some(tool => tool.name === name)) : []
-  const toolChoices = props.tools.length === 0
-    ? agent.tools.map(name => ({ name, description: '' }))
+  const toolChoices: readonly ToolChoice[] = props.tools.length === 0
+    ? agent.tools.map(name => ({ name, description: '', source: 'other' as const }))
     : props.tools
+  // Group the catalogue by the only attributions the Host can prove, plus an
+  // explicit "other" bucket. The registry records no registering package, so a
+  // native Harness tool and a third-party plugin's tool cannot be told apart;
+  // naming that bucket honestly beats guessing an owner for each name.
+  const toolGroups: readonly { key: string; label: string; tools: readonly ToolChoice[] }[] = (() => {
+    const ours = toolChoices.filter(tool => tool.source === 'presets')
+    const byServer = new Map<string, ToolChoice[]>()
+    const other: ToolChoice[] = []
+    for (const tool of toolChoices) {
+      if (tool.source === 'presets') continue
+      if (tool.source === 'mcp' && tool.server !== undefined) {
+        byServer.set(tool.server, [...byServer.get(tool.server) ?? [], tool])
+        continue
+      }
+      other.push(tool)
+    }
+    const groups: { key: string; label: string; tools: readonly ToolChoice[] }[] = []
+    if (ours.length > 0) groups.push({ key: 'presets', label: t('toolsGroupPresets'), tools: ours })
+    for (const [server, tools] of [...byServer.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      groups.push({ key: `mcp:${server}`, label: `${t('toolsGroupMcp')}: ${server}`, tools })
+    }
+    if (other.length > 0) groups.push({ key: 'other', label: t('toolsGroupOther'), tools: other })
+    return groups
+  })()
+  // Groups start collapsed: a deployment with many tools is unreadable as one
+  // flat grid, and each header already reports how many of its tools are chosen.
+  const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([])
+  /** Whether this page may grant the tool at all; a member cannot grant captain-only. */
+  const grantable = (tool: ToolChoice): boolean => !(props.role === 'member' && tool.captainOnly === true)
   const modeOptions: PickerChoice[] = [
     { id: 'all', label: t('toolsDefault') },
     { id: 'custom', label: t('toolsCustom') },
@@ -202,7 +232,15 @@ export function TeamAgentView(props: TeamAgentViewProps) {
                   size="sm"
                   variant="ghost"
                   disabled={disabled || !toolsReady || props.tools.length === 0}
-                  onClick={() => { props.onChange({ tools: props.tools.map(tool => tool.name) }) }}
+                  onClick={() => {
+                    // A member can never exercise a captain-only capability, so
+                    // select-all must not persist one into its allow-list.
+                    props.onChange({
+                      tools: props.tools
+                        .filter(tool => !(props.role === 'member' && tool.captainOnly === true))
+                        .map(tool => tool.name),
+                    })
+                  }}
                 >
                   {t('toolsSelectAll')}
                 </Button>
@@ -216,23 +254,99 @@ export function TeamAgentView(props: TeamAgentViewProps) {
                 </Button>
               </span>
             </div>
-            <div className={css.toolGrid} role="group" aria-label={t('tools')}>
-              {toolChoices.map(tool => (
-                <Checkbox
-                  key={tool.name}
-                  className={css.toolCheckbox}
-                  label={tool.name}
-                  title={tool.description}
-                  checked={agent.tools.includes(tool.name)}
-                  disabled={disabled || (!toolsReady && !agent.tools.includes(tool.name))}
-                  onChange={(checked) => {
-                    props.onChange({
-                      tools: checked ? [...agent.tools, tool.name] : agent.tools.filter(name => name !== tool.name),
-                    })
-                  }}
-                />
-              ))}
-            </div>
+            {toolGroups.map(group => {
+              const expanded = expandedGroups.includes(group.key)
+              const grantableTools = group.tools.filter(grantable)
+              const chosen = group.tools.filter(tool => agent.tools.includes(tool.name)).length
+              // Rewrite only this group's slice of the allow-list, so another
+              // group's selection and a stored name this catalogue cannot
+              // describe both survive untouched.
+              const inside = new Set(group.tools.map(tool => tool.name))
+              const outside = agent.tools.filter(name => !inside.has(name))
+              const retained = group.tools
+                .filter(tool => agent.tools.includes(tool.name) && !grantable(tool))
+                .map(tool => tool.name)
+              return (
+                <div key={group.key} className={css.toolGroup}>
+                  <div className={css.toolGroupHead}>
+                    <button
+                      type="button"
+                      className={css.toolGroupToggle}
+                      aria-expanded={expanded}
+                      onClick={() => {
+                        setExpandedGroups(current => current.includes(group.key)
+                          ? current.filter(entry => entry !== group.key)
+                          : [...current, group.key])
+                      }}
+                    >
+                      <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+                      <span className={css.fieldLabel}>{group.label}</span>
+                      <span className={css.toolGroupCount}>{`${String(chosen)}/${String(group.tools.length)}`}</span>
+                    </button>
+                    <span className={css.rowActions}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled || !toolsReady}
+                        onClick={() => {
+                          props.onChange({ tools: [...outside, ...grantableTools.map(tool => tool.name), ...retained] })
+                        }}
+                      >
+                        {t('toolsSelectAll')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled || !toolsReady}
+                        onClick={() => {
+                          const flipped = grantableTools
+                            .filter(tool => !agent.tools.includes(tool.name))
+                            .map(tool => tool.name)
+                          props.onChange({ tools: [...outside, ...flipped, ...retained] })
+                        }}
+                      >
+                        {t('toolsInvert')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled || chosen === 0}
+                        onClick={() => { props.onChange({ tools: [...outside] }) }}
+                      >
+                        {t('toolsClear')}
+                      </Button>
+                    </span>
+                  </div>
+                  {expanded ? (
+                    <div className={css.toolGrid} role="group" aria-label={group.label}>
+                      {group.tools.map(tool => {
+                        // The Team service enforces captain-only for these, and
+                        // the preset tools exist on the Session root scope alone,
+                        // so a member cannot use them however the list is edited.
+                        // A name already stored stays visible and removable.
+                        const restricted = !grantable(tool)
+                        const selected = agent.tools.includes(tool.name)
+                        return (
+                          <Checkbox
+                            key={tool.name}
+                            className={css.toolCheckbox}
+                            label={tool.name}
+                            title={restricted ? `${tool.description} ${t('toolsCaptainOnly')}` : tool.description}
+                            checked={selected}
+                            disabled={disabled || (restricted && !selected) || (!toolsReady && !selected)}
+                            onChange={(checked) => {
+                              props.onChange({
+                                tools: checked ? [...agent.tools, tool.name] : agent.tools.filter(name => name !== tool.name),
+                              })
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
             {props.toolCatalogue === 'loading' || props.toolCatalogue === 'idle' ? (
               <span className={css.hint} role="status">{t('toolsLoading')}</span>
             ) : props.toolCatalogue === 'error' ? (

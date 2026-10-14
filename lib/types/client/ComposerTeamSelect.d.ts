@@ -12,4 +12,3 @@ export type ComposerTeamSelectProps = PropsRuntime<'conversation.input.left'> & 
  * @returns the Team trigger, or null while no Team is configured.
  */
 export declare function ComposerTeamSelect(props: ComposerTeamSelectProps): import("react").JSX.Element;
-//# sourceMappingURL=ComposerTeamSelect.d.ts.map

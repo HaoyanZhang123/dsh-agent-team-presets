@@ -116,7 +116,7 @@ export function definitionFingerprint(team: TeamPreset): string {
     name: team.name,
     description: team.description,
     captain: slotDefinition(team.captain),
-    members: team.members.map(member => slotDefinition(member)),
+    members: team.members.map(member => ({ ...slotDefinition(member), ...member.id === undefined ? {} : { id: member.id } })),
   })
 }
 

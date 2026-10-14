@@ -106,6 +106,20 @@ export function executionStateOf(state: TeamPresetsState, teamId: string): TeamE
   return state.executions.find(row => row.teamId === teamId)?.state ?? 'unknown'
 }
 
+/**
+ * Every Team in the open draft that has no name, so the save is withheld.
+ *
+ * A Team's name is its identity everywhere it is shown: the list, the composer
+ * selector, and this page's own breadcrumb each fall back to the raw id when the
+ * name is empty. Storing one therefore leaks an id into the UI instead of
+ * failing visibly, so the unnamed Teams are named back to the user and refused.
+ * @param teams - the Teams in the open draft, in page order.
+ * @returns the unnamed Teams, in page order.
+ */
+export function unnamedTeamsOf(teams: readonly TeamPreset[]): TeamPreset[] {
+  return teams.filter(team => team.name.trim() === '')
+}
+
 /** One adopted external Team update, as the page's status line reports it. */
 export interface ExternalUpdateNotice {
   /** Display names of the adopted Teams in page order; an unnamed Team reports its id. */
@@ -229,6 +243,7 @@ const EMPTY: TeamPresetsSection = { teams: [], selections: [] }
  */
 function agentJson(agent: TeamAgentPreset): JsonValue {
   return {
+    ...agent.id === undefined ? {} : { id: agent.id },
     name: agent.name,
     color: agent.color,
     description: agent.description,
@@ -339,6 +354,7 @@ export function emptyCaptainPreset(): TeamCaptainPreset {
 export function emptyAgentPreset(): TeamAgentPreset {
   return {
     ...emptyCaptainPreset(),
+    id: crypto.randomUUID(),
     provider: '',
     model: '',
     reasoningEffort: '',
@@ -688,7 +704,16 @@ export class TeamPresetsController {
     void read.then((result) => {
       if (!this.acceptsCatalogue(generation)) return
       if (!result.ok) throw new Error(result.error.message)
-      this.tools = result.value.tools.map(tool => ({ name: tool.name, description: tool.description }))
+      // The role restriction and the source attribution must survive this
+      // projection: dropping them here is what let a member page offer
+      // captain-only tools as freely grantable and left every tool ungrouped.
+      this.tools = result.value.tools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        source: tool.source,
+        ...tool.captainOnly === true ? { captainOnly: true } : {},
+        ...tool.server === undefined ? {} : { server: tool.server },
+      }))
       this.toolCatalogue = 'ready'
       this.toolCatalogueLoading = false
       this.publish()

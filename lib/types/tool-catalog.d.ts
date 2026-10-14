@@ -1,9 +1,9 @@
 /**
  * Host catalog of the tools a Team member's allow-list may name.
  *
- * `ctx.tools.restrict({ allow })` accepts only **global** tool names, so this
- * service projects exactly the global view that restriction validates against:
- * a name it does not list would be refused when the member is summoned.
+ * Read globals and standing Agent preset scopes without creating Agents. The
+ * editor offers their union plus fixed Team operations; application validates
+ * the selected Session and strict guards cover exact-Agent registrations.
  * @module dsh-agent-team-presets/tool-catalog
  */
 import { Context } from '@deepseek-ai/cordis';
@@ -25,7 +25,7 @@ export interface TeamPresetsToolCatalogConfig {
      */
     readonly monitor?: TeamExecutionMonitor;
 }
-/** Remote catalog of the global tools one Team agent allow-list may name. */
+/** Remote catalog of the deployment's inherited and Team tool names. */
 export default class TeamPresetsToolCatalog extends TypertRemoteService {
     static inject: string[];
     private readonly monitor;
@@ -35,14 +35,14 @@ export default class TeamPresetsToolCatalog extends TypertRemoteService {
      */
     constructor(ctx: Context, config?: TeamPresetsToolCatalogConfig);
     /**
-     * List every global tool a member allow-list may name.
+     * List global, standing-preset and fixed Team capability choices.
      *
      * The reserved PTC mode transport is excluded: `ctx.tools.restrict()` refuses
      * it, so offering it as a checkbox would produce a selection the summon path
      * rejects.
      * @returns the tool names and model-facing descriptions, sorted by name.
      */
-    catalog(): ToolCatalogValue;
+    catalog(): Promise<ToolCatalogValue>;
     /**
      * Stream the execution state of every Team the Host reports.
      *
@@ -55,4 +55,3 @@ export default class TeamPresetsToolCatalog extends TypertRemoteService {
      */
     execution(signal: AbortSignal): AsyncIterable<TeamExecutionSnapshot>;
 }
-//# sourceMappingURL=tool-catalog.d.ts.map

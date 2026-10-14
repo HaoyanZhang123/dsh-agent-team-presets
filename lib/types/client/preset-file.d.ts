@@ -22,4 +22,3 @@ export declare function readPresetFile(file: File): Promise<string>;
  * @param text - the document body.
  */
 export declare function downloadPresetText(fileName: string, text: string): void;
-//# sourceMappingURL=preset-file.d.ts.map

@@ -29,4 +29,3 @@ export interface TeamListViewProps {
  * @returns the header, the create and import actions, and one row per Team.
  */
 export declare function TeamListView(props: TeamListViewProps): import("react").JSX.Element;
-//# sourceMappingURL=TeamListView.d.ts.map

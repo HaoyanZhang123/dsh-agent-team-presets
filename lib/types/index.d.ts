@@ -37,4 +37,3 @@ export declare const inject: string[];
  * @param config - the live configuration whose volatile values carry the stored Teams.
  */
 export declare function apply(ctx: Context, config: Config): void;
-//# sourceMappingURL=index.d.ts.map

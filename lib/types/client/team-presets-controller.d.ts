@@ -79,6 +79,17 @@ export interface TeamPresetsState {
  * @returns the execution state the footer reports.
  */
 export declare function executionStateOf(state: TeamPresetsState, teamId: string): TeamExecutionState;
+/**
+ * Every Team in the open draft that has no name, so the save is withheld.
+ *
+ * A Team's name is its identity everywhere it is shown: the list, the composer
+ * selector, and this page's own breadcrumb each fall back to the raw id when the
+ * name is empty. Storing one therefore leaks an id into the UI instead of
+ * failing visibly, so the unnamed Teams are named back to the user and refused.
+ * @param teams - the Teams in the open draft, in page order.
+ * @returns the unnamed Teams, in page order.
+ */
+export declare function unnamedTeamsOf(teams: readonly TeamPreset[]): TeamPreset[];
 /** One adopted external Team update, as the page's status line reports it. */
 export interface ExternalUpdateNotice {
     /** Display names of the adopted Teams in page order; an unnamed Team reports its id. */
@@ -421,4 +432,3 @@ export interface TeamPresetsInjected {
 }
 export { sameTeam };
 export type { ModelCatalog };
-//# sourceMappingURL=team-presets-controller.d.ts.map

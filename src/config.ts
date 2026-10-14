@@ -28,6 +28,7 @@ const captainSchema = z.object(teamSlotFields)
 /** A member stores the route it runs on. */
 const memberSchema = z.object({
   ...teamSlotFields,
+  id: z.string(),
   provider: z.string().default(''),
   model: z.string().default(''),
   reasoningEffort: z.string().default(''),
@@ -68,15 +69,9 @@ export function hasLegacyCaptainRoute(captain: TeamCaptainPreset): boolean {
  */
 export function withoutCaptainRoute(team: TeamPreset): TeamPreset {
   if (!hasLegacyCaptainRoute(team.captain)) return team
-  const { name, color, description, tools, systemPrompt } = team.captain
-  const captain: TeamCaptainPreset = {
-    name,
-    color,
-    description,
-    toolMode: toolMode(team.captain),
-    tools: [...tools],
-    systemPrompt,
-  }
+  // Remove only the obsolete fields, preserving unknown extension fields.
+  const captain = { ...team.captain, toolMode: toolMode(team.captain) }
+  for (const key of LEGACY_CAPTAIN_ROUTE_KEYS) delete (captain as Record<string, unknown>)[key]
   return { ...team, captain }
 }
 

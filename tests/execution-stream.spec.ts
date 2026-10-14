@@ -327,6 +327,23 @@ describe('Team execution stream', () => {
     controller.abort()
   })
 
+  it('coalesces thousands of unread states to only the latest snapshot', async () => {
+    const h = await setup({ teams: [TEAM_A], selections: SELECTED })
+    const captain = await h.create('s1')
+    h.apply(captain, TEAM_A)
+    const controller = new AbortController()
+    const iterator = h.monitor.stream(controller.signal)[Symbol.asyncIterator]()
+    await nextFrame(iterator)
+    for (let count = 1; count <= 2000; count++) {
+      h.teammates('s1', Array.from({ length: count % 5 + 1 }, () => teammate('running')))
+      h.monitor.invalidate()
+      await Promise.resolve()
+    }
+    expect((await nextFrame(iterator)).teams[0]?.executingMembers).toBe(1)
+    controller.abort()
+    expect((await iterator.next()).done).toBe(true)
+  })
+
   it('ends the stream on abort and releases its subscriber on dispose', async () => {
     const h = await setup({ teams: [TEAM_A], selections: SELECTED })
     const controller = new AbortController()
