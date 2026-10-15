@@ -129,7 +129,7 @@ dsh-agent-team-presets@0.1.4
 
 <!-- release-version: 与 package.json 的 version 同步 -->
 
-- **安装源**决定从哪个 npm 源下载；用「默认安装源」或「npm 官方源」都可以，两者都不通时改用「中国大陆镜像源」。
+- **安装源**决定从哪个 npm 源下载。「默认安装源」指 pnpm 自身配置所指的源：若本机 `~/.npmrc` 已经指向 `registry.npmmirror.com`，默认源就是国内镜像，列表里不会再出现单独的「中国大陆镜像源」项。要绕开镜像选「npm 官方源」；要换第三个源（内网私有源，或腾讯云 `https://mirrors.cloud.tencent.com/npm/`、华为云 `https://repo.huaweicloud.com/repository/npm/` 这类镜像）选「自定义地址」。
 - `@0.1.4` 指定版本；想装 npm 上当前的最新版，去掉它只填 `dsh-agent-team-presets`。
 - 输入框与 `dsh plugin add` 接受同一套规格：`包名`、`包名@版本`、`github:作者/仓库`、压缩包地址或绝对路径。安装前会对包做一次查询，版本不存在、或包没有声明 `dsh.bundle`，都会在安装前被拒。
 - 本包声明了自己的 `dsh.bundle`，安装后由插件管理器登记为 profile 的 bundle 层，不要再手写 loader 条目。

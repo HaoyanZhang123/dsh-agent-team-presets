@@ -129,7 +129,7 @@ dsh-agent-team-presets@0.1.4
 
 <!-- release-version: keep in sync with package.json version -->
 
-- **Registry** selects which npm source the download comes from; **Default registry** and **Official npm registry** both work, and **Mainland China mirror** is there when neither answers.
+- **Registry** selects which npm source the download comes from. **Default registry** means whatever pnpm's own configuration names: on a machine whose `~/.npmrc` already points at `registry.npmmirror.com`, that *is* the mainland mirror, so the dialog lists no separate **Mainland China mirror** entry. Pick **Official npm registry** to bypass a mirror, or **Custom address** for a third source — an internal registry, or another mirror such as `https://mirrors.cloud.tencent.com/npm/` or `https://repo.huaweicloud.com/repository/npm/`.
 - `@0.1.4` names the version; drop it and enter `dsh-agent-team-presets` to take whatever npm currently publishes.
 - The field takes the same specs as `dsh plugin add`: a package name, `name@version`, `github:owner/repo`, a tarball URL, or an absolute path. The check before installing queries the package, so a version that does not exist or a package without `dsh.bundle` is refused before anything is written.
 - This package declares its own `dsh.bundle`, so the plugin manager registers it as a profile bundle layer; do not add a loader entry by hand.
