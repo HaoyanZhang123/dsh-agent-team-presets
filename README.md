@@ -2,391 +2,370 @@
 
 <img src="banner.png" alt="Reusable Agent Team presets for DeepSeek Harness" width="100%">
 
-English | [中文](README.zh.md)
+*Concept illustration. See [Screenshots](#screenshots) for the plugin interface; the captain uses the conversation's selected model.*
 
-<!-- Maintainers: this block and the pinned `#vX.Y.Z` install command further down both
-     hardcode the release version — bump them together with package.json on every release. -->
-> **Status: community plugin v0.1.4**, released as the GitHub tag `v0.1.4`.
-> Install that release with
-> `dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.4`,
-> or follow this repository unpinned with
-> `... add github:bloodarea/dsh-agent-team-presets` — that is the form the plugin
-> market can offer updates for, because it compares this repository's own
-> `package.json` version. The npm registry still serves
-> [`0.1.3`](https://www.npmjs.com/package/dsh-agent-team-presets), which predates
-> the shipped default presets: `dsh plugin --profile <profile> add
-> dsh-agent-team-presets` installs that older release until this one is published.
-> To reproduce one exact release, pin the ref as above; a pinned install is
-> compared only against that same ref, so the market never offers an update for
-> it, by design.
-> The supported Harness peer range is `>=0.2.0-rc.1 <0.3.0`, checked by the plugin
-> manager; the Harness version is not this plugin's version. Plugin details for
-> `dsh-agent-team-presets` should show `v0.1.4`. A card naming
-> `@deepseek-ai/dsh-experimental-agent-team-presets` instead is the monorepo
-> development package, whose version follows the Harness (for example,
-> `0.2.0-rc.2`), not this community release. `lib/` ships prebuilt; rebuilding
-> source needs a Harness checkout — see [DEVELOPMENT.md](DEVELOPMENT.md) and
-> [CHANGELOG.md](CHANGELOG.md).
+English | [中文](<README.zh.md>)
 
-## Summary
-
-`dsh-agent-team-presets` adds a Settings page that configures named Agent Teams and a composer control that applies one Team to a Session. A Team has a captain and any number of members: the captain carries its own prompt and tool policy, while each member also carries its own provider/model route and reasoning effort, read from the stored Team each time that member is summoned. Applying a Team installs the captain's prompt, restricts its tools, and registers `spawn_team_member`, which summons a member with that member's own persona, route, effort, and tools. A captain leads on the model the Session already selected.
+> **Community plugin v0.1.4** · [Release](https://github.com/bloodarea/dsh-agent-team-presets/releases/tag/v0.1.4)
+>
+> Requires a compatible DeepSeek Harness deployment with Agent Teams enabled. This version uses rc.2 APIs; see [Requirements](#requirements). Prebuilt artifacts are included, so installation does not require a source build.
 
 <a id="project-introduction"></a>
-## Project introduction
+## Overview
 
-> Turn DeepSeek Harness Agent Teams from ad-hoc lineups into configurable, reusable professional AI teams.
+**dsh-agent-team-presets** is a visual Team preset manager for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). Configure a Team once, then select it from the conversation composer whenever you need it.
 
-**dsh-agent-team-presets** is a visual Agent Team preset manager for DeepSeek Harness. It configures roles, per-member models, reasoning effort, system prompts, and tool permissions, so a professional AI team is configured once and reused on demand.
+A Team contains a **captain** and any number of **member roles**:
+
+- The captain uses the conversation's selected model, with its own role description, system prompt, and tool policy.
+- Each member can have a different provider, model, reasoning effort, system prompt, and tool policy.
+- The captain summons members through `spawn_team_member`; native Agent Teams provides messaging, the shared task board, and runtime coordination.
+
+This is a community plugin, not the Harness's bundled `@deepseek-ai/dsh-experimental-agent-team-presets` development package.
 
 <a id="why-this-plugin"></a>
-## Why this plugin?
+### Features
 
-DeepSeek Harness already ships Agent Teams with multi-agent collaboration, but it leaves room in per-team configuration and reuse.
+- **Reusable Teams:** create, duplicate, edit, select, and delete named presets.
+- **Per-member model routes:** assign models and reasoning effort to individual roles without changing the captain's model.
+- **Independent tool policies:** choose all available tools or a custom allow-list for the captain and each member.
+- **Portable presets:** import and export role definitions while keeping deployment-specific routes and tool permissions local.
+- **Built-in starting points:** lightweight, standard, and full-stack software development Teams.
+- **Live settings feedback:** see whether a Team is idle, busy, or awaiting an update in an online Session.
 
-This plugin addresses five gaps:
+## Contents
 
-- **Teams are hard to reuse.** Native teams focus on runtime creation and collaboration and offer no visual preset management; this plugin saves, duplicates, and reuses team configurations.
-- **Role setup is repetitive.** Member responsibilities no longer have to be re-described every time: each role's name, description, and system prompt are configured in advance.
-- **Splitting work across models is awkward.** Every member picks its own model and reasoning effort, so one team combines models by task; the captain keeps leading on the model the session already selected.
-- **Tool permissions have no fine-grained entry point.** The captain and each member carry their own global tool allow-list, so roles differ in what they may use.
-- **Switching teams is inconvenient.** Pick a preset team from the composer, with no repeated manual role setup.
-
-**Design principle:** native Agent Teams owns collaboration at runtime; dsh-agent-team-presets owns configuring, managing, and reusing teams.
+- [Screenshots](#screenshots)
+- [Requirements](#requirements)
+- [Install and upgrade](#use-this-package)
+- [Configure and use a Team](#configure-a-team)
+- [Share presets](#share-presets)
+- [Let the captain edit a preset](#edit-presets-with-tools)
+- [Tool permissions and security](#tool-permissions)
+- [Troubleshooting and limitations](#known-limitations-and-deferred-work)
+- [How it works](#understand-the-implementation)
+- [Development and contributing](#development)
+- [Related resources](#further-exploration)
+- [License](#license)
 
 <a id="screenshots"></a>
 ## Screenshots
 
-**The Team control in the composer** — apply one preset Team to this Session, or clear it.
+The screenshots illustrate the composer control and settings workflow. Example Team and provider names are illustrative; available models and tools depend on your deployment. Some screenshots show an earlier UI revision, so controls and helper text may differ from v0.1.4. The permission rules below describe the current version.
 
-![The Team control in the composer](docs/images/01-composer-team-control.png)
+**Choose a Team in the composer**
 
-**Settings → Agent team presets** — every configured Team, with create, duplicate, and delete.
+![The Team control in the composer](<docs/images/01-composer-team-control.png>)
 
-![The Team list in Settings](docs/images/02-team-list.png)
+**Manage saved Teams**
 
-**One Team** — its name and description, the captain, and the member roster.
+![The Team list in Settings](<docs/images/02-team-list.png>)
 
-![One Team's editor](docs/images/03-team-editor.png)
+**Configure member models and reasoning effort**
 
-**One member** — its own provider, model, and reasoning effort. The captain leads on the Session model, so only a member carries a route.
+![A member's model settings](<docs/images/04-member-route.png>)
 
-![One member's route pickers](docs/images/04-member-route.png)
+<details>
+<summary>More settings screenshots</summary>
 
-**The model picker** — every provider and model the deployment currently advertises.
+**Team editor**
 
-![The model picker](docs/images/05-model-picker.png)
+![One Team's editor](<docs/images/03-team-editor.png>)
 
-**The captain's system prompt** — it becomes the Session prompt; complete `{{variable}}` groups interpolate against registered variables, and an unknown variable fails the request instead of degrading.
+**Model picker**
 
-![The captain's system prompt](docs/images/06-captain-system-prompt.png)
+![The model picker](<docs/images/05-model-picker.png>)
 
-**A member's system prompt** — a summoned member reads it after its Team briefing.
+**Captain and member system prompts**
 
-![A member's system prompt](docs/images/07-member-system-prompt.png)
+![The captain's system prompt](<docs/images/06-captain-system-prompt.png>)
 
-**Tool permission: all tools (default)** — adds no restriction; switching modes keeps the saved custom checks.
+![A member's system prompt](<docs/images/07-member-system-prompt.png>)
 
-![Tool permission with all tools](docs/images/08-tools-default.png)
+**Tool policy controls**
 
-**Tool permission: custom allowed tools** — the catalog lists built-in file tools, Team coordination tools, and plugin tools together; an unselected tool is denied at execution time, not merely discouraged in the prompt.
+![Default tool policy](<docs/images/08-tools-default.png>)
 
-![Tool permission with custom allowed tools](docs/images/09-tools-custom.png)
+![Custom tool policy](<docs/images/09-tools-custom.png>)
 
-## Table of Contents
+</details>
 
-- [Project introduction](#project-introduction)
-- [Why this plugin?](#why-this-plugin)
-- [Screenshots](#screenshots)
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Further Exploration](#further-exploration)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+<a id="requirements"></a>
+## Requirements
 
------
+- **DeepSeek Harness with the required rc.2 APIs.** Several dependencies require `>=0.2.0-rc.2 <0.3.0`, while others have broader peer ranges. The plugin manager checks every declared dependency; the exact requirements are in [package.json](<package.json>). Do not treat rc.1 as sufficient for this release.
+- **Agent Teams enabled in the target profile.** The standard integration is `@deepseek-ai/dsh-experimental-agent-team-profile`, which supplies the Team service, tools, and Web roster. This plugin configures Teams; it does not replace that subsystem.
+- **A Web or Desktop profile with Settings and the required client services.** Install into the profile you actually use, typically `web` for the Web GUI or `desktop` for Desktop.
+- **Durable storage and a continuable subagent backend for member execution.** Member creation is refused if the storage domain or the selected execution backend is unavailable. The default backend names are `spawn` and `fork`; custom deployments must configure compatible backends.
+
+The plugin version (`0.1.4`) and the Harness version (`0.2.0-rc.2`, for example) are separate version lines.
 
 <a id="use-this-package"></a>
-## Use this package
+## Install and upgrade
 
-Install the bundle into a profile that already composes `@deepseek-ai/dsh-experimental-agent-team-profile` (the Team service, the Team tools, and the Web roster), then open Settings → Agent team presets.
+### Install from GitHub
 
-### Install, upgrade, and verify the version
-
-From npm — the form with the cleanest update semantics, because the market
-compares the registry's `latest` tag against the installed version. The registry
-currently serves `0.1.3`, which predates the shipped default presets, so use the
-GitHub form below until this release is published there:
-
-```sh
-dsh plugin --profile <profile> add dsh-agent-team-presets
-```
-
-From GitHub, unpinned — updates then follow this repository's own `package.json`
-version, currently `0.1.4`: the market compares that version against the installed
-one, so a release is advertised when the version moves, and a commit that does not
-bump it is not offered:
+For an installation that can receive repository-version update notifications:
 
 ```sh
 dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets
 ```
 
-To reproduce one exact release, pin the ref instead — and note that a pinned
-install is compared only against that same ref, so the market never offers an
-update for it, by design:
+Replace `<profile>` with the profile your GUI runs. For example:
+
+```sh
+dsh plugin --profile web add github:bloodarea/dsh-agent-team-presets
+```
+
+To select the v0.1.4 release tag instead:
 
 ```sh
 dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.4
 ```
 
-Replace `<profile>` with the profile the GUI actually runs (for example, `web`).
-To move a profile from the development link to this release by hand, back up the
-profile and its Team configuration, remove the installed package, then install
-this one into the same profile. If the old package is the development link, remove
-`@deepseek-ai/dsh-experimental-agent-team-presets`, not `dsh-agent-team-presets`.
-Do not enable both packages: they own the same `agent-team-presets` settings and
-client registrations. When migrating a development profile, keep the Team
-configuration and selections under that entry id, but replace its module name
-and the selected bundle with `dsh-agent-team-presets`.
+An unpinned GitHub install follows the repository's package version for market update checks; commits without a version increase do not produce a new-version notification. A pinned ref is compared only with that ref, so later releases are not offered automatically. Use a commit SHA rather than a tag if you need an immutable source reference.
 
-After switching package identities, restart the running Harness and refresh the
-GUI; a page refresh alone can leave the old client entry in the Host's module
-table and produce duplicate-plugin boot failures. Verify the plugin details show
-both `dsh-agent-team-presets` and `v0.1.4`, with its component running. The
-Harness's own `0.2.0-rc.*` version is a separate compatibility requirement.
+### npm release channel
 
-### Desktop and agent-assisted installation
+GitHub and [npm](https://www.npmjs.com/package/dsh-agent-team-presets) are separate release channels and may not carry the same version. Check npm before installing from it:
 
-**Startup fix shipped in 0.1.4:** the prebuilt Host Typert and Remote entrypoints
-inline their `zod` schema code, so a local source link without `node_modules/zod`
-does not fail its startup import. Strict validation remains enabled; this does not
-replace the Harness peer compatibility requirements. A copy installed from an
-earlier tag does not receive this fix automatically.
-
-- When the user supplies this repository's GitHub URL, use the `github:` install
-  form above. “I developed it myself” is not authorization to substitute a
-  `file:` / `link:` source checkout or hand-edit the profile. Use a development
-  link only when explicitly requested.
-- Install into the profile the Desktop actually runs (`desktop`, not the default
-  `web`). The in-app plugin manager targets it; recommend a restart only after a
-  successful installation with no failed operation status.
-- On a nonzero installation exit, manager failure, or compatibility rejection,
-  stop and report the logs. Do not declare success, hand-append dependencies or
-  patches, or ask the user to keep restarting. Back up configuration before
-  recovery and preserve Team definitions and Session selections.
-- On Windows, do not rewrite profile JSON with a UTF-8 BOM. This plugin does not
-  rewrite profile manifest encoding, Host locks, or other plugins' dependencies.
-- BOM parse errors, credential-lock timeouts, and other plugins' installation
-  failures are independent Harness/install-flow issues, outside this fix. Do not
-  disable Typert validation or blindly delete locks while the Host is running.
-
-### Configure a Team
-
-**Custom policies (shipped in 0.1.4):** custom policies cover inherited and exact-Agent tools, including coordination; the catalog includes standing-preset builtins. Custom mode denies general Node `run_code` and ordinary delegation without a strict durable policy contract. Tool-name policies are not OS/path isolation. Invalid initial applications and busy remounts without their frozen snapshot are quarantined; failed updates retain the old policy. Shared prompt edits require exact Host approval, not merely a human-started turn. These are working-tree changes, not a deployment to the current GUI. See the [remediation report](docs/evidence/0.1.4-remediation.md).
-
-**Boundary fixes (shipped in 0.1.4):** every member is now created through this plugin's own subagent execution-backend alias, which the Host writes into its roster and the child's descriptor as a durable identity independent of the snapshot. A marked child whose snapshot is unreadable, whose durable unit cannot be opened, or whose Team identity cannot be resolved is refused inside the creation transaction instead of resuming on the Team Lead's route. A new member is validated against the host's delegation depth cap and its fixed model route first, and a refused creation leaves no intent, no roster row, and no model request. Strict custom policies are applied with native tool calling: when the Session's own Agent scope already declares PTC/both the Team is not applied at all (the previous policy stays and the reason is logged), and when it covered a preset-level PTC presentation the Settings page says so. The Team briefing stays visible under the official `minimal` preset. With the plugin absent entirely, later cold resumes are outside its control. The boundary-fix and real-instance report (`docs/evidence/0.1.4-verify/REPORT.md`) is local working evidence: `docs/evidence/` is not committed.
-
-Settings → Agent team presets is three stacked pages, so a narrow Settings panel never crowds:
-
-1. **Teams** — every configured Team as one row (name, member count, session model). Create, duplicate, or delete from here.
-2. **One Team** — its name and description, the captain row, and the member roster. Adding a member opens that member's page.
-3. **One agent** (captain or member) — identity, tools, and system prompt, each in its own card; a member page adds the model card and deletes that member.
-
-Every edit is staged and written by the **Save** control in the shared footer; the stored value lives in the profile's user settings document. Settings accepts saves during a Team task without interrupting it. A Session is busy while its captain is `running` or any teammate is `running` or `provisioning`; its captain persona, briefing, member preset prompts and role descriptions, member tool description and roster, and tool permissions keep the applied definition, and members summoned during that task use that definition. A member's **model route** and each slot's **color** are deliberately outside the frozen definition, because both are read from the stored Team when they are needed: saving a corrected provider, model, or reasoning effort reaches the next member the running task summons without restarting it, and a color change redraws right away. Once the Session is fully idle, it adopts the latest saved definition before its next Team task; successive saves converge to the latest value. Sessions sharing a preset adopt it independently.
-
-The footer reports the selected Team's execution state across online Sessions:
-
-- **`idle`** — no Session is executing that Team's task; a save takes effect immediately.
-- **`busy`** — at least one Session is executing; idle Sessions adopt a definition change immediately, while busy Sessions adopt it before their next task. A member's route saved meanwhile applies to the next member summoned, in a task already running as well. A teammate finishing does not release the definition while the captain is still running.
-- **`unknown`** — execution cannot be confirmed, including before the stream is ready, after it ends or fails, during a connection loss, or when the Host lacks the method or a Team's state. The page does not treat a previous idle frame as current fact. A definition change still cannot affect a task already in progress, while a member's route saved meanwhile applies to the next member summoned.
-
-| Field | Meaning |
-|---|---|
-| Team name | Display name shown in Settings and in the composer control. |
-| Captain | The agent that leads the Session: its system prompt becomes the Session prompt and its tool scope scopes the session tools. It leads on the model the Session already selected, so it has no route of its own. |
-| Members | Role templates the captain summons by name. |
-| Name | Display name; the teammate target is derived from it (lower-kebab-case, falling back to `member-<n>`). |
-| Color | Accent mark shown in Settings. |
-| Description | The role hint the models act on: the captain reads its own description, the Team description, and every member's description, so it can pick the member whose description fits the work; a summoned member reads the Team description and its own description as its role. |
-| Provider / Model | **Members only.** Route chosen from every provider and model the deployment currently advertises. Empty runs the member on the Session route. |
-| Reasoning effort | **Members only.** Adapter-owned effort for the selected route; empty uses the model default. |
-| Allowed tools | Choose **Default: all tools** or **Custom allowed tools** separately for the captain and each member. Custom mode displays the deployment's global and inherited preset tools as an expanded checkbox grid, with select-all and clear controls. Each checkbox's hover text states what the tool actually is: a registry tool keeps its author's English description, this plugin's own three tools share one English text (the tool definition and the hover tip use the same constant), and a name neither source describes is not listed rather than given invented hover text. **Tool descriptions stay English**, because the upstream `ToolDefinition` carries a single description with no localization field and that text is model-facing first; the surrounding UI copy still follows the language setting. Tools are grouped by source: **this plugin**, each **MCP server** (grouped by the Harness-generated `mcp__<server>__<name>` form), and **other**. Groups start collapsed and show `chosen/total`; clicking a header expands or collapses it. Each group carries its own **select all**, **invert**, and **clear**, which rewrite only that group and leave every other group's selection alone. The registry records no registering package, so a native tool and a third-party plugin's tool cannot be told apart and are reported honestly under "other" rather than attributed by name; if upstream records the source at registration, that group splits by itself with no rework. Captain-only capabilities (`spawn_team_member`, `get_team_preset`, `update_team_preset`, `interrupt_agent`) are greyed out on a member page with the reason, because the Team service refuses a member call; select-all never persists them into a member allow-list, and an already-stored name stays removable. No checks in custom mode denies all configurable tools; default mode adds no restriction and preserves the saved checks. Captain and member policies apply independently, so a member can have tools the captain cannot use. Unavailable saved names remain removable; invalid names reject application instead of granting unrestricted access. Scoped coordination tools must also be selected; general code and ordinary delegation are denied in custom mode. |
-| System prompt | Registered as a prompt section template; complete `{{variable}}` groups interpolate against registered prompt variables. A summoned member reads it after its Team briefing. |
-
-### Built-in default presets
-
-A fresh installation starts with three ready Teams, so the plugin is usable before any Team has been configured. They cover the usual range of task size:
-
-- **轻量研发团队** — a small feature or a module iteration: the captain plus an implementation member, with a technical advisor on call.
-- **标准研发团队** — a medium feature, an important refactor, or continuous iteration: adds an independent reviewer.
-- **全栈软件研发团队** — work that spans Web, desktop, and Android: a backend architect and a UI/UX advisor join the reviewer and the executor.
-
-They are ordinary stored Teams: rename, edit, duplicate, export, select, and **delete** them exactly like a Team you create. The install happens once per deployment, so a preset you delete stays deleted across restarts and updates, and a preset you edit is never overwritten by it.
-
-**Restore defaults** on the Teams page puts those three back. It restores what the shipped documents carry — name, purpose, every standing prompt, colors, and the member roster — and leaves everything they do not: a model route or tool policy you configured for a slot stays exactly as it is, and Teams you created yourself are never touched. A preset you deleted is added back, and the result lands in the draft, so press **Save** to apply it. If every preset already matches, the page says so instead of staging an empty change.
-
-The three presets' prompts are written in Chinese, which is what the shipped documents contain; the same documents are in `contrib/default-presets/` if you would rather import them by hand.
-
-### Select a Team
-
-The composer's team control sits in the tool row after the permission control. Picking a Team writes this Session's selection; an idle Session applies its captain prompt and tool scope immediately, while a busy Session keeps its current application until it is fully idle. Picking "No team" removes the Team application at the same boundary, restoring the Session's other prompt and tool contributions. The model stays the one the composer already shows, because no Team writes a model selection.
-
-### Share one Team
-
-**Export** on a Team row writes that Team as one fixed JSON document, and **Import preset** reads such a document. A shared document carries only what keeps working across deployments: the Team's name and purpose, and the name, description, system prompt, and color of its captain and each member. Model routes and tool permissions stay local, because they name this deployment's providers and tools; a document that carries them is refused instead of being silently trimmed.
-
-An import matches by name. When the document's Team name is already configured, the dialog asks whether to **replace that team** or **add it under a new name**. When the captain name or a member name is already used by the Team being replaced, the same dialog asks, per name, whether to **replace that agent** or **add the imported one renamed**. A replacement writes only the fields the document carries, so the target Team keeps its model routes and tool permissions and keeps every member the document does not mention.
-
-An import lands in the draft first, so it reaches the settings document only when you press **Save**; an export writes what the page currently shows, including an unsaved draft.
-
-### Let the captain adjust a Team preset
-
-Every Session root holds two preset-editing tools, whether or not it has selected a Team. They are the discovery path, not a Team capability: a user may ask the captain to adjust "the Team preset" before any Team is selected, and the captain must be able to read the configured Teams and ask which one. Selecting a Team adds the Team capability and the member tool; it does not add these.
-
-A deleted/invalid selected Team is **not** No team. The composer displays the missing Team ID rather than implying no selection; tool errors explain how to choose a valid Team or **No team**. Cancellation removes the plugin policy and the member tool once the captain and its teammates are idle, and leaves the two discovery tools in place. Already-created managed members retain their stored creation-time policy, even after the root deselects.
-
-- **`get_team_preset`** reads every editable field of this Session's Team (or of the Team a `team_id` names) with the current settings revision. When the Session selected no Team it reports `no-selection` and lists the configured Teams, so the captain asks the user which one to change instead of guessing.
-- **`update_team_preset`** replaces `team_description`, `captain_description`, `captain_system_prompt`, and per-member `description` / `system_prompt`, fenced by the revision `get_team_preset` returned.
-
-A successful tool write saves to the same settings document as the Settings page and follows the same per-Session adoption timing described above. A captain still running its current task keeps the old definition through its subsequent model steps. **An existing teammate keeps its creation-time description, persona, and tool filter**, including when resumed by a message; the updated preset supplies future new members after that Session adopts it. Send an existing teammate a new requirement to adjust its work without replacing its stored composition.
-
-Both tools register in the Session-root Agent scope only, so a teammate never sees them, and the write additionally requires a user-started turn plus exact Host approval of the target, revision, and diff. Disabled, rejected, or unavailable approval writes nothing. Ordinary development input is not shared-prompt authorization; automatic continuations and teammate reports cannot rewrite the preset. Names, member routes, and tool permissions are outside their reach — renaming changes a teammate target and collides with Agent Teams' permanent-name rule, so the Settings page owns it.
-
-The tool's write policy differs from the Settings page: if any online Session that selected or still has that Team applied has a teammate `running` or `provisioning`, `update_team_preset` returns `team-busy` without saving. This conservative model-initiated write check counts teammates only, not the captain executing the tool; counting that captain would block every call. Wait for those teammates to finish, or interrupt them with `interrupt_agent`, then call `get_team_preset` again and retry with its revision. The running task keeps its original definition; the Settings page can still save changes for later adoption, and a member route saved there applies to the next member that task summons. `get_team_preset` reports the executing teammate count.
-
-The tool also refuses a revision another writer advanced (re-read, retry) and a supplied standing prompt whose `{{variable}}` group cannot resolve. An unknown variable fails the request when the template is used rather than degrading it. Only prompts supplied by the call are checked, so an unrelated edit still succeeds on top of text the Settings page wrote.
-
-<a id="understand-the-implementation"></a>
-## Understand the implementation
-
-### Host composition
-
-The Host half owns the live configuration and the per-Session applications:
-
-| File | Role |
-|---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: live Config, per-Session definition freezing and adoption on Agent lifecycle, settings commits, and `team/member` settlements. |
-| [`src/member-runtime.ts`](src/member-runtime.ts) | Member runtime coordination: pre-spawn intent registration, serial `agent/created` scoped injection (route, persona, tools, team division), and cold-resume re-scoping. |
-| [`src/member-store.ts`](src/member-store.ts) | Durable member snapshot store backed by `ctx.storage.domain` for fail-closed member configuration recovery across residencies and restarts. |
-| [`src/execution.ts`](src/execution.ts) | Event-driven execution monitor: captain and teammate status, applied-versus-stored definitions, and aggregate whole-set frames. |
-| [`src/config.ts`](src/config.ts) | Volatile `teams` and `selections` fields, the continuable-provider names, and the captain-route cleanup of stored Teams. |
-| [`src/application.ts`](src/application.ts) | Applies one Team to one live Agent: prompt sections, tool scope, and the `spawn_team_member` tool. |
-| [`src/preset-editor.ts`](src/preset-editor.ts) | Pure preset edits behind the preset tools: the editable-field whitelist, member resolution, and the roster's description limit. |
-| [`src/preset-tools.ts`](src/preset-tools.ts) | The captain's `get_team_preset` and `update_team_preset`, their authority checks, and the settings write. |
-| [`src/presets.ts`](src/presets.ts) | Pure helpers shared with the browser half: teammate targets, member lookup, selection rewriting, roster text. |
-| [`src/tool-catalog.ts`](src/tool-catalog.ts) | Host Remote service `teamPresetsToolCatalog`: restrictable global tools and the `teamPresets.execution` stream for the Settings page. |
-| [`src/client/*`](src/client) | Browser half: the Settings page, the composer control, and the shared form controller. |
-
-Applying a Team installs the captain's prompt as `deployment:persona-prefix` on the Agent's scope, so it shadows the deployment persona for that Session alone. The captain and each member resolve their own tool mode. A custom captain allow-list filters its global tools; a summoned member receives its own custom allow-list, independent of the captain's selection. A captain leads on the model the Session already selected, so this plugin writes no model selection at all: the composer's model control stays the only owner of that reference, and the rendered captain prompt is recorded as a `system/message` surface event before the request, so the model-visible input stays reconstructable from the Session log. The Host half also provides the `teamPresetsToolCatalog` Remote service, which lists exactly the global tools `ctx.tools.restrict()` validates against, so the Settings page cannot offer a name the summon path would refuse.
-
-`teamPresets.execution` is a Remote stream of full snapshots: `{ teams: [{ teamId, state, busySessions, executingMembers, pendingSessions }] }`. Counts cover online Sessions that selected or still have the preset applied; `pendingSessions` counts Sessions with no application or an application that differs from the stored selection or frozen definition, leaving out a member route or a color the Session reads live. Frames carry Team identities and aggregate counts, not personas, Session names, or Session content. Lifecycle and settings events refresh the stream without polling; an unreadable roster reports `unknown` unless known activity already establishes `busy`.
-
-### Selecting and storing
-
-Teams and per-Session selections live in the plugin's volatile Config fields, which the settings service projects into the profile's user settings document and commits back into the running references with a `loader/volatile-update`. The browser half splits the two jobs: the Settings page edits the staged Teams through `ctx.configForms.get('agent-team-presets')`, whose revision-fenced write queue owns the draft and its save, while the composer's per-Session selection is written through `ctx.remote.settings.mutate` with the revision the shared describe mirror reports and folded back with `acceptView()`. A refused or failed selection is retried once — a refusal triggers a recovery read of the Host document, so the retry carries the revision the Host holds now — and is then reported on the control and on the Settings page with the Host's own refusal text. Each agent stores `toolMode` independently of `tools`. Records without `toolMode` retain their list-only behavior: an empty list means default-all and a nonempty list means custom. A stored captain that still carries `provider`, `model`, or `reasoningEffort` from a document written before captains stopped owning a route is rewritten once without them when the plugin loads.
-
-### Per-teammate settings (official rc.2 plugin-only implementation)
-
-In official DeepSeek Harness `0.2.0-rc.2`, the Team service's public `spawnTeammate` API does not pass through custom `agentOptions`, `persona`, or `toolFilter`. This plugin manages member scoping without any host modifications or monkey-patching:
-
-1. **Durable member snapshots (`src/member-store.ts`):** Before calling `ctx.agentTeams.spawnTeammate`, `spawn_team_member` atomically commits a frozen member configuration snapshot (route, reasoning effort, briefing persona, team division of labour, and strict tool policy) into the durable member store backed by `ctx.storage.domain` (the `agent_team_presets_members` unit, `single` layout).
-2. **Official-only spawn request (`src/application.ts`):** `ctx.agentTeams.spawnTeammate` is invoked with official-only fields (`name`, `description`, `prompt`, `context`, `provider`, `signal`).
-3. **Serial creation-edge installation (`src/member-runtime.ts`):** When the official `agent/created` serial event fires, the plugin resolves the child Agent via `ctx.agentTeams.tryMembership`, claims it against its durable snapshot, and installs scoped model selection (`installModelSelection`), persona prefix (`deployment:persona-prefix`), team context (`agent-team-presets:member-team`), and strict tool guard/restriction before the child's first request is admitted.
-4. **Cold resume re-scoping:** When a finished member is awakened later (via `sendMessage`), `agent/created` re-runs and re-applies the exact frozen configuration from the durable store.
-5. **Fail-closed security:** If `storageDomain` is unavailable, or if a stored record fails schema validation or version mismatch, member creation is refused rather than allowing the member to execute on the Session's route with unrestricted tools.
-6. **Known limitation:** The official Team roster (and `list_agents`) displays the model as the Team Lead's model (`lead-model`) or creation options rather than the scoped request model, because the upstream Team service queries creation options. The plugin's `spawn_team_member` result reports `configuredRoute`, and the member actually executes on its configured route.
-
-### Runtime invariant
-
-**Runtime invariant:** No companion is published. Every contribution is an ordinary Cordis registration on the Agent's scope, so disposing that scope already removes the prompt sections, the tool restriction, and the member tool; the assembled captain and member policies are covered by the production Loader composition test instead.
-
------
-
-<a id="further-exploration"></a>
-## Further Exploration
-
-- [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — the `ctx.agentTeams` service, roster, mailbox, and shared task board this package composes.
-- [agent-team package](../agent-team/README.md) — the service, its durable types, and the `agentOptions`, `persona`, and `toolFilter` delegation fields.
-- [tool-agent-team package](../tool-agent-team/README.md) — the tools the model uses to create, message, and coordinate teammates.
-
------
-
-<a id="model-experience"></a>
-## Model Experience
-
-### Captain and member prompts
-
-#### What the model sees
-
-The captain's system prompt replaces the deployment persona prefix for the Session, and one `agent-team-presets:briefing` section states the Team's purpose, the captain's own role, and one line per summonable member target with that member's description, so the captain can pick the member whose description fits the work. A summoned member receives its own persona prefix instead: the Team it joined, its own role, and its configured system prompt. All of it renders into the Session's `system/message`, so a resumed Session rebuilds it from the log.
-
-##### Briefing section for a Team with one member
-
-```markdown
-Team preset "Review team" is active for this Session: Reviews changes before they land
-
-You are its captain "team-lead": Keeps the review queue moving
-
-Summon a member with spawn_team_member(member, task). The targets below are fixed; use them verbatim.
-
-- member-1 (审查者): checks diffs
+```sh
+npm view dsh-agent-team-presets version
 ```
 
-##### Persona prefix of the summoned member
+If that version meets your requirements, install it with:
 
-```markdown
-You are "member-1" (审查者) on the Agent Team "Review team": Reviews changes before they land
-
-Your role: checks diffs
-
-You review one diff at a time and report findings.
+```sh
+dsh plugin --profile <profile> add dsh-agent-team-presets
 ```
 
-#### Token effect
+If the registry version is older than the release you need, use the GitHub command instead. Installing this package uses the prebuilt artifacts; rebuilding them is a separate [development task](#development).
 
-Both sections add their own text to every request's system prompt for the Session. A Team whose captain states no name or description and which has no members adds nothing.
+### Verify and upgrade safely
 
-#### KV Cache effect
+After a successful installation, follow the plugin manager's reload or restart instructions and open **Settings → Agent team presets**. Check that plugin details show `dsh-agent-team-presets`, the expected version, and a running component.
 
-The applied Team's section templates stay unchanged during a running task, even when a newer preset is saved. Adopting a changed Team between tasks can rewrite the captain's prompt and briefing; actual cache reuse also depends on prompt variables and provider capabilities.
+- Back up the profile, Team definitions, and Session selections before upgrading or changing installation sources.
+- A failed command, compatibility rejection, or failed component is not a successful installation. Inspect the error before retrying; repeated restarts do not repair a failed install.
+- When switching from a development link, remove `@deepseek-ai/dsh-experimental-agent-team-presets` through the plugin manager before enabling the community package. Do not enable both: they use the same settings namespace and client registrations. Preserve existing Team settings and selections during migration.
+- Restart Harness after changing package identities, then refresh the GUI. A page refresh alone may leave the old client module registered in the Host.
 
-### `spawn_team_member`
+> **Install the bundle; do not add a second loader declaration.** The package already supplies its own [bundle patch](<cordis.patch.yml>). Hand-written copies of the `agent-team-presets` entry in profile, home, or command-line patches can prevent Team settings from being saved. See [Configuration writes are overridden](#configuration-overridden) if this happens.
 
-#### What the model sees
+<a id="configure-a-team"></a>
+## Configure and use a Team
 
-One tool with `member`, `task`, `description`, and `context` parameters. The result is a compact JSON record naming the teammate target, its status, and its model.
+1. Open **Settings → Agent team presets**.
+2. Choose a built-in Team, duplicate one, or create a new Team.
+3. Set its purpose, captain, and member roles. Configure member routes and tool permissions for your deployment.
+4. Press **Save** in the shared footer. Edits remain a draft until saved.
+5. Select the Team from the conversation composer's Team control, then ask the captain to carry out a task with the relevant roles.
 
-#### Token effect
+For a Team with implementation and review roles, a request could be:
 
-The tool schema and description join the Session's tool surface while a Team is applied.
+> Use the selected Team. Have the implementation member make the agreed change, then ask the reviewer to check it independently. Summarize the changes, test results, and remaining risks.
 
-#### KV Cache effect
+A preset role is not an already-running member. Each call creates a new instance with a unique target such as `reviewer` or `reviewer-2`. Use the returned target with `send_message` to continue an existing member instead of creating another one.
 
-The applied member roster and tool schema stay unchanged during a running task. Adopting a changed roster or tool policy between tasks can change the request's tools and affect cache reuse.
+Selecting **No team** removes the Team application once the captain and its teammates are idle. It restores the conversation's other prompt and tool contributions, without changing the selected model.
 
-## Known Limitations and Deferred Work
+### Fields
+
+| Field | Purpose |
+|---|---|
+| Team name and purpose | Identify the preset and explain what work it should handle. |
+| Captain | The conversation's lead agent. A nonempty captain prompt replaces its persona prefix; the captain keeps the conversation's selected model. |
+| Members | Reusable role templates the captain can summon. A role may have multiple runtime instances, subject to Harness limits. |
+| Name | Display name. After trimming and lowercasing, ASCII letters/digits separated by single hyphens form a role target if it is at most 64 characters and not `lead`. Other names, including empty or non-Latin names, use a target such as `member-1`; collisions receive suffixes. Runtime messages use the returned instance target. |
+| Description | Explain the role's responsibilities so the captain can choose an appropriate member. Keep member descriptions within 200 characters, as required by the Team service. |
+| Color | Accent used to distinguish the role in Settings and the roster. |
+| Provider / Model | Members only. Select a route from the deployment's model catalog; without a complete provider/model selection, no member-specific route is installed. |
+| Reasoning effort | Members only. Options depend on the selected model; empty uses that route's default. |
+| Allowed tools | Independent all-tools or custom policy for each slot; see [Tool permissions](#tool-permissions). |
+| System prompt | Standing role instructions. Complete `{{variable}}` groups are prompt-template variables; an unresolved variable can fail a request. |
+
+The editor has three levels: the Team list, one Team, and one captain or member. You can return to the list without losing a staged edit, but **Save** is required to persist it.
+
+### Built-in presets
+
+A fresh installation seeds three editable Teams:
+
+| Preset | Intended use |
+|---|---|
+| 轻量研发团队 | Small features and module iterations, with an implementation member and an on-demand technical advisor. |
+| 标准研发团队 | Medium features and significant refactoring, adding an independent reviewer. |
+| 全栈软件研发团队 | Work across Web, desktop, and Android, with implementation, architecture, UI/UX, and review roles. |
+
+Their prompts are in Chinese. The same portable documents are available in [contrib/default-presets](<contrib/default-presets>) for manual import.
+
+Defaults are offered once per profile configuration: deleted presets stay deleted across restarts and upgrades, and edited presets are not overwritten. **Restore defaults** restores the shipped fields while preserving routes and tool policies on matched roles, and leaves user-created Teams alone. It also restores each built-in Team's shipped roster, removing roles you added to that Team; duplicate a customized Team first if you want to keep it. Restored presets are staged until you press **Save**. A deleted preset added back has no previous local route or tool policy to preserve.
+
+### When saved changes take effect
+
+A Team preset is shared across Sessions in the profile, but each Session adopts updates independently:
+
+| Change | Effect |
+|---|---|
+| Purpose, role descriptions, prompts, roster, or tool policies | An idle Session adopts the change immediately. A busy Session keeps its applied definition until the task ends. |
+| Team selection, including No team | Takes effect once that Session's captain and teammates are idle. |
+| Member provider, model, or reasoning effort | Read when a **new member instance** is summoned, even during a running task. Existing instances retain their creation-time route. |
+| Color | Updates when the UI redraws. |
+
+The footer summarizes online Sessions as **idle**, **busy**, or **unknown**. Busy includes a running captain or a running/provisioning teammate. Unknown means execution state could not be confirmed, not that the Team is idle.
+
+<a id="share-presets"></a>
+## Share presets
+
+**Export** saves one Team as JSON. **Import preset** reads that document and stages it in the editor.
+
+- Shared fields: Team name and purpose; captain/member names, descriptions, prompts, and colors.
+- Local fields: model routes and tool permissions. These are not exported; an import containing them is rejected.
+- Name collisions: choose replacement or a renamed addition for the Team and conflicting roles. Replacement preserves matched roles' local routes and tool policies, and keeps members not mentioned in the import.
+- New Teams and roles start without a fixed member route and with the default all-tools policy. Review their prompts and permissions before use, especially for documents from others.
+
+Exports include the currently displayed draft, including unsaved edits. Imports do not reach stored settings until you press **Save**. Review prompts for private information before publishing an exported document.
+
+<a id="edit-presets-with-tools"></a>
+## Let the captain edit a preset
+
+You can ask the conversation's lead agent to adjust a Team's purpose or role instructions. Two tools are registered on root Sessions, including Sessions with no Team selected, subject to the active tool policy:
+
+- **`get_team_preset`** reads the selected Team, or the Team named by `team_id`, and returns its editable fields and settings revision. Without a selection, it lists configured Teams so you can choose one.
+- **`update_team_preset`** changes Team/captain descriptions and captain/member system prompts or member descriptions, using that revision. Names, model routes, colors, and tool permissions must be edited in Settings.
+
+A write requires a direct user-started turn and Host approval of the exact target and changes. If approval is disabled, denied, or unavailable, nothing is saved. Another writer advancing the revision also requires a fresh read before retrying.
+
+The update tool returns **`team-busy`** while any affected online Session has a running or provisioning teammate. Wait for those teammates to finish, then read the revision again. The Settings page can still save changes for later adoption. A successful tool write uses the same adoption timing as a Settings save; it does not rewrite an existing teammate's stored persona or policy.
+
+<a id="tool-permissions"></a>
+## Tool permissions and security
+
+### Policy modes
+
+- **Default: all tools** adds no allow-list restriction beyond the deployment's permissions and Team role rules.
+- **Custom allowed tools** permits only selected tool names, including scoped Team coordination tools such as `send_message`, `list_agents`, and `team_task_*`. An empty custom list denies all configurable tool calls. Switching modes preserves the saved custom selections.
+- Captain and member policies are independent. To coordinate a Team under a custom policy, explicitly allow the tools each role needs; allowing them for the captain does not grant them to members.
+
+The catalog groups tools by this plugin, MCP server, and other tools. Groups offer selection controls and show selected/total counts. Descriptions use the registry's model-facing text and may remain English even when the interface is localized. The catalog combines tools from different Agent presets; a listed tool is not necessarily available to the current Session. Choose an Agent preset that provides it or remove it from the allow-list if application is refused.
+
+Captain-only tools are disabled on member pages. Native `spawn_teammate` is blocked while a Team preset is active; use `spawn_team_member` so member configuration is applied consistently.
+
+### Security boundaries
+
+- The allow-list is **not a filesystem, process, or network sandbox**. An allowed shell, code-capable tool, or third-party plugin may have broad indirect capabilities. Keep Harness's own sandbox and approval settings appropriate for the work.
+- Custom mode denies general-purpose `run_code` and ordinary `subagent`, `subagent_fork`, and `workflow` delegation, because those paths do not provide this plugin's durable strict-policy contract. Use preset-managed Team members for delegation.
+- Custom policies use native tool calling. If an inherited programmatic tool-calling (PTC) presentation is replaced, Settings discloses the change. If a conflicting presentation is declared on the exact Session scope and cannot be replaced, Team application is refused rather than silently weakening the policy.
+- Invalid updates retain the last valid application. If a safe initial application or recovery cannot be established, affected tool execution is blocked until the configuration is corrected or a valid Team/No team selection can take effect.
+- Managed members require their durable configuration on resume. Missing or corrupt records are refused rather than replaced by unrestricted defaults. The plugin must remain installed for this protection; it cannot enforce policies after it has been removed.
 
 <a id="known-limitations-and-deferred-work"></a>
+## Troubleshooting and limitations
 
-- **Profile-global Team definitions with a per-Session selection record.** The selection is stored in the user settings document rather than in the Session log, so a forked or copied Session does not inherit it, and a Session re-applied on another machine needs the same settings document.
-- **A settings document owned by a home patch or a command-line overlay refuses every write.** The Harness composes the profile patch document below `$DSH_HOME/cordis.patch.yml` and any `--patch` overlay, and its editor refuses a write whose result a higher layer would override (`Configuration for "agent-team-presets" is overridden by a home patch or command-line overlay`). Nothing the plugin can do makes such a write land: a deployment that pins this row's `config` in an overlay must move it into the profile patch document before Teams can be saved or selected. The failure is now reported on the composer control and on the Settings page with that message, instead of the click doing nothing.
-- **No Session-log record of the selection itself.** The captain's rendered prompt is logged; the Team identity is not, so a reader cannot tell which Team a Session used without the settings document.
-- **Member system prompts are persona templates.** A member prompt containing an unknown `{{variable}}` fails that member's first request; the field warns before saving.
-- **The allow-list masks global tools only.** A scoped registration such as the Team coordination tools (`send_message`, `team_task_*`) stays visible to a restricted agent, because `ctx.tools.restrict()` intersects global names and leaves scoped registrations in place. A member therefore keeps the tools it needs to answer its Lead.
-- **The Session model is no part of a Team.** The captain leads on whatever model the composer selected, and only members carry a route, so editing a Team never changes your model.
-- **Captains stored before this version lose their route once.** The plugin rewrites such a Team on load through the ordinary settings write, so the profile patch stops naming `provider`, `model`, and `reasoningEffort` on a captain.
-- **Existing teammates retain their creation-time composition.** Applying a saved preset updates the captain and future new members, not existing teammates' description, persona, or tool filter; sending a new requirement adjusts work without replacing that composition.
-- **Shared presets adopt per Session, and a route does not wait for that.** Settings saves do not change a running task's definition; the captain adopts the latest one when fully idle, before the next task. A member's route is read when that member is summoned, so a route corrected in Settings reaches the next member a running task summons without a restart. The captain's tool additionally refuses saves while any affected Session has a running or provisioning teammate, and requires a user-started turn.
+<a id="configuration-overridden"></a>
+### Configuration writes are overridden
 
------
+If saving or selecting a Team reports:
+
+```text
+Configuration for "agent-team-presets" is overridden by a home patch or command-line overlay
+```
+
+a patch layer conflicts with the settings write. The installed bundle already inserts the plugin entry; a duplicate hand-written declaration or an overriding configuration can prevent the Host's editor from committing changes.
+
+1. Back up the profile, Team definitions, and Session selections.
+2. Check the profile patch, `$DSH_HOME/cordis.patch.yml`, and any `--patch` overlays for conflicting hand-written `agent-team-presets` declarations.
+3. Remove the conflicting declaration or override. **Do not simply move it into another patch.** Preserve the Host-managed settings row and saved Teams; do not delete every occurrence of the entry indiscriminately.
+4. Keep the installed bundle in `dsh.profile.bundles` and edit Teams through Settings.
+
+The composer and Settings page show the Host's error text when a write fails.
+
+<a id="verify-member-model-route"></a>
+### A member's displayed model differs from its route
+
+In Harness `0.2.0-rc.2`, the Team roster and `list_agents.model` read creation-time options or fallback metadata, not this plugin's member-scoped request selection. `list_agents.provider` identifies the subagent execution backend, not the LLM provider, and the tool does not report `reasoningEffort`. A display mismatch alone does not establish a routing failure.
+
+- **Check configuration:** `configuredRoute` in the `spawn_team_member` result reports the route captured for that instance. It is omitted when no member-specific route is configured. Advanced diagnostics can also inspect `route` in the durable `agent_team_presets_members` unit.
+- **Check request records:** inspect the corresponding member Session's `request/header` or `modelSelection.lastUsed` projection. Before the first request header, `lastUsed` is empty; afterwards it describes the last recorded request, not the next selection.
+- **Understand the scope:** a configured value does not prove that a request executed. Request records identify the route used by Harness, not a third-party service's internal model implementation. Self-reported names and throughput are not independent model-identity verification.
+
+### Other common issues
+
+| Symptom | What to check |
+|---|---|
+| Settings page is absent or the plugin is pending | Confirm the target profile, peer compatibility, Agent Teams, and required client services. |
+| Model or tool catalog fails to load | Read the displayed error and check the deployment's provider/tool services. Saving a preset cannot add a missing capability. |
+| Member creation is refused | Check durable storage, the configured execution backend, route/effort availability, and Harness depth/concurrency/member limits. A finished member frees an activity slot, not its permanent Team roster slot. |
+| A prompt fails with an unknown variable | Correct the `{{variable}}` group or provide the variable through the deployment. |
+| Windows configuration cannot be parsed | Preserve valid UTF-8 JSON without a BOM when editing profile manifests. Do not disable schema validation or delete active Host/credential locks to work around an error. |
+| The selected Team was deleted | Select a valid Team or No team. A missing Team is an error, not an implicit switch to unrestricted mode. |
+
+### Persistence and compatibility
+
+- Team definitions and Session selections live in profile settings, not a structured selection history in the Session event log. Rendered prompts may contain the Team name, but they do not make the selection portable: a fork or a move to another deployment needs an explicit Team selection and matching settings.
+- Already-created members retain their creation-time persona, description, route, and tool policy, including when resumed with `send_message`. Saved preset changes apply to future instances; send an existing member a message to adjust its immediate task.
+- Legacy captain route fields are removed during settings reconciliation because captains use the conversation's model. Back up configuration before migrating older profiles.
+- The bundled schema runtime in v0.1.4 fixes missing-`zod` startup imports from earlier package builds. It does not repair unrelated Harness installation, encoding, lock, or third-party plugin failures.
+
+<a id="understand-the-implementation"></a>
+## How it works
+
+The plugin uses Cordis and Harness extension points without patching the Host:
+
+1. **Profile configuration** stores Team definitions and Session selections. The browser uses revision-checked settings writes and an event-driven execution stream.
+2. **Session application** installs the captain's persona/briefing, tool policy, and `spawn_team_member` at the Agent scope. It does not change the root conversation's model selection.
+3. **Member creation** validates the route and delegation limits, stores an instance snapshot, and creates the child through a plugin-owned execution-backend alias. The serial `agent/created` lifecycle installs its model route, persona, Team context, and strict tool policy before its first request.
+4. **Resume and cleanup** restore a managed member's snapshot and dispose scoped registrations when their owning application ends. Existing members keep their captured configuration rather than adopting later preset edits.
+
+### Source navigation
+
+| Area | Source |
+|---|---|
+| Plugin lifecycle and settings reconciliation | [index.ts](<src/index.ts>), [settings-reconcile.ts](<src/settings-reconcile.ts>) |
+| Team application and member tool | [application.ts](<src/application.ts>) |
+| Member snapshots, identity, and resume | [member-store.ts](<src/member-store.ts>), [member-identity.ts](<src/member-identity.ts>), [member-runtime.ts](<src/member-runtime.ts>) |
+| Tool policies and presentation | [tool-policy.ts](<src/tool-policy.ts>), [presentation.ts](<src/presentation.ts>) |
+| Preset editing and portable documents | [preset-tools.ts](<src/preset-tools.ts>), [preset-transfer.ts](<src/preset-transfer.ts>) |
+| Execution state and catalog | [execution.ts](<src/execution.ts>), [tool-catalog.ts](<src/tool-catalog.ts>) |
+| Browser UI | [src/client](<src/client>) |
+
+<a id="model-experience"></a>
+### Prompt and context behavior
+
+The captain sees its configured persona, the Team purpose, and a roster of member role targets and descriptions. A member sees its own role instructions and the Team's division of labour; that role list is not a live runtime roster. Use `list_agents` for current targets and status.
+
+These prompt sections and the `spawn_team_member` schema add to the model's context. Larger rosters and longer prompts therefore use more tokens. Definitions remain stable during a task, but actual prompt-cache reuse depends on prompt variables and the provider; the plugin makes no cache-hit guarantee. Rendered system prompts are recorded in the Session's `system/message` events.
 
 <a id="dev-note"></a>
-### Dev Note
+<a id="development"></a>
+## Development and contributing
 
-<details>
-<summary>Maintainer details — click to expand</summary>
+Source development requires a compatible, dependency-installed [Harness checkout](https://github.com/deepseek-ai/deepseek-harness). From this repository:
 
-None.
+```sh
+export DSH_CHECKOUT=/absolute/path/to/deepseek-harness
+npm test
+npm run typecheck
+npm run bundle
+```
 
-</details>
+The scripts use the checkout's tooling and source aliases. Tests use mock model adapters; `npm run typecheck` reports this plugin's diagnostics, not a clean typecheck of the entire Harness. `npm run bundle` rebuilds the committed artifacts in an isolated staging workspace. These checks do not replace visual or real-provider testing. See the scripts in [tools](<tools>) and the [test suite](<tests>) for the current verification scope.
+
+Bug reports and pull requests are welcome in [GitHub Issues](https://github.com/bloodarea/dsh-agent-team-presets/issues) and [Pull requests](https://github.com/bloodarea/dsh-agent-team-presets/pulls). For a report, include:
+
+- Harness and plugin versions, OS, profile type, and installation source/ref.
+- Reproduction steps, expected behavior, actual behavior, and relevant error text.
+- A minimal, redacted preset or screenshot when helpful.
+
+Do not publish credentials, private endpoints, full Session logs, or proprietary prompt content. Review the affected behavior and add focused tests when changing runtime code. Keep the two README versions and prebuilt artifacts consistent with a release.
+
+<a id="further-exploration"></a>
+## Related resources
+
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — the Host and its plugin system.
+- [Built-in preset documents](<contrib/default-presets>) — portable starting points for your own Teams.
+- [GitHub Releases](https://github.com/bloodarea/dsh-agent-team-presets/releases) — published versions.
+
+<a id="license"></a>
+## License
+
+[MIT](<LICENSE>). Bundled third-party notices are in [THIRD-PARTY-NOTICES.txt](<lib/THIRD-PARTY-NOTICES.txt>).
