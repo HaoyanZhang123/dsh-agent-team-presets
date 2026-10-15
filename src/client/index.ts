@@ -35,8 +35,20 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.session']
+/**
+ * Required services (cordis fiber inject).
+ *
+ * `remote.settings` is the namespace the composer's selection write goes
+ * through, and the shared describe mirror every settings surface reads is
+ * reached through `configForms`. Both are named explicitly because the cordis
+ * property proxy resolves a namespaced service RELATIVE to the context that
+ * reads it: `ctx.remote.settings` only resolves where the reading fiber (or an
+ * ancestor in the same isolate) declares `remote.settings` in its own inject
+ * set. A context that reads it without that declaration throws
+ * `cannot get property "remote.settings" without inject`, which is exactly the
+ * failure mode this plugin's own scope must never reproduce.
+ */
+export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.session', 'remote.settings']
 
 /**
  * Host notifications that change which provider routes exist.
@@ -61,7 +73,7 @@ const CATALOGUE_INVALIDATIONS = [
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(teamPresetsRemote)
   const ui = ctx.inject(
-    ['remote.teamPresets', 'slots', 'locale', 'configForms', 'remote.session'],
+    ['remote.teamPresets', 'slots', 'locale', 'configForms', 'remote.session', 'remote.settings'],
     registerUi,
   )
   try {

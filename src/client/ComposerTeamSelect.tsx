@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { selectedTeam } from '../presets.ts'
 import type { TeamPresetsInjected } from './team-presets-controller.ts'
+import { FORM_ISSUE_KEYS, selectionFailureText } from './locales.ts'
 import css from './ComposerTeamSelect.module.css'
 
 /** Complete props derived from the composer slot and the shared Team state. */
@@ -23,7 +24,7 @@ export type ComposerTeamSelectProps =
 /**
  * Render the composer's Team picker.
  * @param props - the Session identity, the page's locale reader, and the selection writer.
- * @returns the Team trigger, or null while no Team is configured.
+ * @returns the Team trigger, plus a notice when the last selection write failed.
  */
 export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
   const { t, sessionId } = props
@@ -34,6 +35,13 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
   const active = selectedTeam(state.teams, state.selections, String(sessionId))
   const missing = selection !== undefined && active === undefined
   const missingLabel = t('composerMissing').replace('{team}', selection?.teamId ?? '')
+  // A selection the Host refused is reported here, on the control the user
+  // clicked: the trigger's own title carries it and a sibling notice makes it
+  // visible without a hover, because the failure this replaces was exactly a
+  // click that left no trace anywhere. A document this page cannot use says so
+  // in the title too, so a disabled trigger is never a dead end.
+  const failure = state.selectionFailure === undefined ? undefined : selectionFailureText(state.selectionFailure, t)
+  const issue = state.formIssue === undefined ? undefined : t(FORM_ISSUE_KEYS[state.formIssue])
   const writable = state.status === 'ready' && state.writable
   const items: MenuEntry[] = [
     { id: '', label: t('composerNone') },
@@ -42,43 +50,46 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
   ]
 
   return (
-    <Menu
-      open={open}
-      items={items}
-      selectedId={selection?.teamId ?? ''}
-      onSelect={(id) => {
-        setOpen(false)
-        void props.selectTeam(String(sessionId), id === '' ? undefined : id)
-      }}
-      onClose={() => { setOpen(false) }}
-      side="top"
-      portal
-      compact
-      anchor={(
-        <button
-          type="button"
-          className={css.trigger}
-          disabled={!writable}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          title={missing ? `${missingLabel}. ${t('composerMissingHint')}` : t('composerHint')}
-          onClick={() => { setOpen(value => !value) }}
-        >
-          {active === undefined || active.captain.color === ''
-            ? null
-            : (
-              <span
-                className={css.accentDot}
-                style={{ background: active.captain.color }}
-                aria-hidden
-              />
-            )}
-          <span className={css.triggerLabel} aria-label={t('composerTitle')}>
-            {missing ? missingLabel : active === undefined ? t('composerTitle') : (active.name === '' ? active.id : active.name)}
-          </span>
-          <span className={css.triggerIcon}><IconChevronDownOutlineRegular size={14} /></span>
-        </button>
-      )}
-    />
+    <>
+      <Menu
+        open={open}
+        items={items}
+        selectedId={selection?.teamId ?? ''}
+        onSelect={(id) => {
+          setOpen(false)
+          void props.selectTeam(String(sessionId), id === '' ? undefined : id)
+        }}
+        onClose={() => { setOpen(false) }}
+        side="top"
+        portal
+        compact
+        anchor={(
+          <button
+            type="button"
+            className={css.trigger}
+            disabled={!writable}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            title={failure ?? issue ?? (missing ? `${missingLabel}. ${t('composerMissingHint')}` : t('composerHint'))}
+            onClick={() => { setOpen(value => !value) }}
+          >
+            {active === undefined || active.captain.color === ''
+              ? null
+              : (
+                <span
+                  className={css.accentDot}
+                  style={{ background: active.captain.color }}
+                  aria-hidden
+                />
+              )}
+            <span className={css.triggerLabel} aria-label={t('composerTitle')}>
+              {missing ? missingLabel : active === undefined ? t('composerTitle') : (active.name === '' ? active.id : active.name)}
+            </span>
+            <span className={css.triggerIcon}><IconChevronDownOutlineRegular size={14} /></span>
+          </button>
+        )}
+      />
+      {failure === undefined ? null : <span className={css.failure} role="status">{failure}</span>}
+    </>
   )
 }

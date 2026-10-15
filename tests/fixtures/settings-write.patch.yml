@@ -1,0 +1,28 @@
+# One real settings write over the shipped headless profile.
+#
+# The fixture owns only the isolated session root, the official Agent Team row
+# the presets plugin injects, and the two headless rows that would otherwise
+# run a single task and exit.
+#
+# It deliberately does NOT configure the `agent-team-presets` row. That row
+# comes from the plugin's own shipped bundle layer, because
+# `ConfigEditor.edit` composes bundle layers first, then the profile patch
+# document, then home and `--patch` overlays — and refuses any write whose
+# composed config differs from the edited value. A row whose config arrives
+# from a `--patch` overlay is therefore refused with "overridden by a home
+# patch or command-line overlay" before the revision fence is even consulted,
+# which would mask the behavior under test.
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+- id: session-persistence-jsonl
+  config:
+    root: './.sessions'
+    compression: none
+
+- insert:
+    - id: agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'

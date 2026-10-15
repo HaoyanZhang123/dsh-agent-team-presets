@@ -9,6 +9,6 @@ export type ComposerTeamSelectProps = PropsRuntime<'conversation.input.left'> & 
 /**
  * Render the composer's Team picker.
  * @param props - the Session identity, the page's locale reader, and the selection writer.
- * @returns the Team trigger, or null while no Team is configured.
+ * @returns the Team trigger, plus a notice when the last selection write failed.
  */
 export declare function ComposerTeamSelect(props: ComposerTeamSelectProps): import("react").JSX.Element;

@@ -5,10 +5,12 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { ModelCatalog, ModelProviderGroup, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  ModelCatalog, ModelProviderGroup, SettingsNamespaceView, SettingsPathOpView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm, SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { toolMode, withSelection } from '../presets.ts'
 import {
@@ -75,6 +77,20 @@ export interface TeamPresetsState {
   readonly dirty: boolean
   /** Team definitions the Host rewrote behind the page, or undefined while none was adopted. */
   readonly externalUpdate: ExternalUpdateNotice | undefined
+  /**
+   * Why this client cannot edit the stored section, or undefined when it can.
+   *
+   * A settings form that never reaches `ready` used to look exactly like one
+   * that is still loading: the page showed a spinner forever and the composer
+   * refused every click without saying so. Naming the state is what makes the
+   * difference between "the deployment serves no Team section", "this page is
+   * not backed by a Host document", and "the Host serves it but this client's
+   * own form refused the stored value" — three conditions with three different
+   * fixes, and only the third one is this plugin's to report.
+   */
+  readonly formIssue: TeamPresetsFormIssue | undefined
+  /** The last Team selection this client could not write, until the next attempt. */
+  readonly selectionFailure: TeamSelectionFailure | undefined
   /** Whether the Host execution stream has delivered a frame the page can trust. */
   readonly execution: 'loading' | 'ready' | 'error'
   /** Execution state of every Team the Host reports, empty while it is not trusted. */
@@ -89,6 +105,30 @@ export interface TeamPresetsState {
   readonly tools: readonly ToolChoice[]
   /** Whether the tool catalogue is still loading or failed. */
   readonly toolCatalogue: 'idle' | 'loading' | 'ready' | 'error'
+}
+
+/**
+ * Why the stored section is not editable, as this client can observe it.
+ *
+ * `settings-unavailable` is the terminal process-local page: the Host keeps no
+ * document for it, so nothing is stored and nothing can be. `namespace-missing`
+ * is a deployment that never composed a row owning the `agent-team-presets`
+ * namespace. `schema-rejected` is the one condition this client can name but not
+ * repair: the Host serves the section, and the shared form refuses to accept the
+ * value it holds, so the page keeps working off the describe mirror instead.
+ */
+export type TeamPresetsFormIssue = 'settings-unavailable' | 'namespace-missing' | 'schema-rejected'
+
+/** One Team selection this client could not write. */
+export interface TeamSelectionFailure {
+  /** `unavailable`: nothing to write to. `refused`: the Host rejected the write. `failed`: the write did not complete. */
+  readonly kind: 'unavailable' | 'refused' | 'failed'
+  /** The Session whose Team the user tried to change. */
+  readonly sessionId: string
+  /** The Team the user tried to apply, or undefined for "no Team". */
+  readonly teamId: string | undefined
+  /** The Host's own refusal text, or the transport failure, when one exists. */
+  readonly detail: string | undefined
 }
 
 /**
@@ -234,7 +274,34 @@ function mergeTransfer(
   }
 }
 
-const EMPTY: TeamPresetsSection = { teams: [], selections: [] }
+/**
+ * Narrow one stored settings section into the two lists this plugin reads.
+ *
+ * The Host projects exactly the fields its own schema declares, so a served
+ * namespace always carries both arrays; a section that carries one of them as
+ * something other than a list is still readable as the empty list that field
+ * means, because a composer that offers no Team is strictly better than one
+ * that refuses to open over a field it does not use.
+ * @param value - the namespace value the describe mirror holds.
+ * @returns the section, or undefined when the value is not a settings object at all.
+ */
+function sectionOf(value: unknown): TeamPresetsSection | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const section = value as { teams?: unknown; selections?: unknown }
+  return {
+    teams: Array.isArray(section.teams) ? section.teams as TeamPreset[] : [],
+    selections: Array.isArray(section.selections) ? section.selections as TeamSelectionRecordView[] : [],
+  }
+}
+
+/**
+ * Read one thrown value as text a user can act on.
+ * @param error - the caught value.
+ * @returns its message, or its string form for a non-Error throw.
+ */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
 /**
  * Convert one staged member into the JSON value a settings write carries.
@@ -366,7 +433,19 @@ export class TeamPresetsController {
   /** Observable page state the slot registrations expose to their components. */
   readonly store: SnapshotStore<TeamPresetsState>
   private readonly form: ConfigForm<TeamPresetsSection>
+  /**
+   * The shared describe mirror, which is the authority for the STORED document.
+   *
+   * Every settings surface in the browser derives from this one mirror, so it
+   * answers three questions the form cannot: whether the Host serves the
+   * namespace at all, what the stored section holds when this client's own form
+   * refuses to decode it, and which revision a write must carry. The form keeps
+   * its own job — the page's staged draft, its save fence, and its coordination
+   * of a Host write landing behind that draft.
+   */
+  private readonly mirror: SettingsDescribeFace
   private readonly unsubscribe: () => void
+  private readonly unsubscribeMirror: () => void
   private draft: TeamPreset[] | undefined
   private draftRevision: number | undefined
   /**
@@ -381,6 +460,8 @@ export class TeamPresetsController {
    * line is not wiped by a catalogue refresh or another Session's selection.
    */
   private externalUpdate: ExternalUpdateNotice | undefined
+  /** The last selection write this client could not complete, until the user acts again. */
+  private selectionFailure: TeamSelectionFailure | undefined
   /** Whether a write this page started is still crossing the wire. */
   private saving = false
   /** Stream health of the Host execution state, and the frames it delivered. */
@@ -403,34 +484,42 @@ export class TeamPresetsController {
    */
   constructor(private readonly ctx: Context) {
     this.form = ctx.configForms.get<TeamPresetsSection>(TEAM_PRESETS_NS)
+    this.mirror = ctx.configForms.describe()
     this.store = createSnapshotStore(this.projection())
     this.unsubscribe = this.form.subscribe(() => {
       this.reconcile()
       this.publish()
     })
+    // The mirror is subscribed after the form, whose own subscription is what
+    // derives it: every mirror publication therefore reaches the form's store
+    // first, so this projection never observes a section the form has not yet
+    // been offered.
+    this.unsubscribeMirror = this.mirror.subscribe(() => { this.publish() })
   }
 
-  /** Release the form subscription and the execution stream. */
+  /** Release the form and mirror subscriptions and the execution stream. */
   dispose(): void {
     this.disposed = true
     this.executionGeneration += 1
     this.executionAbort?.abort()
     this.executionAbort = undefined
     this.unsubscribe()
+    this.unsubscribeMirror()
   }
 
   private projection(): TeamPresetsState {
-    const snapshot = this.form.getSnapshot()
-    const stored = snapshot.value ?? EMPTY
+    const stored = this.storedSection()
     return {
-      status: snapshot.status === 'ready' ? 'ready' : snapshot.status === 'loading' ? 'loading' : 'unavailable',
-      writable: snapshot.writable,
+      status: this.documentStatus(),
+      writable: this.documentWritable(),
       saving: false,
       failed: false,
       teams: this.visibleTeams(),
-      selections: stored.selections,
+      selections: stored?.selections ?? [],
       dirty: this.draft !== undefined,
       externalUpdate: this.externalUpdate,
+      formIssue: this.formIssue(),
+      selectionFailure: this.selectionFailure,
       execution: this.execution,
       executions: this.executions,
       providers: this.providers,
@@ -439,6 +528,75 @@ export class TeamPresetsController {
       tools: this.tools,
       toolCatalogue: this.toolCatalogue,
     }
+  }
+
+  /**
+   * Whether the stored document is usable, as the describe mirror reports it.
+   *
+   * The mirror answers even when the shared form does not: a form parked at
+   * `loading` because it refused the stored value still leaves a served
+   * namespace with a readable value and a writable document, and gating the
+   * composer on the form is what turned that into a control that opened a menu
+   * and then did nothing.
+   * @returns the stored document's state.
+   */
+  private documentStatus(): TeamPresetsState['status'] {
+    const mirrored = this.mirror.getSnapshot()
+    if (mirrored.view === undefined) return mirrored.status === 'unavailable' ? 'unavailable' : 'loading'
+    return this.namespaceView() === undefined ? 'unavailable' : 'ready'
+  }
+
+  /**
+   * The Host's view of the Team namespace, or undefined while it serves none.
+   * @returns the namespace view the describe mirror currently holds.
+   */
+  private namespaceView(): SettingsNamespaceView | undefined {
+    return this.mirror.getSnapshot().view?.namespaces.find(row => row.ns === TEAM_PRESETS_NS)
+  }
+
+  /**
+   * The stored section this client reads and writes.
+   *
+   * The mirror wins whenever it holds an answer, because it is the same value
+   * every other settings surface derives from and it survives a namespace whose
+   * stored section this client's own form refused to decode. The form's accepted
+   * value is the fallback only for the window before the first describe answer,
+   * where the form may hold a section the mirror has not published yet: once the
+   * mirror HAS answered, a namespace it does not list is not served, and the
+   * form's older value must not be shown as if it were stored.
+   * @returns the stored Teams and selections, or undefined while nothing is known.
+   */
+  private storedSection(): TeamPresetsSection | undefined {
+    const mirrored = this.mirror.getSnapshot()
+    if (mirrored.view !== undefined) return sectionOf(this.namespaceView()?.value)
+    const accepted = this.form.getSnapshot().value
+    return accepted === undefined ? undefined : { teams: accepted.teams, selections: accepted.selections }
+  }
+
+  /**
+   * Whether the stored document accepts writes.
+   *
+   * A namespace the Host never composed accepts none, whatever the document's
+   * own writability says: there is no section to write into, and reporting the
+   * document as writable there is what let the composer offer a control whose
+   * every click was refused.
+   * @returns whether a selection can be written right now.
+   */
+  private documentWritable(): boolean {
+    const view = this.mirror.getSnapshot().view
+    if (view === undefined) return this.form.getSnapshot().writable
+    return this.namespaceView() === undefined ? false : view.writable
+  }
+
+  /**
+   * Name why the stored section cannot be edited, when it cannot.
+   * @returns the condition, or undefined when this page can edit and save.
+   */
+  private formIssue(): TeamPresetsFormIssue | undefined {
+    const mirrored = this.mirror.getSnapshot()
+    if (mirrored.view === undefined) return mirrored.status === 'unavailable' ? 'settings-unavailable' : undefined
+    if (this.namespaceView() === undefined) return 'namespace-missing'
+    return this.form.getSnapshot().status === 'ready' ? undefined : 'schema-rejected'
   }
 
   private publish(patch: Partial<TeamPresetsState> = {}): void {
@@ -454,7 +612,7 @@ export class TeamPresetsController {
    * @returns the staged Teams, or the stored ones while nothing is staged.
    */
   private visibleTeams(): readonly TeamPreset[] {
-    return this.draft ?? this.form.getSnapshot().value?.teams ?? []
+    return this.draft ?? this.storedSection()?.teams ?? []
   }
 
   /**
@@ -671,13 +829,42 @@ export class TeamPresetsController {
     return !this.disposed && generation === this.catalogueGeneration
   }
 
+  /**
+   * Read one namespaced Remote service, reporting a context that cannot reach it.
+   *
+   * A namespaced service resolves relative to the context that reads it: the
+   * reading fiber (or an ancestor in the same isolate) must declare
+   * `remote.<namespace>` in its own inject set, and a context that does not
+   * throws `cannot get property "remote.<namespace>" without inject` on the
+   * property access itself. That throw is synchronous, so an unguarded read from
+   * inside plugin assembly takes the whole registration with it — this plugin
+   * would rather publish the catalogue as failed and keep the page and the
+   * composer mounted, because a UI that says which read failed is worth more
+   * than one that never appears.
+   * @param read - the property access to attempt.
+   * @returns the read, or undefined when this context cannot reach the service.
+   */
+  private readNamespace<T>(read: () => Promise<T>): Promise<T> | undefined {
+    try {
+      return read()
+    } catch (_unreachable) {
+      return undefined
+    }
+  }
+
   private loadModelCatalogue(): void {
     if (this.catalogueLoading || this.catalogue === 'ready') return
     const generation = this.catalogueGeneration
     this.catalogueLoading = true
     this.catalogue = 'loading'
     this.publish()
-    const read = this.ctx.remote.session.modelCatalog()
+    const read = this.readNamespace(() => this.ctx.remote.session.modelCatalog())
+    if (read === undefined) {
+      this.catalogue = 'error'
+      this.catalogueLoading = false
+      this.publish()
+      return
+    }
     void read.then((result) => {
       if (!this.acceptsCatalogue(generation)) return
       if (!result.ok) throw new Error(result.error.message)
@@ -700,7 +887,13 @@ export class TeamPresetsController {
     this.toolCatalogueLoading = true
     this.toolCatalogue = 'loading'
     this.publish()
-    const read = this.ctx.remote.teamPresets.catalog()
+    const read = this.readNamespace(() => this.ctx.remote.teamPresets.catalog())
+    if (read === undefined) {
+      this.toolCatalogue = 'error'
+      this.toolCatalogueLoading = false
+      this.publish()
+      return
+    }
     void read.then((result) => {
       if (!this.acceptsCatalogue(generation)) return
       if (!result.ok) throw new Error(result.error.message)
@@ -916,7 +1109,12 @@ export class TeamPresetsController {
   /** Write the staged Teams. */
   async save(): Promise<void> {
     const snapshot = this.form.getSnapshot()
-    if (this.draft === undefined || snapshot.status !== 'ready' || !snapshot.writable) return
+    if (this.draft === undefined || snapshot.status !== 'ready' || !snapshot.writable) {
+      // Staged work the page cannot write is a failure the user must see: the
+      // status line names it, where a silent return left the click unanswered.
+      if (this.draft !== undefined) this.publish({ failed: true })
+      return
+    }
     const draft = this.draft
     const revision = this.draftRevision
     this.saving = true
@@ -959,20 +1157,113 @@ export class TeamPresetsController {
 
   /**
    * Apply one Team to a Session, or clear its Team.
+   *
+   * The write goes through the Host's own `settings.mutate` with the revision
+   * the describe mirror holds, which is what makes a refusal reportable: the
+   * shared form's `mutate` answers only a boolean, so a refused selection used
+   * to be indistinguishable from one that never happened. The mirror's answer
+   * is folded back exactly as the shared form folds it, so every other settings
+   * surface sees the selection immediately.
+   *
+   * One retry follows a refusal. A refused write triggers the mirror's recovery
+   * read, so the retry carries the revision and the section the Host holds now —
+   * a fence that was stale when the user clicked is then a real retry rather
+   * than the same conflict forever, and a concurrent selection is preserved
+   * instead of being overwritten by the array this attempt first built.
    * @param sessionId - the Session whose Team changes.
    * @param teamId - the selected Team identity; undefined clears the selection.
-   * @returns once the write settled.
+   * @returns once the write settled; the outcome is published on {@link store}.
    */
   async selectTeam(sessionId: string, teamId: string | undefined): Promise<void> {
-    const snapshot = this.form.getSnapshot()
-    if (snapshot.status !== 'ready' || !snapshot.writable) return
-    const stored = snapshot.value ?? EMPTY
+    // Acting again retires the report of the last attempt: the notice describes
+    // the click the user just made, never one they already moved past.
+    this.selectionFailure = undefined
+    this.publish()
+    const view = this.namespaceView()
+    if (view === undefined || this.storedSection() === undefined || !this.documentWritable()) {
+      this.failSelection({ kind: 'unavailable', sessionId, teamId, detail: undefined })
+      return
+    }
+    const attempt = await this.writeSelection(sessionId, teamId, view.revision)
+    if (attempt.kind === 'landed') return
+    const recovered = this.namespaceView()
+    const retried = recovered === undefined
+      ? attempt
+      : await this.writeSelection(sessionId, teamId, recovered.revision)
+    if (retried.kind === 'landed') return
+    this.failSelection({ kind: retried.kind, sessionId, teamId, detail: retried.detail })
+  }
+
+  /**
+   * Write one selection under one revision fence.
+   * @param sessionId - the Session whose Team changes.
+   * @param teamId - the selected Team identity; undefined clears the selection.
+   * @param revision - the revision the write is fenced on.
+   * @returns the outcome, with the Host's own refusal text when it refused.
+   */
+  private async writeSelection(
+    sessionId: string,
+    teamId: string | undefined,
+    revision: number,
+  ): Promise<{ kind: 'landed' } | { kind: 'refused' | 'failed'; detail: string | undefined }> {
+    const stored = this.storedSection()
+    /* v8 ignore next -- every caller resolves the section before it writes. */
+    if (stored === undefined) return { kind: 'failed', detail: undefined }
     const next = withSelection(stored.selections, sessionId, teamId)
-    await this.form.mutate([{
+    const ops = [{
       op: 'set',
       path: ['selections'],
       value: next.map(record => ({ sessionId: record.sessionId, teamId: record.teamId })),
-    } satisfies SettingsPathOpView])
+    } satisfies SettingsPathOpView]
+    let response
+    try {
+      response = await this.ctx.remote.settings.mutate(TEAM_PRESETS_NS, ops, revision)
+    } catch (error: unknown) {
+      await this.refreshStored()
+      return { kind: 'failed', detail: messageOf(error) }
+    }
+    if (this.disposed) return { kind: 'landed' }
+    if (!response.ok) {
+      // The refusal is only actionable against the document the Host holds now,
+      // and the recovery read is what republishes whatever changed under it.
+      await this.refreshStored()
+      return { kind: 'refused', detail: response.error.message }
+    }
+    // The same fold the shared form performs, so a selection written here is
+    // visible to every other settings surface without waiting for a reload.
+    this.mirror.acceptView(response.value)
+    return { kind: 'landed' }
+  }
+
+  /**
+   * Re-read the Host document after a write this client could not complete.
+   *
+   * The cross-namespace describe contract exposes `ensure`, which reads only
+   * from an idle mirror, and a refused write is exactly the case where a HELD
+   * view is stale. The read below is the same namespace read the mirror itself
+   * performs and `acceptView` is the contract's own fold, so the shared document
+   * is refreshed without reaching past the face the contract publishes.
+   * @returns settlement once a refreshed view, when there is one, is folded.
+   */
+  private async refreshStored(): Promise<void> {
+    try {
+      const response = await this.ctx.remote.settings.describe()
+      if (!response.ok) return
+      const view = response.value.namespaces.find(row => row.ns === TEAM_PRESETS_NS)
+      if (view !== undefined) this.mirror.acceptView(view)
+    } catch (_unreachable) {
+      // A failed recovery read leaves the held document standing: the notice the
+      // user is about to see already says the write did not land.
+    }
+  }
+
+  /**
+   * Publish one selection failure for the page and the composer control.
+   * @param failure - the refusal or failure to report.
+   */
+  private failSelection(failure: TeamSelectionFailure): void {
+    this.selectionFailure = failure
+    this.publish()
   }
 }
 

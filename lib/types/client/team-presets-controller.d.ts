@@ -53,6 +53,20 @@ export interface TeamPresetsState {
     readonly dirty: boolean;
     /** Team definitions the Host rewrote behind the page, or undefined while none was adopted. */
     readonly externalUpdate: ExternalUpdateNotice | undefined;
+    /**
+     * Why this client cannot edit the stored section, or undefined when it can.
+     *
+     * A settings form that never reaches `ready` used to look exactly like one
+     * that is still loading: the page showed a spinner forever and the composer
+     * refused every click without saying so. Naming the state is what makes the
+     * difference between "the deployment serves no Team section", "this page is
+     * not backed by a Host document", and "the Host serves it but this client's
+     * own form refused the stored value" — three conditions with three different
+     * fixes, and only the third one is this plugin's to report.
+     */
+    readonly formIssue: TeamPresetsFormIssue | undefined;
+    /** The last Team selection this client could not write, until the next attempt. */
+    readonly selectionFailure: TeamSelectionFailure | undefined;
     /** Whether the Host execution stream has delivered a frame the page can trust. */
     readonly execution: 'loading' | 'ready' | 'error';
     /** Execution state of every Team the Host reports, empty while it is not trusted. */
@@ -67,6 +81,28 @@ export interface TeamPresetsState {
     readonly tools: readonly ToolChoice[];
     /** Whether the tool catalogue is still loading or failed. */
     readonly toolCatalogue: 'idle' | 'loading' | 'ready' | 'error';
+}
+/**
+ * Why the stored section is not editable, as this client can observe it.
+ *
+ * `settings-unavailable` is the terminal process-local page: the Host keeps no
+ * document for it, so nothing is stored and nothing can be. `namespace-missing`
+ * is a deployment that never composed a row owning the `agent-team-presets`
+ * namespace. `schema-rejected` is the one condition this client can name but not
+ * repair: the Host serves the section, and the shared form refuses to accept the
+ * value it holds, so the page keeps working off the describe mirror instead.
+ */
+export type TeamPresetsFormIssue = 'settings-unavailable' | 'namespace-missing' | 'schema-rejected';
+/** One Team selection this client could not write. */
+export interface TeamSelectionFailure {
+    /** `unavailable`: nothing to write to. `refused`: the Host rejected the write. `failed`: the write did not complete. */
+    readonly kind: 'unavailable' | 'refused' | 'failed';
+    /** The Session whose Team the user tried to change. */
+    readonly sessionId: string;
+    /** The Team the user tried to apply, or undefined for "no Team". */
+    readonly teamId: string | undefined;
+    /** The Host's own refusal text, or the transport failure, when one exists. */
+    readonly detail: string | undefined;
 }
 /**
  * Resolve the execution state of one Team as the page must show it.
@@ -182,7 +218,19 @@ export declare class TeamPresetsController {
     /** Observable page state the slot registrations expose to their components. */
     readonly store: SnapshotStore<TeamPresetsState>;
     private readonly form;
+    /**
+     * The shared describe mirror, which is the authority for the STORED document.
+     *
+     * Every settings surface in the browser derives from this one mirror, so it
+     * answers three questions the form cannot: whether the Host serves the
+     * namespace at all, what the stored section holds when this client's own form
+     * refuses to decode it, and which revision a write must carry. The form keeps
+     * its own job — the page's staged draft, its save fence, and its coordination
+     * of a Host write landing behind that draft.
+     */
+    private readonly mirror;
     private readonly unsubscribe;
+    private readonly unsubscribeMirror;
     private draft;
     private draftRevision;
     /**
@@ -197,6 +245,8 @@ export declare class TeamPresetsController {
      * line is not wiped by a catalogue refresh or another Session's selection.
      */
     private externalUpdate;
+    /** The last selection write this client could not complete, until the user acts again. */
+    private selectionFailure;
     /** Whether a write this page started is still crossing the wire. */
     private saving;
     /** Stream health of the Host execution state, and the frames it delivered. */
@@ -217,9 +267,53 @@ export declare class TeamPresetsController {
      * @param ctx - the browser plugin context providing the shared configuration forms.
      */
     constructor(ctx: Context);
-    /** Release the form subscription and the execution stream. */
+    /** Release the form and mirror subscriptions and the execution stream. */
     dispose(): void;
     private projection;
+    /**
+     * Whether the stored document is usable, as the describe mirror reports it.
+     *
+     * The mirror answers even when the shared form does not: a form parked at
+     * `loading` because it refused the stored value still leaves a served
+     * namespace with a readable value and a writable document, and gating the
+     * composer on the form is what turned that into a control that opened a menu
+     * and then did nothing.
+     * @returns the stored document's state.
+     */
+    private documentStatus;
+    /**
+     * The Host's view of the Team namespace, or undefined while it serves none.
+     * @returns the namespace view the describe mirror currently holds.
+     */
+    private namespaceView;
+    /**
+     * The stored section this client reads and writes.
+     *
+     * The mirror wins whenever it holds an answer, because it is the same value
+     * every other settings surface derives from and it survives a namespace whose
+     * stored section this client's own form refused to decode. The form's accepted
+     * value is the fallback only for the window before the first describe answer,
+     * where the form may hold a section the mirror has not published yet: once the
+     * mirror HAS answered, a namespace it does not list is not served, and the
+     * form's older value must not be shown as if it were stored.
+     * @returns the stored Teams and selections, or undefined while nothing is known.
+     */
+    private storedSection;
+    /**
+     * Whether the stored document accepts writes.
+     *
+     * A namespace the Host never composed accepts none, whatever the document's
+     * own writability says: there is no section to write into, and reporting the
+     * document as writable there is what let the composer offer a control whose
+     * every click was refused.
+     * @returns whether a selection can be written right now.
+     */
+    private documentWritable;
+    /**
+     * Name why the stored section cannot be edited, when it cannot.
+     * @returns the condition, or undefined when this page can edit and save.
+     */
+    private formIssue;
     private publish;
     /**
      * The Teams the page currently shows.
@@ -301,6 +395,22 @@ export declare class TeamPresetsController {
      * @returns whether the answer may be published.
      */
     private acceptsCatalogue;
+    /**
+     * Read one namespaced Remote service, reporting a context that cannot reach it.
+     *
+     * A namespaced service resolves relative to the context that reads it: the
+     * reading fiber (or an ancestor in the same isolate) must declare
+     * `remote.<namespace>` in its own inject set, and a context that does not
+     * throws `cannot get property "remote.<namespace>" without inject` on the
+     * property access itself. That throw is synchronous, so an unguarded read from
+     * inside plugin assembly takes the whole registration with it — this plugin
+     * would rather publish the catalogue as failed and keep the page and the
+     * composer mounted, because a UI that says which read failed is worth more
+     * than one that never appears.
+     * @param read - the property access to attempt.
+     * @returns the read, or undefined when this context cannot reach the service.
+     */
+    private readNamespace;
     private loadModelCatalogue;
     private loadToolCatalogue;
     /**
@@ -397,11 +507,48 @@ export declare class TeamPresetsController {
     discard(): void;
     /**
      * Apply one Team to a Session, or clear its Team.
+     *
+     * The write goes through the Host's own `settings.mutate` with the revision
+     * the describe mirror holds, which is what makes a refusal reportable: the
+     * shared form's `mutate` answers only a boolean, so a refused selection used
+     * to be indistinguishable from one that never happened. The mirror's answer
+     * is folded back exactly as the shared form folds it, so every other settings
+     * surface sees the selection immediately.
+     *
+     * One retry follows a refusal. A refused write triggers the mirror's recovery
+     * read, so the retry carries the revision and the section the Host holds now —
+     * a fence that was stale when the user clicked is then a real retry rather
+     * than the same conflict forever, and a concurrent selection is preserved
+     * instead of being overwritten by the array this attempt first built.
      * @param sessionId - the Session whose Team changes.
      * @param teamId - the selected Team identity; undefined clears the selection.
-     * @returns once the write settled.
+     * @returns once the write settled; the outcome is published on {@link store}.
      */
     selectTeam(sessionId: string, teamId: string | undefined): Promise<void>;
+    /**
+     * Write one selection under one revision fence.
+     * @param sessionId - the Session whose Team changes.
+     * @param teamId - the selected Team identity; undefined clears the selection.
+     * @param revision - the revision the write is fenced on.
+     * @returns the outcome, with the Host's own refusal text when it refused.
+     */
+    private writeSelection;
+    /**
+     * Re-read the Host document after a write this client could not complete.
+     *
+     * The cross-namespace describe contract exposes `ensure`, which reads only
+     * from an idle mirror, and a refused write is exactly the case where a HELD
+     * view is stale. The read below is the same namespace read the mirror itself
+     * performs and `acceptView` is the contract's own fold, so the shared document
+     * is refreshed without reaching past the face the contract publishes.
+     * @returns settlement once a refreshed view, when there is one, is folded.
+     */
+    private refreshStored;
+    /**
+     * Publish one selection failure for the page and the composer control.
+     * @param failure - the refusal or failure to report.
+     */
+    private failSelection;
 }
 /** Business face the page and composer registrations inject. */
 export interface TeamPresetsInjected {

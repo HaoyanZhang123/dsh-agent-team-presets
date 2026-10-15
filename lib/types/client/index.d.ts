@@ -16,7 +16,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'settings.agentTeamPresets': TeamPresetsLocaleKey;
     }
 }
-/** Required services (cordis fiber inject). */
+/**
+ * Required services (cordis fiber inject).
+ *
+ * `remote.settings` is the namespace the composer's selection write goes
+ * through, and the shared describe mirror every settings surface reads is
+ * reached through `configForms`. Both are named explicitly because the cordis
+ * property proxy resolves a namespaced service RELATIVE to the context that
+ * reads it: `ctx.remote.settings` only resolves where the reading fiber (or an
+ * ancestor in the same isolate) declares `remote.settings` in its own inject
+ * set. A context that reads it without that declaration throws
+ * `cannot get property "remote.settings" without inject`, which is exactly the
+ * failure mode this plugin's own scope must never reproduce.
+ */
 export declare const inject: string[];
 /**
  * Register the Settings page and the composer control once this plugin's tool

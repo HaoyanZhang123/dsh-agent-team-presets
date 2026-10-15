@@ -1,9 +1,36 @@
 import { readFile, writeFile } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { bootProductionProfile } from '../../../../test-support/loader-smoke/tests/fixtures/production-profile.ts'
+import type { Context } from '@deepseek-ai/cordis'
+
+/**
+ * The Harness checkout this run was pointed at.
+ *
+ * The shared profile bootstrap lives in the checkout, and the monorepo spelling
+ * of this path (`../../../../test-support/...`) only holds where this plugin
+ * lives at `<checkout>/packages/<group>/<plugin>/`. Standalone it lands outside
+ * the checkout, so the checkout is taken from `DSH_CHECKOUT` — which
+ * `tools/test.mjs` already requires — with the monorepo spelling as fallback.
+ */
+const checkout = process.env['DSH_CHECKOUT'] ?? resolve(import.meta.dirname, '../../../..')
+
+/** The slice of the shared bootstrap's contract this driver uses. */
+interface ProductionProfileOptions {
+  /** Diagnostic prefix for profile and Loader failures. */
+  readonly binName: string
+  /** Shipped profile whose bundle layers form the test tree. */
+  readonly profile: string
+  /** Test overlay files, applied above the shipped bundle layers in order. */
+  readonly overlayPaths: readonly string[]
+}
+
+const { bootProductionProfile } = await import(
+  pathToFileURL(join(checkout, 'packages/test-support/loader-smoke/tests/fixtures/production-profile.ts')).href
+) as { readonly bootProductionProfile: (options: ProductionProfileOptions) => Promise<Context> }
 
 const configPath = process.argv[2]
 if (configPath === undefined) throw new Error('tool-permission fixture requires an overlay')

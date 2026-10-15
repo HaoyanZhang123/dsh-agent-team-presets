@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ModelCatalog, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ModelCatalog, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   TeamPresetsController,
@@ -152,9 +152,60 @@ function scriptedForm(options: {
 }
 
 /**
- * One client context carrying the two services the controller reads. The
- * services are installed on a real Context, so the controller sees the type it
- * declares instead of a stand-in narrowed by an assertion.
+ * One scripted stored-document lane: the describe mirror the controller reads
+ * and the `remote.settings` namespace it writes selections through.
+ *
+ * A case that needs to read the writes the controller sent, steer a refusal, or
+ * serve a section the scripted form never accepted passes one in; every other
+ * case leaves it out and the fixture owns an internal one with these defaults.
+ */
+export interface ScriptedDocument {
+  /** Every `remote.settings.mutate` call, in order. */
+  readonly calls: { readonly ops: readonly SettingsPathOpView[]; readonly revision: number | undefined }[]
+  /** Whether the Host serves the `agent-team-presets` namespace at all. */
+  served: boolean
+  /** The stored section the mirror reports; null projects the scripted form's own value. */
+  value: TeamPresetsSection | null
+  /** The revision the mirror reports; null projects the scripted form's own revision. */
+  revision: number | null
+  /** Whether the Host document accepts writes. */
+  writable: boolean
+  /** How many writes to refuse before one lands. */
+  refusals: number
+  /** The Host's refusal text, which the UI must show verbatim. */
+  refusalMessage: string
+  /** How many writes to reject as a transport failure before one lands. */
+  rejections: number
+  /** The transport failure's own text. */
+  rejectionMessage: string
+}
+
+/** One stored-document lane with every default a case does not script. */
+function scriptedDocument(): ScriptedDocument {
+  return {
+    calls: [],
+    served: true,
+    value: null,
+    revision: null,
+    writable: true,
+    refusals: 0,
+    refusalMessage: 'settings conflict',
+    rejections: 0,
+    rejectionMessage: 'transport failed',
+  }
+}
+
+/**
+ * One client context carrying the services the controller reads. The services
+ * are installed on a real Context, so the controller sees the type it declares
+ * instead of a stand-in narrowed by an assertion.
+ *
+ * The describe mirror is projected from the scripted form by default, so a case
+ * that scripts only a form keeps meaning exactly what it meant before the
+ * controller read the stored document from the mirror: a ready form is a served
+ * namespace, a loading or unavailable one is not. A case that needs the two to
+ * disagree (a served section this client's own form refused) scripts the
+ * document lane directly.
  */
 function scriptedContext(form: ConfigForm<TeamPresetsSection>, options: {
   modelOk?: boolean
@@ -163,9 +214,129 @@ function scriptedContext(form: ConfigForm<TeamPresetsSection>, options: {
   toolRejects?: boolean
   catalog?: () => ModelCatalog | Promise<ModelCatalog>
   execution?: (signal: AbortSignal) => AsyncIterable<TeamExecutionSnapshot>
+  /** The stored-document lane to steer; a case that omits it gets a default one. */
+  document?: ScriptedDocument
 } = {}): ClientContext {
+  const document = options.document ?? scriptedDocument()
+  const listeners = new Set<() => void>()
+  const notify = (): void => { for (const listener of [...listeners]) listener() }
+
+  /** The namespace view the Host would describe for this lane. */
+  const namespaceView = (): SettingsNamespaceView | undefined => {
+    if (!document.served) return undefined
+    if (document.value !== null) {
+      return {
+        ns: 'agent-team-presets',
+        schema: {},
+        value: document.value as never,
+        applies: 'live',
+        secrets: [],
+        revision: document.revision ?? 0,
+      }
+    }
+    // A form parked before `ready` describes no section: the Host has not been
+    // answered yet, or the deployment serves nothing.
+    if (form.getSnapshot().status !== 'ready') return undefined
+    return {
+      ns: 'agent-team-presets',
+      schema: {},
+      value: (form.getSnapshot().value ?? {}) as never,
+      applies: 'live',
+      secrets: [],
+      // The lane's own revision wins once a scripted write moved the document,
+      // so a case can prove the retry carries a fence that actually changed.
+      revision: document.revision ?? form.getSnapshot().revision ?? 0,
+    }
+  }
+
+  /**
+   * The mirror snapshot this lane reports.
+   *
+   * The real mirror holds no view until its first answer, which is what a
+   * scripted loading form means; an explicitly served section is an answer even
+   * while the form itself never accepts it, which is the branch a page needs to
+   * survive rather than report as an endless load.
+   */
+  const describeSnapshot = () => {
+    const formStatus = form.getSnapshot().status
+    if (document.value === null && formStatus === 'loading') return { status: 'loading' as const, view: undefined }
+    if (document.value === null && formStatus === 'unavailable') return { status: 'unavailable' as const, view: undefined }
+    const view = namespaceView()
+    return {
+      status: 'ready' as const,
+      view: {
+        namespaces: view === undefined ? [] : [view],
+        writable: document.writable && form.getSnapshot().writable,
+        hasDocument: true,
+      },
+    }
+  }
+
+  const describeView = () => {
+    const snapshot = describeSnapshot()
+    return { status: snapshot.status, view: snapshot.view, error: null }
+  }
+
+  const describeSettings = async () => {
+    const snapshot = describeSnapshot()
+    return {
+      ok: true as const,
+      value: snapshot.view ?? { namespaces: [], writable: document.writable, hasDocument: true },
+    }
+  }
+
+  const mutate = async (
+    _ns: string,
+    ops: readonly SettingsPathOpView[],
+    revision: number | undefined,
+  ) => {
+    document.calls.push({ ops, revision })
+    if (document.rejections > 0) {
+      document.rejections -= 1
+      throw new Error(document.rejectionMessage)
+    }
+    if (document.refusals > 0) {
+      document.refusals -= 1
+      // The write that won the race moved the document, so the fence the retry
+      // carries is a genuinely different one.
+      document.revision = (document.revision ?? form.getSnapshot().revision ?? 0) + 1
+      return { ok: false as const, error: { code: 'settings/conflict', message: document.refusalMessage } }
+    }
+    const base = (document.value ?? form.getSnapshot().value ?? { teams: [], selections: [] }) as Record<string, unknown>
+    let next: Record<string, unknown> = base
+    for (const op of ops) {
+      if (op.op === 'set' && op.path.length === 1 && typeof op.path[0] === 'string') {
+        next = { ...next, [op.path[0]]: op.value }
+      }
+    }
+    document.value = next as TeamPresetsSection
+    const landed = (document.revision ?? 0) + 1
+    document.revision = landed
+    const answered = {
+      ns: 'agent-team-presets',
+      schema: {},
+      value: next as never,
+      applies: 'live' as const,
+      secrets: [],
+      revision: landed,
+    }
+    notify()
+    return { ok: true as const, value: answered }
+  }
+
   const partial = {
-    configForms: { get: () => form },
+    configForms: {
+      get: () => form,
+      describe: () => ({
+        getSnapshot: describeView,
+        subscribe: (listener: () => void) => {
+          listeners.add(listener)
+          return () => { listeners.delete(listener) }
+        },
+        ensure: () => Promise.resolve(),
+        acceptView: () => { notify() },
+      }),
+    },
     remote: {
       session: {
         modelCatalog: () => options.modelRejects === true
@@ -176,6 +347,7 @@ function scriptedContext(form: ConfigForm<TeamPresetsSection>, options: {
             ? { ok: false as const, error: { message: 'no catalogue' } }
             : { ok: true as const, value: (options.catalog ?? (() => CATALOG))() }),
       },
+      settings: { describe: describeSettings, mutate },
       teamPresets: {
         catalog: () => options.toolRejects === true
           ? Promise.reject(new Error('no tools'))
@@ -1106,43 +1278,221 @@ describe('external Team updates behind an open draft', () => {
 describe('composer selection writes', () => {
   it('adds, replaces, and clears one Session selection', async () => {
     const form = scriptedForm({ value: SECTION })
-    const controller = new TeamPresetsController(scriptedContext(form.form))
+    const document = scriptedDocument()
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
 
     await controller.selectTeam('s2', 'team-9')
-    expect(form.mutations[0]?.ops[0]).toMatchObject({
+    expect(document.calls[0]?.ops[0]).toMatchObject({
       op: 'set', path: ['selections'],
       value: [{ sessionId: 's1', teamId: 'team-1' }, { sessionId: 's2', teamId: 'team-9' }],
     })
 
     await controller.selectTeam('s1', undefined)
-    expect(form.mutations[1]?.ops[0]).toMatchObject({
+    expect(document.calls[1]?.ops[0]).toMatchObject({
       op: 'set', path: ['selections'], value: [{ sessionId: 's2', teamId: 'team-9' }],
     })
+    // The accepted answer is folded into the shared document, so the control
+    // reflects the selection without waiting for a reload.
+    expect(controller.store.getSnapshot().selections).toEqual([{ sessionId: 's2', teamId: 'team-9' }])
+    expect(controller.store.getSnapshot().selectionFailure).toBeUndefined()
     controller.dispose()
   })
 
   it('starts a selection list from an empty mirror', async () => {
     const form = scriptedForm({ value: undefined })
-    const controller = new TeamPresetsController(scriptedContext(form.form))
+    const document = scriptedDocument()
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
     await controller.selectTeam('s1', 'team-1')
-    expect(form.mutations[0]?.ops[0]).toMatchObject({
+    expect(document.calls[0]?.ops[0]).toMatchObject({
       op: 'set', path: ['selections'], value: [{ sessionId: 's1', teamId: 'team-1' }],
     })
     controller.dispose()
   })
 
-  it('writes nothing while the namespace is not ready or not writable', async () => {
+  it('fences every selection on the revision the shared document reports', async () => {
+    const form = scriptedForm({ value: SECTION, revision: 7 })
+    const document = scriptedDocument()
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+    await controller.selectTeam('s2', 'team-9')
+    expect(document.calls[0]?.revision).toBe(7)
+    controller.dispose()
+  })
+
+  it('reports an unavailable document instead of returning silently', async () => {
     const loading = scriptedForm({ status: 'loading' })
-    const notReady = new TeamPresetsController(scriptedContext(loading.form))
+    const notReadyDocument = scriptedDocument()
+    const notReady = new TeamPresetsController(scriptedContext(loading.form, { document: notReadyDocument }))
     await notReady.selectTeam('s1', 'team-1')
-    expect(loading.mutations).toHaveLength(0)
+    expect(notReadyDocument.calls).toHaveLength(0)
+    expect(notReady.store.getSnapshot().selectionFailure).toEqual({
+      kind: 'unavailable', sessionId: 's1', teamId: 'team-1', detail: undefined,
+    })
     notReady.dispose()
 
     const readOnly = scriptedForm({ value: SECTION, writable: false })
-    const unwritable = new TeamPresetsController(scriptedContext(readOnly.form))
+    const readOnlyDocument = scriptedDocument()
+    const unwritable = new TeamPresetsController(scriptedContext(readOnly.form, { document: readOnlyDocument }))
     await unwritable.selectTeam('s1', 'team-1')
-    expect(readOnly.mutations).toHaveLength(0)
+    expect(readOnlyDocument.calls).toHaveLength(0)
+    expect(unwritable.store.getSnapshot().selectionFailure?.kind).toBe('unavailable')
     unwritable.dispose()
+  })
+
+  it('retries once after a refusal and lands the selection', async () => {
+    const form = scriptedForm({ value: SECTION })
+    const document = scriptedDocument()
+    document.refusals = 1
+    document.refusalMessage = 'settings conflict'
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+
+    await controller.selectTeam('s2', 'team-9')
+
+    // Two attempts: the refused one, then one carrying the revision the recovery
+    // read republished — a real retry rather than the same conflict again.
+    expect(document.calls).toHaveLength(2)
+    expect(document.calls[0]?.revision).not.toBe(document.calls[1]?.revision)
+    expect(controller.store.getSnapshot().selections).toEqual([
+      { sessionId: 's1', teamId: 'team-1' }, { sessionId: 's2', teamId: 'team-9' },
+    ])
+    expect(controller.store.getSnapshot().selectionFailure).toBeUndefined()
+    controller.dispose()
+  })
+
+  it('reports the Host\'s own refusal text when the retry is refused too', async () => {
+    const form = scriptedForm({ value: SECTION })
+    const document = scriptedDocument()
+    document.refusals = 2
+    document.refusalMessage = 'Config field "selections" is not volatile'
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+
+    await controller.selectTeam('s2', 'team-9')
+
+    expect(document.calls).toHaveLength(2)
+    expect(controller.store.getSnapshot().selectionFailure).toEqual({
+      kind: 'refused',
+      sessionId: 's2',
+      teamId: 'team-9',
+      detail: 'Config field "selections" is not volatile',
+    })
+    // Nothing landed, so the control keeps showing the stored selection.
+    expect(controller.store.getSnapshot().selections).toEqual([{ sessionId: 's1', teamId: 'team-1' }])
+    controller.dispose()
+  })
+
+  it('reports a transport failure, and retries it once', async () => {
+    const form = scriptedForm({ value: SECTION })
+    const document = scriptedDocument()
+    document.rejections = 1
+    document.rejectionMessage = 'connection lost'
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+
+    await controller.selectTeam('s2', 'team-9')
+    expect(document.calls).toHaveLength(2)
+    expect(controller.store.getSnapshot().selectionFailure).toBeUndefined()
+
+    document.rejections = 2
+    await controller.selectTeam('s3', 'team-9')
+    expect(controller.store.getSnapshot().selectionFailure).toEqual({
+      kind: 'failed', sessionId: 's3', teamId: 'team-9', detail: 'connection lost',
+    })
+    controller.dispose()
+  })
+
+  it('retires the last report when the user tries again', async () => {
+    const form = scriptedForm({ value: SECTION })
+    const document = scriptedDocument()
+    document.refusals = 2
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+    await controller.selectTeam('s2', 'team-9')
+    expect(controller.store.getSnapshot().selectionFailure).toBeDefined()
+
+    document.refusals = 0
+    await controller.selectTeam('s2', 'team-9')
+    expect(controller.store.getSnapshot().selectionFailure).toBeUndefined()
+    expect(controller.store.getSnapshot().selections).toEqual([
+      { sessionId: 's1', teamId: 'team-1' }, { sessionId: 's2', teamId: 'team-9' },
+    ])
+    controller.dispose()
+  })
+})
+
+describe('the stored document behind the shared form', () => {
+  it('serves the stored Teams and selections from the describe mirror', () => {
+    const form = scriptedForm({ value: SECTION })
+    const controller = new TeamPresetsController(scriptedContext(form.form))
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'ready', teams: SECTION.teams, selections: SECTION.selections, formIssue: undefined,
+    })
+    controller.dispose()
+  })
+
+  it('names a namespace the deployment never composed', () => {
+    const form = scriptedForm({ value: SECTION })
+    const document = scriptedDocument()
+    document.served = false
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'unavailable', writable: false, teams: [], formIssue: 'namespace-missing',
+    })
+    controller.dispose()
+  })
+
+  it('names a page with no Host settings document', () => {
+    const form = scriptedForm({ status: 'unavailable', writable: false })
+    const controller = new TeamPresetsController(scriptedContext(form.form))
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'unavailable', formIssue: 'settings-unavailable',
+    })
+    controller.dispose()
+  })
+
+  it('keeps the stored Teams readable and the selection writable when the form refused the section', async () => {
+    // The exact shape of the reported field failure: the Host serves the section
+    // and the shared form never accepts it, so the form is parked at `loading`
+    // while the document itself is perfectly readable and writable.
+    const form = scriptedForm({ status: 'loading' })
+    const document = scriptedDocument()
+    document.value = SECTION
+    document.revision = 3
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'ready',
+      formIssue: 'schema-rejected',
+      writable: true,
+      teams: SECTION.teams,
+      selections: SECTION.selections,
+    })
+
+    await controller.selectTeam('s2', 'team-9')
+    expect(document.calls).toHaveLength(1)
+    expect(document.calls[0]?.revision).toBe(3)
+    expect(controller.store.getSnapshot().selections).toEqual([
+      { sessionId: 's1', teamId: 'team-1' }, { sessionId: 's2', teamId: 'team-9' },
+    ])
+    controller.dispose()
+  })
+
+  it('reports a form parked at loading as loading while the Host has not answered', () => {
+    const form = scriptedForm({ status: 'loading' })
+    const controller = new TeamPresetsController(scriptedContext(form.form))
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'loading', formIssue: undefined, teams: [], selections: [],
+    })
+    controller.dispose()
+  })
+
+  it('keeps a form that cannot be written from claiming a save landed', async () => {
+    const form = scriptedForm({ status: 'loading' })
+    const document = scriptedDocument()
+    document.value = SECTION
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
+    controller.createTeam()
+    await controller.save()
+    expect(form.mutations).toHaveLength(0)
+    // The page cannot write this draft, so the click is answered rather than lost.
+    expect(controller.store.getSnapshot().failed).toBe(true)
+    controller.dispose()
   })
 })
 
@@ -1198,14 +1548,15 @@ describe('the injected business face', () => {
 
   it('writes staged Teams and one selection through the injected face', async () => {
     const form = scriptedForm({ value: SECTION })
-    const controller = new TeamPresetsController(scriptedContext(form.form))
+    const document = scriptedDocument()
+    const controller = new TeamPresetsController(scriptedContext(form.form, { document }))
     const injected = controller.inject()
     injected.createTeam()
     await injected.save()
     expect(form.mutations[0]?.ops[0]).toMatchObject({ op: 'set', path: ['teams'] })
 
     await injected.selectTeam('s2', 'team-2')
-    expect(form.mutations[1]?.ops[0]).toMatchObject({ op: 'set', path: ['selections'] })
+    expect(document.calls[0]?.ops[0]).toMatchObject({ op: 'set', path: ['selections'] })
     controller.dispose()
   })
 

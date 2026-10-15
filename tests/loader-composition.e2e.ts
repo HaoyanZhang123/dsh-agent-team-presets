@@ -4,6 +4,24 @@ import { expect, test } from 'vitest'
 import { runLoaderSmoke, LOADER_SMOKE_TEST_TIMEOUT_MS } from '@deepseek-ai/dsh-loader-smoke'
 
 /**
+ * The Harness checkout this run was pointed at.
+ *
+ * The monorepo spelling of this path (`../../../../tsconfig.base.json`) only
+ * holds where this plugin lives at `<checkout>/packages/<group>/<plugin>/`;
+ * standalone it lands outside the checkout, the booted profile gets no `paths`
+ * map, and every `@deepseek-ai/*` import of its entries fails to resolve.
+ * `tools/test.mjs` already requires `DSH_CHECKOUT`, so take the checkout from
+ * there and keep the monorepo spelling as the fallback.
+ * @returns the absolute checkout root.
+ */
+function checkoutRoot(): string {
+  const checkout = process.env['DSH_CHECKOUT']
+  return checkout === undefined || checkout === ''
+    ? resolve(import.meta.dirname, '../../../..')
+    : checkout
+}
+
+/**
  * Concatenated text of one captured tool result, so an assertion reads the
  * model-facing wording instead of the content-block envelope.
  * @param content - captured content blocks of one tool execution.
@@ -39,7 +57,7 @@ test('applies independent captain and member tool policies through the productio
     binScript: resolve(import.meta.dirname, 'fixtures/driver.ts'),
     libBinScript: resolve(import.meta.dirname, 'fixtures/driver.ts'),
     configPath: resolve(import.meta.dirname, 'fixtures/tool-permissions.patch.yml'),
-    tsconfigPath: resolve(import.meta.dirname, '../../../../tsconfig.base.json'),
+    tsconfigPath: resolve(checkoutRoot(), 'tsconfig.base.json'),
     inspect: async (cwd) => { captured = JSON.parse(await readFile(resolve(cwd, 'tool-permissions.json'), 'utf8')) as Captured },
   })
   if (captured === undefined) throw new Error('the composition driver wrote no capture')

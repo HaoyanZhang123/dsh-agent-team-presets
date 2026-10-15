@@ -18,7 +18,7 @@ import type {
   ExternalUpdateNotice, TeamPresetImportPlan, TeamPresetsInjected,
 } from './team-presets-controller.ts'
 import { downloadPresetText, presetFileName, readPresetFile } from './preset-file.ts'
-import { DISCLOSURE_NOTICE_KEYS, EXECUTION_NOTICE_KEYS, IMPORT_FAILURE_KEYS } from './locales.ts'
+import { DISCLOSURE_NOTICE_KEYS, EXECUTION_NOTICE_KEYS, FORM_ISSUE_KEYS, IMPORT_FAILURE_KEYS, selectionFailureText } from './locales.ts'
 import type { TeamPresetsLocaleKey } from './locales.ts'
 import type { TeamAgentPreset, TeamCaptainPreset } from '../types.ts'
 import css from './TeamPresetsSection.module.css'
@@ -122,10 +122,19 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   useEffect(() => { refreshCatalogue() }, [refreshCatalogue])
 
   if (state.status !== 'ready') {
-    return <p className={css.empty} role="status">{state.status === 'loading' ? t('saving') : t('unavailable')}</p>
+    // The status line names the condition instead of showing one "unavailable"
+    // for all of them: a page with no Host document, a deployment that serves
+    // no Team section, and a section this client refused to decode are three
+    // different problems with three different owners.
+    const issue = state.formIssue === undefined ? undefined : t(FORM_ISSUE_KEYS[state.formIssue])
+    return <p className={css.empty} role="status">{issue ?? (state.status === 'loading' ? t('sectionLoading') : t('unavailable'))}</p>
   }
 
-  const disabled = !state.writable
+  // A section the shared form refused stays readable through the describe
+  // mirror, but nothing may be edited against it: the save would be refused the
+  // same way the selection write was, and offering the edit would be a second
+  // silent failure.
+  const disabled = !state.writable || state.formIssue !== undefined
   const teamList = state.teams
   const found = view.kind === 'list' ? undefined : teamList.find(entry => entry.id === view.teamId)
   // A deleted Team or member drops the page back to the level that still exists.
@@ -239,6 +248,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             tools={state.tools}
             toolCatalogue={state.toolCatalogue}
             cataloguePartial={state.cataloguePartial}
+            catalogueFailed={state.catalogue === 'error'}
             t={t}
             disabled={disabled}
             onBack={() => { openTeam(team.id) }}
@@ -284,6 +294,12 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             </span>
           ))}
           {state.failed ? <span className={css.warn} role="status">{t('saveFailed')}</span> : null}
+          {state.formIssue === undefined ? null : (
+            <span className={css.warn} role="status">{t(FORM_ISSUE_KEYS[state.formIssue])}</span>
+          )}
+          {state.selectionFailure === undefined ? null : (
+            <span className={css.warn} role="status">{selectionFailureText(state.selectionFailure, t)}</span>
+          )}
           {unnamedTeams.length === 0 ? null : (
             <span className={css.warn} role="status">
               {t('teamNameRequired', { teams: unnamedTeams.map(entry => entry.id).join(', ') })}

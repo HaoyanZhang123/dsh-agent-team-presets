@@ -59,3 +59,16 @@
   border-radius: 50%;
   /* The color is per-Team data, applied inline. */
 }
+
+/* A refused selection, beside the control that was clicked. The composer tool
+ * row is a flex row of compact chips, so the notice stays on one ellipsized
+ * line: a failure the user cannot see is the bug this replaces. */
+.failure {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-state-warn-label);
+  font-size: 11px;
+  line-height: 17px;
+}

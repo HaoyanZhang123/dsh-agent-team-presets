@@ -253,7 +253,7 @@ Host 半边拥有实时配置与按会话的应用：
 
 ### 选择与存储
 
-Team 与按会话的选择记录保存在插件的易变 Config 字段中；settings 服务把它们投射到 profile 的用户设置文档，并通过 `loader/volatile-update` 提交回运行中的引用。浏览器半边通过 `ctx.configForms.get('agent-team-presets')` 编辑它们，因此 Settings 页面与 composer 控件共享同一个按修订号围栏的写入队列。每个 agent 独立于 `tools` 存储 `toolMode`。缺少 `toolMode` 的记录保留其仅列表的行为：空列表表示 default-all，非空列表表示 custom。若存储的 captain 仍带着 captain 不再拥有的 `provider`、`model` 或 `reasoningEffort`（来自更早的文档），插件会在加载时把它们清掉并回写一次。
+Team 与按会话的选择记录保存在插件的易变 Config 字段中；settings 服务把它们投射到 profile 的用户设置文档，并通过 `loader/volatile-update` 提交回运行中的引用。浏览器半边把两件事分开：Settings 页面通过 `ctx.configForms.get('agent-team-presets')` 编辑暂存的 Team，其按修订号围栏的写入队列负责草稿与保存；composer 的按会话选择则通过 `ctx.remote.settings.mutate` 写入，携带共享 describe 镜像报告的修订号，并用 `acceptView()` 折回。选择写入被拒绝或失败时会重试一次（拒绝会触发一次宿主文档回读，因此重试携带宿主当前的修订号），仍失败则在控件和 Settings 页面上显示失败，并附宿主自己的拒绝文案。每个 agent 独立于 `tools` 存储 `toolMode`。缺少 `toolMode` 的记录保留其仅列表的行为：空列表表示 default-all，非空列表表示 custom。若存储的 captain 仍带着 captain 不再拥有的 `provider`、`model` 或 `reasoningEffort`（来自更早的文档），插件会在加载时把它们清掉并回写一次。
 
 ### 按 teammate 的设置（官方 rc.2 纯插件无补丁实现）
 
@@ -339,6 +339,7 @@ You review one diff at a time and report findings.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Team 定义是 profile 全局的，而选择记录是按会话的。** 该选择保存在用户设置文档而不是会话日志中，因此 fork 或复制的会话不会继承它，而在另一台机器上重新应用某个会话需要同一份设置文档。
+- **若设置文档被 home patch 或命令行 overlay 接管，则所有写入都会被拒绝。** Harness 的层级中，profile patch 文档低于 `$DSH_HOME/cordis.patch.yml` 与任何 `--patch` overlay，其编辑器会拒绝“结果会被更高层覆盖”的写入（`Configuration for "agent-team-presets" is overridden by a home patch or command-line overlay`）。插件无法让这种写入生效：把该行的 `config` 钉在 overlay 里的部署，必须把它移入 profile patch 文档，之后才能保存或选择 Team。现在该失败会在 composer 控件和 Settings 页面上带着这条消息显示，而不是点了没反应。
 - **选择本身没有会话日志记录。** captain 的渲染提示词会被记录；Team 身份不会，因此读者无法在没有设置文档的情况下判断某个会话用过哪个 Team。
 - **成员系统提示词是 persona 模板。** 成员的提示词若包含未知 `{{variable}}`，该成员的首次请求会失败；字段会在保存前给出警告。
 - **允许列表只遮蔽全局工具。** 诸如 Team 协调工具（`send_message`、`team_task_*`）这样的作用域注册对受限 agent 仍然可见，因为 `ctx.tools.restrict()` 只对全局名称取交集，而保留作用域注册。因此成员仍保留其答复 Lead 所需的工具。

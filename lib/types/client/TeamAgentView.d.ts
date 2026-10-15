@@ -21,6 +21,8 @@ export interface TeamAgentViewProps {
     readonly toolCatalogue: 'idle' | 'loading' | 'ready' | 'error';
     /** Whether some provider failed its catalogue lookup, so its models are absent. */
     readonly cataloguePartial: boolean;
+    /** Whether the provider catalogue could not be read at all, so no model can be offered. */
+    readonly catalogueFailed: boolean;
     /** Page copy reader. */
     readonly t: (key: TeamPresetsLocaleKey) => string;
     /** Whether the Host document accepts writes. */
