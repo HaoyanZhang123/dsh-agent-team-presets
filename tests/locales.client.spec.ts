@@ -2,8 +2,8 @@
 
 import { describe, expect, it } from 'vitest'
 import { en, NS, zh } from '../src/client/locales.ts'
-import { FORM_ISSUE_KEYS, SELECTION_FAILURE_KEYS, selectionFailureText } from '../src/client/locales.ts'
-import type { TeamPresetsFormIssue, TeamSelectionFailure } from '../src/client/team-presets-controller.ts'
+import { DEFAULTS_NOTICE_KEYS, FORM_ISSUE_KEYS, SELECTION_FAILURE_KEYS, selectionFailureText } from '../src/client/locales.ts'
+import type { DefaultsRestore, TeamPresetsFormIssue, TeamSelectionFailure } from '../src/client/team-presets-controller.ts'
 
 describe('Team preset locale bundles', () => {
   it('owns one settings namespace', () => {
@@ -51,5 +51,19 @@ describe('Team preset locale bundles', () => {
     // A failure with no Host text still renders a complete sentence.
     expect(selectionFailureText({ ...refusal, detail: undefined }, key => zh[key])).toBe(zh.selectionRefused)
     expect(selectionFailureText({ ...refusal, detail: '' }, key => zh[key])).toBe(zh.selectionRefused)
+  })
+
+  it('names both outcomes of a default-preset restore, in both languages', () => {
+    const outcomes: DefaultsRestore[] = ['restored', 'unchanged']
+    for (const outcome of outcomes) {
+      const key = DEFAULTS_NOTICE_KEYS[outcome]
+      expect(en[key].trim(), key).not.toBe('')
+      expect(zh[key].trim(), key).not.toBe('')
+    }
+    // "restored" and "nothing to restore" are different answers: one leaves a
+    // save to be pressed, the other does not, so they must not read alike.
+    expect(new Set(Object.values(DEFAULTS_NOTICE_KEYS)).size).toBe(outcomes.length)
+    expect(en.restoreDefaults.trim()).not.toBe('')
+    expect(zh.restoreDefaults.trim()).not.toBe('')
   })
 })

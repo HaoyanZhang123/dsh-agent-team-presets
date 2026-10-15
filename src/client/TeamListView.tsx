@@ -23,6 +23,8 @@ export interface TeamListViewProps {
   readonly onCreate: () => void
   readonly onDuplicate: (teamId: string) => void
   readonly onDelete: (teamId: string) => void
+  /** Puts the three presets this plugin ships back at their shipped content. */
+  readonly onRestoreDefaults: () => void
   /** Receives the document the user chose to import. */
   readonly onImport: (file: File) => void
   /** Writes the chosen Team out as a shareable document. */
@@ -54,6 +56,14 @@ export function TeamListView(props: TeamListViewProps) {
         >
           {t('importPreset')}
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={props.onRestoreDefaults}
+        >
+          {t('restoreDefaults')}
+        </Button>
         <input
           ref={fileInput}
           className={css.fileInput}
@@ -70,6 +80,7 @@ export function TeamListView(props: TeamListViewProps) {
       </div>
 
       <p className={css.hint}>{t('importNote')}</p>
+      <p className={css.hint}>{t('restoreDefaultsHint')}</p>
       {props.importError === undefined
         ? null
         : <p className={css.warn} role="status">{t(props.importError)}</p>}

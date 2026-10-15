@@ -19,6 +19,9 @@ import {
 import { executionStateOf, unnamedTeamsOf } from '../src/client/team-presets-controller.ts'
 import type { ExternalUpdateNotice, TeamPresetImportPlan } from '../src/client/team-presets-controller.ts'
 import { EXECUTION_NOTICE_KEYS, en, zh } from '../src/client/locales.ts'
+import {
+  BUILTIN_TEAMS, BUILTIN_TEAM_IDS, FULLSTACK_TEAM_ID, LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, builtinTeamDefinition,
+} from '../src/builtin-teams.ts'
 import { serializeTeamPreset } from '../src/preset-transfer.ts'
 import { teamAppearance } from '../src/client/appearance.ts'
 import type { TeamSelectionRecordView } from '../src/client/team-presets-controller.ts'
@@ -744,6 +747,125 @@ describe('staged edits', () => {
     controller.patchMember(0, 3, { name: 'ghost' })
     controller.removeTeam(0)
     expect(controller.store.getSnapshot().teams).toEqual([])
+    controller.dispose()
+  })
+})
+
+describe('restoring the shipped default presets', () => {
+  /** The route and policy one shipped member keeps across a restore. */
+  function keepLocalRoute(member: TeamAgentPreset): TeamAgentPreset {
+    return { ...member, provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high', toolMode: 'custom', tools: ['read'] }
+  }
+
+  /** Every shipped preset at its document, with the first one edited by hand. */
+  function editedLightweight() {
+    const definitions = BUILTIN_TEAMS.map(builtinTeamDefinition)
+    const first = definitions[0]!
+    const edited: TeamPreset = {
+      ...first,
+      name: 'Renamed by me',
+      description: 'Rewritten purpose',
+      members: first.members.map((member, index) => index === 0 ? keepLocalRoute(member) : member),
+    }
+    return { stored: [edited, ...definitions.slice(1)], pristine: definitions }
+  }
+
+  /** One controller over the given stored Teams. */
+  function deployment(teams: readonly TeamPreset[]) {
+    const form = scriptedForm({ value: { teams: [...teams], selections: [] } })
+    const controller = new TeamPresetsController(scriptedContext(form.form))
+    return { form, controller }
+  }
+
+  it('stages the shipped content of an edited preset and keeps the local route and policy', () => {
+    const { stored } = editedLightweight()
+    const { controller } = deployment(stored)
+    expect(controller.restoreDefaults()).toBe('restored')
+    const state = controller.store.getSnapshot()
+    expect(state.dirty).toBe(true)
+    expect(state.defaults).toBe('restored')
+    expect(state.teams[0]?.name).toBe(BUILTIN_TEAMS[0]!.document.team.name)
+    expect(state.teams[0]?.description).toBe(BUILTIN_TEAMS[0]!.document.team.description)
+    // A shared document cannot be evidence for discarding a route or an
+    // allow-list it does not carry, so both survive the restore.
+    expect(state.teams[0]?.members[0]).toMatchObject({
+      provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high', toolMode: 'custom', tools: ['read'],
+    })
+    // The two presets that were already at their document are untouched.
+    expect(state.teams[1]).toEqual(stored[1])
+    expect(state.teams[2]).toEqual(stored[2])
+    controller.dispose()
+  })
+
+  it('re-adds a preset the user deleted, behind the teams that remain', () => {
+    const definitions = BUILTIN_TEAMS.map(builtinTeamDefinition)
+    const own: TeamPreset = { ...preset(), id: 'team-9', name: 'Mine' }
+    const { controller } = deployment([own, definitions[1]!])
+    expect(controller.restoreDefaults()).toBe('restored')
+    const teams = controller.store.getSnapshot().teams
+    expect(teams.map(entry => entry.id))
+      .toEqual(['team-9', STANDARD_TEAM_ID, LIGHTWEIGHT_TEAM_ID, FULLSTACK_TEAM_ID])
+    // A Team the user created keeps its identity, content, and position.
+    expect(teams[0]).toEqual(own)
+    controller.dispose()
+  })
+
+  it('stages nothing and says so when every shipped preset already matches', () => {
+    const definitions = BUILTIN_TEAMS.map(builtinTeamDefinition)
+    const { controller } = deployment(definitions)
+    expect(controller.restoreDefaults()).toBe('unchanged')
+    expect(controller.store.getSnapshot()).toMatchObject({ dirty: false, defaults: 'unchanged' })
+    expect(controller.store.getSnapshot().teams).toEqual(definitions)
+    controller.dispose()
+  })
+
+  it('restores within the open draft instead of the stored document', () => {
+    const definitions = BUILTIN_TEAMS.map(builtinTeamDefinition)
+    const { controller } = deployment(definitions)
+    controller.patchTeam(0, { name: 'My rename' })
+    expect(controller.store.getSnapshot().defaults).toBeUndefined()
+    expect(controller.restoreDefaults()).toBe('restored')
+    expect(controller.store.getSnapshot().teams[0]?.name).toBe(BUILTIN_TEAMS[0]!.document.team.name)
+    controller.dispose()
+  })
+
+  it('retires the notice once the user edits or discards the draft', () => {
+    const { stored } = editedLightweight()
+    const first = deployment(stored)
+    first.controller.restoreDefaults()
+    first.controller.patchTeam(0, { description: 'another edit' })
+    expect(first.controller.store.getSnapshot().defaults).toBeUndefined()
+    first.controller.dispose()
+
+    const second = deployment(stored)
+    second.controller.restoreDefaults()
+    second.controller.discard()
+    expect(second.controller.store.getSnapshot()).toMatchObject({ defaults: undefined, dirty: false })
+    second.controller.dispose()
+  })
+
+  it('writes the restored presets through the one teams path and retires the notice', async () => {
+    const { stored } = editedLightweight()
+    const { form, controller } = deployment(stored)
+    controller.restoreDefaults()
+    await controller.save()
+    expect(form.mutations).toHaveLength(1)
+    const op = form.mutations[0]?.ops[0]
+    expect(op).toMatchObject({ op: 'set', path: ['teams'] })
+    const written = (op as { value: TeamPreset[] }).value
+    expect(written.map(entry => entry.id)).toEqual([...BUILTIN_TEAM_IDS])
+    expect(written[0]?.name).toBe(BUILTIN_TEAMS[0]!.document.team.name)
+    expect(written[0]?.members[0]).toMatchObject({ provider: 'deepseek', model: 'deepseek-chat' })
+    expect(controller.store.getSnapshot()).toMatchObject({ dirty: false, defaults: undefined })
+    controller.dispose()
+  })
+
+  it('exposes the restore the settings page calls, and reads the state it publishes', () => {
+    const { stored } = editedLightweight()
+    const { controller } = deployment(stored)
+    controller.inject().restoreDefaults()
+    expect(controller.store.getSnapshot()).toMatchObject({ defaults: 'restored', dirty: true })
+    expect(controller.store.getSnapshot().teams[0]?.id).toBe(LIGHTWEIGHT_TEAM_ID)
     controller.dispose()
   })
 })

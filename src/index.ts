@@ -32,7 +32,7 @@ import { createdDepthRefusal } from './delegation.ts'
 import { isPresetMemberProvider, memberProviderMarker, registerMemberProviders } from './member-identity.ts'
 import { installNativePresentation, personaBaseline, prepareNativePresentation, readWire } from './presentation.ts'
 import type { Config } from './config.ts'
-import { teamSettingsMigration } from './settings-migration.ts'
+import { teamSettingsReconcile } from './settings-reconcile.ts'
 import { isSessionRoot, TeamExecutionMonitor, teammatesBusy } from './execution.ts'
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -622,13 +622,14 @@ export function apply(ctx: Context, config: Config): void {
   }
   ctx.effect(() => () => teardown(), 'agent-team-presets: ordered shutdown')
 
-  // A document stored while captains still owned a route is cleaned once, so a
-  // Session is never composed from a Team shape this plugin no longer applies.
+  // The stored document is reconciled once at startup: a document written while
+  // captains still owned a route is cleaned, a member identity it never carried
+  // is added, and the shipped default presets are installed for the first time.
   // HMR can mount after Host ready. The next task crosses Cordis activation,
   // whose LOADING entry is intentionally absent from settings.describe().
-  const migration = teamSettingsMigration(ctx, config, NAMESPACE)
-  const migrationTimer = setTimeout(() => { if (!disposed) void migration.request() }, 0)
-  ctx.effect(() => () => { clearTimeout(migrationTimer); migration.dispose() }, 'agent-team-presets: migration readiness')
+  const settingsReconcile = teamSettingsReconcile(ctx, config, NAMESPACE)
+  const reconcileTimer = setTimeout(() => { if (!disposed) void settingsReconcile.request() }, 0)
+  ctx.effect(() => () => { clearTimeout(reconcileTimer); settingsReconcile.dispose() }, 'agent-team-presets: settings reconcile readiness')
 
   for (const agent of ctx.agents.list()) {
     if (isSessionRoot(agent)) reconcile(agent)
@@ -676,7 +677,7 @@ export function apply(ctx: Context, config: Config): void {
     for (const agent of ctx.agents.list()) {
       if (isSessionRoot(agent)) reconcile(agent)
     }
-    if (!disposed) void migration.request()
+    if (!disposed) void settingsReconcile.request()
     // A stored change moves the frame even when no Session is online to adopt it.
     monitor.invalidate()
   })

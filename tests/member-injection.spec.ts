@@ -37,6 +37,7 @@ import { mountMemberStorage } from './fixtures/member-storage.ts'
 import type { MemberStorage } from './fixtures/member-storage.ts'
 import { MockAdapter, textResponse } from './fixtures/mock-adapter.ts'
 import type { TeamPreset } from '../src/types.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 
 const contexts: Context[] = []
 const temporary: string[] = []
@@ -183,6 +184,7 @@ async function stack(options: {
     teams: { get: () => [current] },
     selections: { get: () => [{ sessionId, teamId: current.id }] },
     freshProvider: 'spawn',
+    seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
     forkProvider: 'fork',
   }
   await ctx.plugin(Object.assign((owner: Context) => apply(owner, config), { inject }))

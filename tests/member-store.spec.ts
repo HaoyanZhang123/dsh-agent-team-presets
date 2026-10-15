@@ -25,6 +25,7 @@ import { apply, inject } from '../src/index.ts'
 import { MEMBER_DOMAIN_NAME, MEMBER_TABLE_NAME, memberRecordKey, memberRecordSchema, openMemberStore } from '../src/member-store.ts'
 import type { MemberRecord } from '../src/member-store.ts'
 import { MemberRuntime } from '../src/member-runtime.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 import { mountMemberStorage } from './fixtures/member-storage.ts'
 import { MockAdapter, textResponse } from './fixtures/mock-adapter.ts'
 import { subagentServiceDouble } from './fixtures/plugin-harness.ts'
@@ -53,6 +54,7 @@ async function bare(options: { teams?: ReturnType<typeof team>; selections?: { s
     teams: { get: () => [definition] },
     selections: { get: () => options.selections ?? [{ sessionId: 'root', teamId: definition.id }] },
     freshProvider: 'spawn',
+    seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
     forkProvider: 'fork',
   }
   // The plugin injects the subagent service, exactly as a deployment that

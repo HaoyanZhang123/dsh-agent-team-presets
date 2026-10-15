@@ -22,6 +22,7 @@ import { applyTeamToAgent } from '../src/application.ts'
 import { apply, inject } from '../src/index.ts'
 import TeamPresetsToolCatalog from '../src/tool-catalog.ts'
 import { guardPolicy, policyOf } from '../src/tool-policy.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 import { MockAdapter, textResponse, toolCallResponse } from './fixtures/mock-adapter.ts'
 import { mountMemberStorage } from './fixtures/member-storage.ts'
 import { team, slot } from './fixtures/team-presets.ts'
@@ -63,7 +64,7 @@ describe('strict capability execution', () => {
     await ctx.plugin(Spawn, { providerName: 'spawn' })
     await ctx.plugin(TeamService)
     ctx.provide('settings', { configure: () => () => {}, describe: () => [{ ns: 'agent-team-presets', revision: 0 }], update: async () => {} })
-    const config = { teams: { get: () => [] }, selections: { get: () => [] }, freshProvider: 'spawn', forkProvider: 'fork' }
+    const config = { teams: { get: () => [] }, selections: { get: () => [] }, freshProvider: 'spawn', seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] }, forkProvider: 'fork' }
     await ctx.plugin(Object.assign((owner: Context) => apply(owner, config), { inject }))
     const handle = await ctx.agents.create({ sessionId: SessionId('ordinary-root'), agentOptions: { provider: 'mock', model: 'mock' } })
     // TeamTools installs once published Agents can be resolved as live members.
@@ -215,7 +216,7 @@ describe('real durable preset-managed creation', () => {
       toolMode: 'custom', tools: ['spawn_team_member', 'list_agents', 'send_message'],
     })
     ctx.provide('settings', { configure: () => () => {}, describe: () => [{ ns: 'agent-team-presets', revision: 0 }], update: async () => {} })
-    const config = { teams: { get: () => [definition] }, selections: { get: () => [{ sessionId: 'managed-root', teamId: 'team-1' }] }, freshProvider: 'spawn', forkProvider: 'fork' }
+    const config = { teams: { get: () => [definition] }, selections: { get: () => [{ sessionId: 'managed-root', teamId: 'team-1' }] }, freshProvider: 'spawn', seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] }, forkProvider: 'fork' }
     await ctx.plugin(Object.assign((owner: Context) => apply(owner, config), { inject }))
     const root = await ctx.agents.create({ sessionId: SessionId('managed-root'), agentOptions: { provider: 'mock', model: 'mock' } })
     const first = await call(ctx, root.agent, 'spawn_team_member', { member: 'reviewer', task: 'review first' })

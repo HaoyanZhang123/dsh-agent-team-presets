@@ -72,6 +72,8 @@ interface CapturedRow {
   readonly value: {
     readonly teams?: ReadonlyArray<{ readonly id?: string; readonly name?: string }>
     readonly selections?: ReadonlyArray<Selection>
+    /** Identities of the shipped default presets this deployment has been offered. */
+    readonly seededDefaults?: readonly string[]
   }
 }
 
@@ -185,6 +187,29 @@ function readRow(context: Context): CapturedRow | null {
 }
 
 /**
+ * Wait until the plugin's startup reconcile has installed the shipped defaults.
+ *
+ * That pass is scheduled asynchronously at activation, so the section a client
+ * reads is only stable once its marker is present. Polling the observable
+ * document — rather than sleeping a fixed time — is what makes every later
+ * assertion about the stored Teams deterministic instead of a race with the
+ * Host's own timer.
+ * @param context - booted Loader root.
+ * @returns the settled row, or null when the namespace is not served.
+ */
+async function settledRow(context: Context): Promise<CapturedRow | null> {
+  const deadline = Date.now() + 5000
+  for (;;) {
+    const row = readRow(context)
+    if (row === null || (row.value.seededDefaults?.length ?? 0) > 0) return row
+    if (Date.now() > deadline) {
+      throw new Error('the shipped default presets were never installed by the startup reconcile')
+    }
+    await new Promise<void>(resolve => { setTimeout(resolve, 10) })
+  }
+}
+
+/**
  * The exact edit a correct client sends when the composer picks a Team.
  * @param selection - the Session/Team pair to store.
  * @returns the ordered path ops handed to the Host settings service.
@@ -214,8 +239,9 @@ const ctx = await bootProductionProfile({
 
 try {
   // The namespace is served by the composition, with the Team section at the
-  // bundle layer's empty default.
-  const booted = readRow(ctx)
+  // bundle layer's empty default; the plugin's own startup pass then installs
+  // the three presets it ships. Read the row once that pass has landed.
+  const booted = await settledRow(ctx)
   const documentPath = ctx.configEditor.documentPath
 
   // A Team is configured the way the Settings page configures one: a real

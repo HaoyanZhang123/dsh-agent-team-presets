@@ -6,14 +6,16 @@
 
 <!-- 维护者注意：本区块与下方固定 tag 的安装命令都写死了版本号，
      每次发版请与 package.json 一起同步。 -->
-> **状态：社区插件 v0.1.3**，已发布到 npm：
-> [`dsh-agent-team-presets`](https://www.npmjs.com/package/dsh-agent-team-presets)。
-> 安装：`dsh plugin --profile <profile> add dsh-agent-team-presets`，或从 GitHub
-> 浮动安装 `... add github:bloodarea/dsh-agent-team-presets` —— 只有这两种形式，
-> 插件市场才能提示更新；要复现某个确切版本，才用 `#v0.1.3` 固定 ref，并注意：
-> 带 ref 的安装只与同一个 ref 比对，市场因此永远不会为它提示更新（设计如此）。
+> **状态：社区插件 v0.1.4**，以 GitHub tag `v0.1.4` 发布。
+> 安装该版本：`dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.4`；
+> 或从 GitHub 浮动安装 `... add github:bloodarea/dsh-agent-team-presets` —— 这是插件市场
+> 能提示更新的形式，因为它比对的是本仓 `package.json` 的版本号。npm 仓库当前仍是
+> [`0.1.3`](https://www.npmjs.com/package/dsh-agent-team-presets)，早于内置默认预设：
+> `dsh plugin --profile <profile> add dsh-agent-team-presets` 在本版本发布到 npm 之前
+> 装到的仍是那个旧版本。要复现某个确切版本，就用上面的固定 ref；带 ref 的安装只与同一个
+> ref 比对，市场因此永远不会为它提示更新（设计如此）。
 > 支持的 Harness peer 范围为 `>=0.2.0-rc.1 <0.3.0`，由插件管理器校验；Harness 版本不是本插件版本。
-> 包名为 `dsh-agent-team-presets` 的插件详情应显示 `v0.1.3`。
+> 包名为 `dsh-agent-team-presets` 的插件详情应显示 `v0.1.4`。
 > 若卡片显示 `@deepseek-ai/dsh-experimental-agent-team-presets`，加载的是 monorepo 开发包，
 > 其版本跟随 Harness（例如 `0.2.0-rc.2`），不是本社区发布版。
 > `lib/` 已预构建，安装无需构建；重建源码需要 Harness 检出目录 —— 见
@@ -105,13 +107,14 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力，但�
 
 ### 安装、升级与版本确认
 
-从 npm 安装 —— 更新语义最干净的一种，市场直接拿 registry 的 `latest` 与已装版本比 semver：
+从 npm 安装 —— 更新语义最干净的一种，市场直接拿 registry 的 `latest` 与已装版本比 semver。
+但 registry 当前仍是 `0.1.3`，早于内置默认预设，因此在本版本发布到 npm 之前请先用下面的 GitHub 方式：
 
 ```sh
 dsh plugin --profile <profile> add dsh-agent-team-presets
 ```
 
-从 GitHub 浮动安装 —— 更新跟随本仓自己的版本号（市场读仓库 `package.json`）：
+从 GitHub 浮动安装 —— 更新跟随本仓自己的版本号（市场读仓库 `package.json`），当前为 `0.1.4`：
 只有版本号变动才会被提示，只推 commit 不 bump 版本不会被提示：
 
 ```sh
@@ -122,7 +125,7 @@ dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets
 市场因此永远不会为它提示更新（设计如此）：
 
 ```sh
-dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.3
+dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.4
 ```
 
 把 `<profile>` 替换为 GUI 实际运行的 profile（例如 `web`）。
@@ -135,14 +138,13 @@ dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.
 
 切换包身份后，重启正在运行的 Harness 并刷新 GUI；仅刷新页面可能仍保留 Host 模块表中的旧
 客户端入口，造成重复插件启动失败。确认插件详情同时显示 `dsh-agent-team-presets` 和
-`v0.1.3`，且组件处于运行中。Harness 自身的 `0.2.0-rc.*` 是另一套兼容版本要求。
+`v0.1.4`，且组件处于运行中。Harness 自身的 `0.2.0-rc.*` 是另一套兼容版本要求。
 
 ### Desktop 与 agent 安装注意事项
 
-**待发布 0.1.4 的启动修复（本项尚未测试）：** Host Typert 与 Remote 入口现将
-`zod` 校验代码内联进预构建产物，避免本地源码链接没有 `node_modules/zod` 时在
-启动前导入失败。保留严格校验；这不替代 Harness peer 兼容性要求。
-旧的 `v0.1.3` 标签或已安装副本不会自动获得该修复。
+**0.1.4 已发布的启动修复：** Host Typert 与 Remote 入口把 `zod` 校验代码内联进
+预构建产物，避免本地源码链接没有 `node_modules/zod` 时在启动前导入失败。保留严格
+校验；这不替代 Harness peer 兼容性要求。从更早标签安装的副本不会自动获得该修复。
 
 - 用户给出本仓 GitHub URL 时，使用上面的 `github:` 安装方式；“我自己开发的”
   不代表授权改成 `file:` / `link:` 或手工编辑 profile。只有明确要求本地开发链接时才使用它。
@@ -155,7 +157,7 @@ dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.
 - `Unexpected token` BOM 错误、凭据锁超时和其他插件安装失败属于 Harness/安装流程
   的独立问题，不在此修复范围内。不要为此关闭 Typert 校验或在运行中盲删锁文件。
 
-### 0.1.4 准备分支的权限变化（尚未发布）
+### 0.1.4 的权限变化（已发布）
 
 本工作树的自定义策略同时限制继承工具和 Agent 自身注册的工具；协作工具也须明确勾选。
 工具目录读取全局与 standing preset 作用域，包含文件工具，但目录是部署并集，具体会话仍须通过适用性校验。
@@ -164,9 +166,9 @@ dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.
 白名单不是文件路径/操作系统沙箱：允许 shell 或可信第三方工具，也就接受其间接能力。
 无效首次应用会隔离，失败更新保留旧策略；运行中热重载无法还原旧定义时隔离到任务边界。
 共享提示词修改还须 Host 对具体差异批准，审批禁用时拒绝；普通开发请求不是写配置授权。
-这些说明描述未发布源码，不表示当前 GUI 已安装。详见 [修复与边界报告](docs/evidence/0.1.4-remediation.md)。
+这些能力随 0.1.4 发布；当前 GUI 是否已安装取决于所装版本。详见 [修复与边界报告](docs/evidence/0.1.4-remediation.md)。
 
-**边界修复（同一未发布分支）：** 每个成员改由插件自己的 subagent 执行后端别名创建，该别名由宿主写进 roster 与子会话 descriptor，成为独立于快照的持久身份；快照读不到、durable unit 打不开或身份无法解析时，带标记的子会话会在创建事务内被拒绝，而不会退回队长线路。新建成员前先校验宿主深度上限与固定模型路由；被拒绝的创建不写 intent、不写 roster、不发模型请求。自定义策略改用原生工具调用：若该会话的 Agent 作用域已经声明 PTC/both，Team 不再应用（保留旧策略并在日志说明原因）；覆盖了 preset 级 PTC 时，设置页会明示"已改用原生工具调用"。官方 `minimal` 预设下团队简报仍然可见。插件完全缺席时，后续冷恢复不归本插件管控。边界修复与真机验收报告见本机证据 `docs/evidence/0.1.4-verify/REPORT.md`（`docs/evidence/` 不随仓库提交）。
+**边界修复（0.1.4 已发布）：** 每个成员改由插件自己的 subagent 执行后端别名创建，该别名由宿主写进 roster 与子会话 descriptor，成为独立于快照的持久身份；快照读不到、durable unit 打不开或身份无法解析时，带标记的子会话会在创建事务内被拒绝，而不会退回队长线路。新建成员前先校验宿主深度上限与固定模型路由；被拒绝的创建不写 intent、不写 roster、不发模型请求。自定义策略改用原生工具调用：若该会话的 Agent 作用域已经声明 PTC/both，Team 不再应用（保留旧策略并在日志说明原因）；覆盖了 preset 级 PTC 时，设置页会明示"已改用原生工具调用"。官方 `minimal` 预设下团队简报仍然可见。插件完全缺席时，后续冷恢复不归本插件管控。边界修复与真机验收报告见本机证据 `docs/evidence/0.1.4-verify/REPORT.md`（`docs/evidence/` 不随仓库提交）。
 
 ### 配置一个 Team
 
@@ -196,6 +198,20 @@ Settings → Agent team presets 是三个层叠页面，因此狭窄的 Settings
 | 推理强度 | **仅成员。** 所选路由的适配器自有强度；留空则使用模型默认值。 |
 | 允许的工具 | 为 captain 和每个成员分别选择 **Default: all tools** 或 **Custom allowed tools**。自定义模式把部署的全局与预设继承工具显示为展开的复选框网格，并提供全选与清空控件。每个复选框的悬浮提示写它实际是什么：注册表里的工具沿用其作者的英文描述，本插件自己的三个工具使用同一份英文文案（工具定义与悬浮提示共用一个常量），两者都没有的名字不列出——不编造第三方工具的描述。**工具描述一律保持英文**，因为上游 `ToolDefinition` 只有单一描述字段、没有本地化机制，且该文本首先是给模型读的；界面文案本身仍随语言设置切换。工具按来源分组：**本插件**、**MCP 服务器**（按 harness 自己生成的 `mcp__<server>__<name>` 命名归组）、以及**其他**。分组默认收起并显示"已选/总数"，点击标题即可展开或收起；每组各自带**全选**、**反选**、**清空**，只改写本组，不影响其他组的勾选。工具注册表不记录注册包，所以"原生工具"与"第三方插件工具"无法区分，统一如实归入"其他"，不按名字猜归属；上游若在注册时记录来源，该分组会自动拆开而无需返工。仅队长可用的能力（`spawn_team_member`、`get_team_preset`、`update_team_preset`、`interrupt_agent`）在队员页面置灰并说明原因，因为团队服务会拒绝队员调用；全选也不会把它们写进队员白名单，已存储的名字仍可移除。自定义模式下不勾选任何工具会拒绝所有可配置工具；默认模式不增加任何限制，并保留已保存的勾选。captain 与成员策略相互独立，因此成员可以拥有 captain 无法使用的工具。已保存但不可用的名称仍可移除；无效名称会拒绝应用，而不是放开为不受限访问。作用域内的协调工具也必须明确勾选；通用代码与普通委派在自定义模式下不可用。 |
 | 系统提示词 | 注册为提示词区段模板；完整的 `{{variable}}` 组会按已注册的提示词变量插值。被召唤的成员会在其团队 briefing 之后读到它。 |
+
+### 内置默认预设
+
+全新安装会自带三个可直接使用的团队，因此在配置任何团队之前插件就能用。它们按任务规模覆盖常见场景：
+
+- **轻量研发团队** —— 小型功能或模块迭代：队长加一名执行成员，架构顾问按需参与。
+- **标准研发团队** —— 中型功能、重要重构或持续迭代：增加一名独立审查员。
+- **全栈软件研发团队** —— 跨 Web、桌面与 Android 的工作：在后端架构顾问、UI/UX 设计顾问、审查员与执行者之间分工。
+
+它们就是普通的已保存团队：重命名、编辑、复制、导出、选择、删除，和你自己创建的团队完全一样。安装只在每个部署上发生一次——你删除的预设会一直保持删除，重启或升级都不会自动装回来；你改过的预设也不会被安装覆盖。
+
+Teams 页面上的 **恢复默认预设** 会把这三个预设恢复到出厂状态：恢复的是随插件发布的文档所携带的内容——名称、说明、每一段固定提示词、颜色和成员名单；文档不携带的内容一律保留，也就是你为它们配置的模型路由与工具权限保持原样。你自己创建的团队完全不受影响；被删除的预设会被追加回来。恢复结果先进入草稿，需要按 **保存** 才会写入。如果三个预设本来就是出厂状态，页面会直接说明，而不会制造一次空改动。
+
+三个预设的提示词是中文，内容即随插件发布的文档本身；仓库中的 `contrib/default-presets/` 保留了同样的 JSON，也可以手动导入。
 
 ### 选择一个 Team
 

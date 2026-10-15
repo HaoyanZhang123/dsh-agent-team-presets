@@ -22,6 +22,7 @@ import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-system-prompt'
 import { apply, inject } from '../src/index.ts'
 import type { Config } from '../src/config.ts'
 import type { TeamPreset, TeamSelectionRecord } from '../src/types.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 import { memberRecord, mountMemberStorage } from './fixtures/member-storage.ts'
 import type { MemberStorage } from './fixtures/member-storage.ts'
 import { settlePlugin, subagentServiceDouble } from './fixtures/plugin-harness.ts'
@@ -240,6 +241,7 @@ async function setup(options: {
     teams: teamsRef.ref,
     selections: selectionsRef.ref,
     freshProvider: 'spawn',
+    seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
     forkProvider: 'fork',
   } satisfies Config
   const fiber = await ctx.plugin(Object.assign((inner: Context) => { apply(inner, config) }, { inject }))
@@ -831,6 +833,7 @@ describe('application lifecycle across status edges', () => {
       teams: { get: () => [definition('A', 'alpha')] },
       selections: { get: () => SELECTED },
       freshProvider: 'spawn',
+      seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
       forkProvider: 'fork',
     } satisfies Config
 

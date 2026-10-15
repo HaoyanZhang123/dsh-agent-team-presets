@@ -18,6 +18,7 @@ const composer = readFileSync(new URL('../src/client/ComposerTeamSelect.tsx', im
 const composerCss = readFileSync(new URL('../src/client/ComposerTeamSelect.module.css', import.meta.url), 'utf8')
 const section = readFileSync(new URL('../src/client/TeamPresetsSection.tsx', import.meta.url), 'utf8')
 const agentView = readFileSync(new URL('../src/client/TeamAgentView.tsx', import.meta.url), 'utf8')
+const listView = readFileSync(new URL('../src/client/TeamListView.tsx', import.meta.url), 'utf8')
 
 describe('selection failure visibility', () => {
   it('renders the failure beside the composer control and in its title', () => {
@@ -49,5 +50,21 @@ describe('selection failure visibility', () => {
     expect(section).toContain("catalogueFailed={state.catalogue === 'error'}")
     expect(agentView).toContain("props.catalogueFailed")
     expect(agentView).toContain("t('modelsFailed')")
+  })
+})
+
+describe('default preset restore visibility', () => {
+  it('offers the restore on the Team list and wires it to the controller', () => {
+    expect(listView).toContain('props.onRestoreDefaults')
+    expect(listView).toContain("t('restoreDefaults')")
+    // The button says what it does and does not do, so a reader knows the local
+    // routes survive and their own Teams are untouched.
+    expect(listView).toContain("t('restoreDefaultsHint')")
+    expect(section).toContain('props.restoreDefaults()')
+  })
+
+  it('renders the outcome of the click, so a restore that stages nothing still answers', () => {
+    expect(section).toContain('DEFAULTS_NOTICE_KEYS[state.defaults]')
+    expect(section).toContain('state.defaults === undefined')
   })
 })

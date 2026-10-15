@@ -21,6 +21,7 @@ import { definitionFingerprint } from '../src/presets.ts'
 import TeamPresetsToolCatalog from '../src/tool-catalog.ts'
 import type { Config } from '../src/config.ts'
 import type { TeamExecutionSnapshot, TeamPreset, TeamSelectionRecord } from '../src/types.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 import { slot, team } from './fixtures/team-presets.ts'
 
 const contexts: Context[] = []
@@ -132,6 +133,7 @@ async function setup(options: {
     teams: teamsRef.ref,
     selections: selectionsRef.ref,
     freshProvider: 'spawn',
+    seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
     forkProvider: 'fork',
   } satisfies Config
   const applied = new Map<Agent, { teamId: string; fingerprint: string }>()

@@ -51,6 +51,8 @@ export interface TeamPresetsState {
     readonly selections: readonly TeamSelectionRecordView[];
     /** Whether the page holds edits a save would write. */
     readonly dirty: boolean;
+    /** How the last restore of the shipped default presets resolved, until the user acts again. */
+    readonly defaults: DefaultsRestore | undefined;
     /** Team definitions the Host rewrote behind the page, or undefined while none was adopted. */
     readonly externalUpdate: ExternalUpdateNotice | undefined;
     /**
@@ -146,6 +148,15 @@ export interface TeamSelectionRecordView {
     /** Selected Team identity. */
     readonly teamId: string;
 }
+/**
+ * How one restore of the shipped default presets resolved.
+ *
+ * `restored` means the draft now differs from the stored document, so the page
+ * is dirty and Save applies it. `unchanged` means every shipped preset already
+ * matched its document — the page has to say so, because a click that stages
+ * nothing would otherwise look like a control that does not work.
+ */
+export type DefaultsRestore = 'restored' | 'unchanged';
 /** What one import will do, once the document was read and its collisions are known. */
 export type TeamPresetImportPlan = {
     /** The document being imported. */
@@ -245,6 +256,12 @@ export declare class TeamPresetsController {
      * line is not wiped by a catalogue refresh or another Session's selection.
      */
     private externalUpdate;
+    /**
+     * The last default-preset restore, kept until the user acts on the draft
+     * again, exactly as {@link externalUpdate} is: it reports the click the user
+     * just made, not one they already moved past.
+     */
+    private defaultsRestore;
     /** The last selection write this client could not complete, until the user acts again. */
     private selectionFailure;
     /** Whether a write this page started is still crossing the wire. */
@@ -441,6 +458,20 @@ export declare class TeamPresetsController {
      */
     duplicateTeam(index: number): string | undefined;
     /**
+     * Put the shipped default presets back at their document's content.
+     *
+     * Only the presets this plugin ships are touched: a Team the user created
+     * keeps its identity, its content, and its position, and the model route and
+     * tool policy configured for a shipped preset's slots are kept too, exactly as
+     * an import keeps them — a shared document cannot be evidence for discarding a
+     * local setting it does not carry. What the restore produces is staged, so it
+     * is visible and saved like every other edit on the page; a restore that would
+     * change nothing stages nothing and reports that instead of opening an empty
+     * draft.
+     * @returns how the restore resolved.
+     */
+    restoreDefaults(): DefaultsRestore;
+    /**
      * Serialize one Team as the fixed shareable document.
      * @param index - the Team position to export.
      * @returns the document text, or undefined for a position the page does not show.
@@ -558,6 +589,8 @@ export interface TeamPresetsInjected {
     };
     createTeam: () => string;
     duplicateTeam: (index: number) => string | undefined;
+    /** Stage the shipped default presets at their document's content, reporting the outcome on the store. */
+    restoreDefaults: () => void;
     /** Serialize one Team as the fixed shareable document, or undefined for an unknown position. */
     exportTeam: (index: number) => string | undefined;
     /** Read one shared document and report what importing it would collide with. */

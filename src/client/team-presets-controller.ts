@@ -13,6 +13,7 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import type { ConfigForm, SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { toolMode, withSelection } from '../presets.ts'
+import { restoreBuiltinTeams } from '../builtin-teams.ts'
 import {
   applySharedFields,
   importConflicts,
@@ -75,6 +76,8 @@ export interface TeamPresetsState {
   readonly selections: readonly TeamSelectionRecordView[]
   /** Whether the page holds edits a save would write. */
   readonly dirty: boolean
+  /** How the last restore of the shipped default presets resolved, until the user acts again. */
+  readonly defaults: DefaultsRestore | undefined
   /** Team definitions the Host rewrote behind the page, or undefined while none was adopted. */
   readonly externalUpdate: ExternalUpdateNotice | undefined
   /**
@@ -181,6 +184,16 @@ export interface TeamSelectionRecordView {
   /** Selected Team identity. */
   readonly teamId: string
 }
+
+/**
+ * How one restore of the shipped default presets resolved.
+ *
+ * `restored` means the draft now differs from the stored document, so the page
+ * is dirty and Save applies it. `unchanged` means every shipped preset already
+ * matched its document — the page has to say so, because a click that stages
+ * nothing would otherwise look like a control that does not work.
+ */
+export type DefaultsRestore = 'restored' | 'unchanged'
 
 /** What one import will do, once the document was read and its collisions are known. */
 export type TeamPresetImportPlan = {
@@ -460,6 +473,12 @@ export class TeamPresetsController {
    * line is not wiped by a catalogue refresh or another Session's selection.
    */
   private externalUpdate: ExternalUpdateNotice | undefined
+  /**
+   * The last default-preset restore, kept until the user acts on the draft
+   * again, exactly as {@link externalUpdate} is: it reports the click the user
+   * just made, not one they already moved past.
+   */
+  private defaultsRestore: DefaultsRestore | undefined
   /** The last selection write this client could not complete, until the user acts again. */
   private selectionFailure: TeamSelectionFailure | undefined
   /** Whether a write this page started is still crossing the wire. */
@@ -518,6 +537,7 @@ export class TeamPresetsController {
       selections: stored?.selections ?? [],
       dirty: this.draft !== undefined,
       externalUpdate: this.externalUpdate,
+      defaults: this.defaultsRestore,
       formIssue: this.formIssue(),
       selectionFailure: this.selectionFailure,
       execution: this.execution,
@@ -716,6 +736,7 @@ export class TeamPresetsController {
       hooks: { teamPresets: this.store },
       createTeam: () => this.createTeam(),
       duplicateTeam: (index: number) => this.duplicateTeam(index),
+      restoreDefaults: () => { this.restoreDefaults() },
       exportTeam: (index: number) => this.exportTeam(index),
       inspectImport: (text: string) => this.inspectImport(text),
       applyImport: (plan: TeamPresetImportPlan, resolution: TeamPresetImportResolution) => {
@@ -929,6 +950,7 @@ export class TeamPresetsController {
    */
   private beginDraft(): TeamPreset[] {
     this.externalUpdate = undefined
+    this.defaultsRestore = undefined
     if (this.draft === undefined) {
       const snapshot = this.form.getSnapshot()
       const stored = snapshot.value?.teams ?? []
@@ -981,6 +1003,33 @@ export class TeamPresetsController {
     this.draft = [...draft.slice(0, index + 1), copy, ...draft.slice(index + 1)]
     this.publish()
     return copy.id
+  }
+
+  /**
+   * Put the shipped default presets back at their document's content.
+   *
+   * Only the presets this plugin ships are touched: a Team the user created
+   * keeps its identity, its content, and its position, and the model route and
+   * tool policy configured for a shipped preset's slots are kept too, exactly as
+   * an import keeps them — a shared document cannot be evidence for discarding a
+   * local setting it does not carry. What the restore produces is staged, so it
+   * is visible and saved like every other edit on the page; a restore that would
+   * change nothing stages nothing and reports that instead of opening an empty
+   * draft.
+   * @returns how the restore resolved.
+   */
+  restoreDefaults(): DefaultsRestore {
+    const restored = restoreBuiltinTeams(this.visibleTeams())
+    if (restored.changed.length === 0) {
+      this.defaultsRestore = 'unchanged'
+      this.publish()
+      return 'unchanged'
+    }
+    this.beginDraft()
+    this.draft = restored.teams
+    this.defaultsRestore = 'restored'
+    this.publish()
+    return 'restored'
   }
 
   /**
@@ -1134,6 +1183,8 @@ export class TeamPresetsController {
       this.draft = undefined
       this.draftBase = undefined
       this.draftRevision = undefined
+      // The restore the notice asked the user to save has now landed.
+      this.defaultsRestore = undefined
     } else {
       // A refused write leaves the page fenced on a revision the Host has moved
       // past, and the recovery read behind the refusal has already folded what
@@ -1152,6 +1203,7 @@ export class TeamPresetsController {
     this.draftBase = undefined
     this.draftRevision = undefined
     this.externalUpdate = undefined
+    this.defaultsRestore = undefined
     this.publish()
   }
 
@@ -1288,6 +1340,8 @@ export interface TeamPresetsInjected {
   }
   createTeam: () => string
   duplicateTeam: (index: number) => string | undefined
+  /** Stage the shipped default presets at their document's content, reporting the outcome on the store. */
+  restoreDefaults: () => void
   /** Serialize one Team as the fixed shareable document, or undefined for an unknown position. */
   exportTeam: (index: number) => string | undefined
   /** Read one shared document and report what importing it would collide with. */

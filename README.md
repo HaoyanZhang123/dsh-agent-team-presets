@@ -6,17 +6,22 @@ English | [中文](README.zh.md)
 
 <!-- Maintainers: this block and the pinned `#vX.Y.Z` install command further down both
      hardcode the release version — bump them together with package.json on every release. -->
-> **Status: community plugin v0.1.3**, published to npm as
-> [`dsh-agent-team-presets`](https://www.npmjs.com/package/dsh-agent-team-presets).
-> Install it with `dsh plugin --profile <profile> add dsh-agent-team-presets`, or
-> from GitHub unpinned with `... add github:bloodarea/dsh-agent-team-presets` —
-> those are the two forms the plugin market can offer updates for; to reproduce one
-> exact release, pin the ref with `#v0.1.3` instead, and note that a pinned install
-> is compared only against that same ref, so the market never offers an update for
+> **Status: community plugin v0.1.4**, released as the GitHub tag `v0.1.4`.
+> Install that release with
+> `dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.4`,
+> or follow this repository unpinned with
+> `... add github:bloodarea/dsh-agent-team-presets` — that is the form the plugin
+> market can offer updates for, because it compares this repository's own
+> `package.json` version. The npm registry still serves
+> [`0.1.3`](https://www.npmjs.com/package/dsh-agent-team-presets), which predates
+> the shipped default presets: `dsh plugin --profile <profile> add
+> dsh-agent-team-presets` installs that older release until this one is published.
+> To reproduce one exact release, pin the ref as above; a pinned install is
+> compared only against that same ref, so the market never offers an update for
 > it, by design.
 > The supported Harness peer range is `>=0.2.0-rc.1 <0.3.0`, checked by the plugin
 > manager; the Harness version is not this plugin's version. Plugin details for
-> `dsh-agent-team-presets` should show `v0.1.3`. A card naming
+> `dsh-agent-team-presets` should show `v0.1.4`. A card naming
 > `@deepseek-ai/dsh-experimental-agent-team-presets` instead is the monorepo
 > development package, whose version follows the Harness (for example,
 > `0.2.0-rc.2`), not this community release. `lib/` ships prebuilt; rebuilding
@@ -110,16 +115,18 @@ Install the bundle into a profile that already composes `@deepseek-ai/dsh-experi
 ### Install, upgrade, and verify the version
 
 From npm — the form with the cleanest update semantics, because the market
-compares the registry's `latest` tag against the installed version:
+compares the registry's `latest` tag against the installed version. The registry
+currently serves `0.1.3`, which predates the shipped default presets, so use the
+GitHub form below until this release is published there:
 
 ```sh
 dsh plugin --profile <profile> add dsh-agent-team-presets
 ```
 
 From GitHub, unpinned — updates then follow this repository's own `package.json`
-version: the market compares that version against the installed one, so a release
-is advertised when the version moves, and a commit that does not bump it is not
-offered:
+version, currently `0.1.4`: the market compares that version against the installed
+one, so a release is advertised when the version moves, and a commit that does not
+bump it is not offered:
 
 ```sh
 dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets
@@ -130,7 +137,7 @@ install is compared only against that same ref, so the market never offers an
 update for it, by design:
 
 ```sh
-dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.3
+dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.4
 ```
 
 Replace `<profile>` with the profile the GUI actually runs (for example, `web`).
@@ -146,16 +153,16 @@ and the selected bundle with `dsh-agent-team-presets`.
 After switching package identities, restart the running Harness and refresh the
 GUI; a page refresh alone can leave the old client entry in the Host's module
 table and produce duplicate-plugin boot failures. Verify the plugin details show
-both `dsh-agent-team-presets` and `v0.1.3`, with its component running. The
+both `dsh-agent-team-presets` and `v0.1.4`, with its component running. The
 Harness's own `0.2.0-rc.*` version is a separate compatibility requirement.
 
 ### Desktop and agent-assisted installation
 
-**Startup fix for the unreleased 0.1.4 (this fix is untested):** the prebuilt Host Typert and
-Remote entrypoints now inline their `zod` schema code so a local source link
-without `node_modules/zod` does not fail its startup import. Strict validation
-remains enabled; this does not replace the Harness peer compatibility requirements.
-The old `v0.1.3` tag and already installed copies do not receive this fix automatically.
+**Startup fix shipped in 0.1.4:** the prebuilt Host Typert and Remote entrypoints
+inline their `zod` schema code, so a local source link without `node_modules/zod`
+does not fail its startup import. Strict validation remains enabled; this does not
+replace the Harness peer compatibility requirements. A copy installed from an
+earlier tag does not receive this fix automatically.
 
 - When the user supplies this repository's GitHub URL, use the `github:` install
   form above. “I developed it myself” is not authorization to substitute a
@@ -176,9 +183,9 @@ The old `v0.1.3` tag and already installed copies do not receive this fix automa
 
 ### Configure a Team
 
-**Unreleased 0.1.4 preparation:** custom policies cover inherited and exact-Agent tools, including coordination; the catalog includes standing-preset builtins. Custom mode denies general Node `run_code` and ordinary delegation without a strict durable policy contract. Tool-name policies are not OS/path isolation. Invalid initial applications and busy remounts without their frozen snapshot are quarantined; failed updates retain the old policy. Shared prompt edits require exact Host approval, not merely a human-started turn. These are working-tree changes, not a deployment to the current GUI. See the [remediation report](docs/evidence/0.1.4-remediation.md).
+**Custom policies (shipped in 0.1.4):** custom policies cover inherited and exact-Agent tools, including coordination; the catalog includes standing-preset builtins. Custom mode denies general Node `run_code` and ordinary delegation without a strict durable policy contract. Tool-name policies are not OS/path isolation. Invalid initial applications and busy remounts without their frozen snapshot are quarantined; failed updates retain the old policy. Shared prompt edits require exact Host approval, not merely a human-started turn. These are working-tree changes, not a deployment to the current GUI. See the [remediation report](docs/evidence/0.1.4-remediation.md).
 
-**Boundary fixes (same unreleased branch):** every member is now created through this plugin's own subagent execution-backend alias, which the Host writes into its roster and the child's descriptor as a durable identity independent of the snapshot. A marked child whose snapshot is unreadable, whose durable unit cannot be opened, or whose Team identity cannot be resolved is refused inside the creation transaction instead of resuming on the Team Lead's route. A new member is validated against the host's delegation depth cap and its fixed model route first, and a refused creation leaves no intent, no roster row, and no model request. Strict custom policies are applied with native tool calling: when the Session's own Agent scope already declares PTC/both the Team is not applied at all (the previous policy stays and the reason is logged), and when it covered a preset-level PTC presentation the Settings page says so. The Team briefing stays visible under the official `minimal` preset. With the plugin absent entirely, later cold resumes are outside its control. The boundary-fix and real-instance report (`docs/evidence/0.1.4-verify/REPORT.md`) is local working evidence: `docs/evidence/` is not committed.
+**Boundary fixes (shipped in 0.1.4):** every member is now created through this plugin's own subagent execution-backend alias, which the Host writes into its roster and the child's descriptor as a durable identity independent of the snapshot. A marked child whose snapshot is unreadable, whose durable unit cannot be opened, or whose Team identity cannot be resolved is refused inside the creation transaction instead of resuming on the Team Lead's route. A new member is validated against the host's delegation depth cap and its fixed model route first, and a refused creation leaves no intent, no roster row, and no model request. Strict custom policies are applied with native tool calling: when the Session's own Agent scope already declares PTC/both the Team is not applied at all (the previous policy stays and the reason is logged), and when it covered a preset-level PTC presentation the Settings page says so. The Team briefing stays visible under the official `minimal` preset. With the plugin absent entirely, later cold resumes are outside its control. The boundary-fix and real-instance report (`docs/evidence/0.1.4-verify/REPORT.md`) is local working evidence: `docs/evidence/` is not committed.
 
 Settings → Agent team presets is three stacked pages, so a narrow Settings panel never crowds:
 
@@ -206,6 +213,20 @@ The footer reports the selected Team's execution state across online Sessions:
 | Reasoning effort | **Members only.** Adapter-owned effort for the selected route; empty uses the model default. |
 | Allowed tools | Choose **Default: all tools** or **Custom allowed tools** separately for the captain and each member. Custom mode displays the deployment's global and inherited preset tools as an expanded checkbox grid, with select-all and clear controls. Each checkbox's hover text states what the tool actually is: a registry tool keeps its author's English description, this plugin's own three tools share one English text (the tool definition and the hover tip use the same constant), and a name neither source describes is not listed rather than given invented hover text. **Tool descriptions stay English**, because the upstream `ToolDefinition` carries a single description with no localization field and that text is model-facing first; the surrounding UI copy still follows the language setting. Tools are grouped by source: **this plugin**, each **MCP server** (grouped by the Harness-generated `mcp__<server>__<name>` form), and **other**. Groups start collapsed and show `chosen/total`; clicking a header expands or collapses it. Each group carries its own **select all**, **invert**, and **clear**, which rewrite only that group and leave every other group's selection alone. The registry records no registering package, so a native tool and a third-party plugin's tool cannot be told apart and are reported honestly under "other" rather than attributed by name; if upstream records the source at registration, that group splits by itself with no rework. Captain-only capabilities (`spawn_team_member`, `get_team_preset`, `update_team_preset`, `interrupt_agent`) are greyed out on a member page with the reason, because the Team service refuses a member call; select-all never persists them into a member allow-list, and an already-stored name stays removable. No checks in custom mode denies all configurable tools; default mode adds no restriction and preserves the saved checks. Captain and member policies apply independently, so a member can have tools the captain cannot use. Unavailable saved names remain removable; invalid names reject application instead of granting unrestricted access. Scoped coordination tools must also be selected; general code and ordinary delegation are denied in custom mode. |
 | System prompt | Registered as a prompt section template; complete `{{variable}}` groups interpolate against registered prompt variables. A summoned member reads it after its Team briefing. |
+
+### Built-in default presets
+
+A fresh installation starts with three ready Teams, so the plugin is usable before any Team has been configured. They cover the usual range of task size:
+
+- **轻量研发团队** — a small feature or a module iteration: the captain plus an implementation member, with a technical advisor on call.
+- **标准研发团队** — a medium feature, an important refactor, or continuous iteration: adds an independent reviewer.
+- **全栈软件研发团队** — work that spans Web, desktop, and Android: a backend architect and a UI/UX advisor join the reviewer and the executor.
+
+They are ordinary stored Teams: rename, edit, duplicate, export, select, and **delete** them exactly like a Team you create. The install happens once per deployment, so a preset you delete stays deleted across restarts and updates, and a preset you edit is never overwritten by it.
+
+**Restore defaults** on the Teams page puts those three back. It restores what the shipped documents carry — name, purpose, every standing prompt, colors, and the member roster — and leaves everything they do not: a model route or tool policy you configured for a slot stays exactly as it is, and Teams you created yourself are never touched. A preset you deleted is added back, and the result lands in the draft, so press **Save** to apply it. If every preset already matches, the page says so instead of staging an empty change.
+
+The three presets' prompts are written in Chinese, which is what the shipped documents contain; the same documents are in `contrib/default-presets/` if you would rather import them by hand.
 
 ### Select a Team
 

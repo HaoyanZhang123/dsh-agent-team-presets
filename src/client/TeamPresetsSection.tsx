@@ -18,7 +18,7 @@ import type {
   ExternalUpdateNotice, TeamPresetImportPlan, TeamPresetsInjected,
 } from './team-presets-controller.ts'
 import { downloadPresetText, presetFileName, readPresetFile } from './preset-file.ts'
-import { DISCLOSURE_NOTICE_KEYS, EXECUTION_NOTICE_KEYS, FORM_ISSUE_KEYS, IMPORT_FAILURE_KEYS, selectionFailureText } from './locales.ts'
+import { DEFAULTS_NOTICE_KEYS, DISCLOSURE_NOTICE_KEYS, EXECUTION_NOTICE_KEYS, FORM_ISSUE_KEYS, IMPORT_FAILURE_KEYS, selectionFailureText } from './locales.ts'
 import type { TeamPresetsLocaleKey } from './locales.ts'
 import type { TeamAgentPreset, TeamCaptainPreset } from '../types.ts'
 import css from './TeamPresetsSection.module.css'
@@ -208,6 +208,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             onCreate={() => { openTeam(props.createTeam()) }}
             onImport={(file) => { void importDocument(file) }}
             onExport={exportDocument}
+            onRestoreDefaults={() => { props.restoreDefaults() }}
             onDuplicate={(teamId) => {
               const index = teamList.findIndex(entry => entry.id === teamId)
               if (index < 0) return
@@ -307,6 +308,9 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
           )}
           {state.externalUpdate === undefined ? null : (
             <span className={css.warn} role="status">{externalUpdateText(state.externalUpdate, t)}</span>
+          )}
+          {state.defaults === undefined ? null : (
+            <span className={css.footerNote} role="status">{t(DEFAULTS_NOTICE_KEYS[state.defaults])}</span>
           )}
           {state.dirty ? <span className={css.footerNote}>{t('unsaved')}</span> : null}
         </div>

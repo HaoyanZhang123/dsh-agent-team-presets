@@ -2,6 +2,7 @@ import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { delimiter, resolve } from 'node:path'
 import { expect, test } from 'vitest'
 import { runLoaderSmoke, LOADER_SMOKE_TEST_TIMEOUT_MS } from '@deepseek-ai/dsh-loader-smoke'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 
 /** One stored Session/Team selection pair. */
 interface Selection {
@@ -16,6 +17,8 @@ interface CapturedRow {
   readonly value: {
     readonly teams?: ReadonlyArray<{ readonly id?: string; readonly name?: string }>
     readonly selections?: ReadonlyArray<Selection>
+    /** Identities of the shipped default presets this deployment has been offered. */
+    readonly seededDefaults?: readonly string[]
   }
 }
 
@@ -154,16 +157,23 @@ test('a fresh settings revision fence lands and a stale one is refused with a co
   if (captured === undefined) throw new Error('the settings-write driver wrote no capture')
 
   // The plugin's settings row is served by the real Loader composition: the
-  // bundle layer supplies an empty Team section, and a real settings write
-  // configures the Team the composer then selects.
+  // bundle layer supplies an empty Team section, the plugin's own startup pass
+  // then installs the three presets it ships and records them, and a real
+  // settings write configures the Team the composer then selects.
   expect(captured.namespacePresent).toBe(true)
   expect(captured.booted?.ns).toBe('agent-team-presets')
-  expect(captured.booted?.value.teams).toEqual([])
+  expect(captured.booted?.value.seededDefaults).toEqual([...BUILTIN_TEAM_IDS])
+  expect(captured.booted?.value.teams?.map(entry => entry.id)).toEqual([...BUILTIN_TEAM_IDS])
   expect(captured.teamWrite.threw).toBe(false)
   expect(captured.initial?.ns).toBe('agent-team-presets')
   expect(captured.initial?.value.teams).toContainEqual(
     expect.objectContaining({ id: 'team-1', name: 'E2E Team' }),
   )
+  // A write that does not mention a shipped preset drops it from the document:
+  // the marker records that it was offered, not that it must stay installed, so
+  // a deleted preset is never silently restored.
+  expect(captured.initial?.value.teams?.map(entry => entry.id)).toEqual(['team-1'])
+  expect(captured.initial?.value.seededDefaults).toEqual([...BUILTIN_TEAM_IDS])
   expect(captured.initial?.value.selections).toEqual([])
 
   // A correct client writes with the revision it just read, and the write

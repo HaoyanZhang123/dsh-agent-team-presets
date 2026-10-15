@@ -2,7 +2,7 @@
 
 import type { TeamPresetImportFailure } from '../preset-transfer.ts'
 import type { TeamExecutionState } from '../types.ts'
-import type { TeamPresetsFormIssue, TeamSelectionFailure } from './team-presets-controller.ts'
+import type { DefaultsRestore, TeamPresetsFormIssue, TeamSelectionFailure } from './team-presets-controller.ts'
 
 /** Locale keys this plugin renders. */
 export type TeamPresetsLocaleKey =
@@ -38,6 +38,7 @@ export type TeamPresetsLocaleKey =
   | 'emptyMembers' | 'inheritSession' | 'deleteAgent' | 'roleCaptain' | 'roleMember'
   | 'composerTitle' | 'composerNone' | 'composerHint'
   | 'importPreset' | 'exportPreset' | 'importNote' | 'importConfirm' | 'cancel' | 'close'
+  | 'restoreDefaults' | 'restoreDefaultsHint' | 'defaultsRestored' | 'defaultsUnchanged'
   | 'importConflictTitle' | 'importTeamConflict' | 'importTeamReplace' | 'importTeamRename' | 'importNewTeamName'
   | 'importCaptainConflict' | 'importCaptainReplace' | 'importCaptainRename'
   | 'importMemberConflict' | 'importMemberReplace' | 'importMemberRename'
@@ -159,6 +160,10 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   importPreset: 'Import preset',
   exportPreset: 'Export',
   importNote: 'A shared document carries names, descriptions, system prompts, and colors. Model routes and tool permissions stay local.',
+  restoreDefaults: 'Restore defaults',
+  restoreDefaultsHint: 'Puts the three presets this plugin ships back to their shipped name, description, prompts, colors, and roster. The model routes and tool permissions you configured stay as they are, and teams you created yourself are not touched.',
+  defaultsRestored: 'Default presets restored in this draft. Save to apply them.',
+  defaultsUnchanged: 'The default presets already match what this plugin ships; nothing was staged.',
   importConfirm: 'Import',
   cancel: 'Cancel',
   close: 'Close',
@@ -294,6 +299,10 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   importPreset: '导入预设',
   exportPreset: '导出',
   importNote: '共享文档只携带名称、描述、系统提示词和颜色；模型路由与工具权限保留在本地。',
+  restoreDefaults: '恢复默认预设',
+  restoreDefaultsHint: '把插件自带的三个预设恢复到出厂的名称、说明、提示词、颜色和成员名单；你为它们配置的模型路由与工具权限保持不变，你自己创建的团队完全不受影响。',
+  defaultsRestored: '默认预设已恢复到草稿，保存后生效。',
+  defaultsUnchanged: '默认预设与插件出厂状态一致，无需恢复。',
   importConfirm: '导入',
   cancel: '取消',
   close: '关闭',
@@ -333,6 +342,12 @@ export const EXECUTION_NOTICE_KEYS: Record<TeamExecutionState, TeamPresetsLocale
   busy: 'executionBusy',
   idle: 'executionIdle',
   unknown: 'executionUnknown',
+}
+
+/** Locale key of the notice one default-preset restore shows. */
+export const DEFAULTS_NOTICE_KEYS: Record<DefaultsRestore, TeamPresetsLocaleKey> = {
+  restored: 'defaultsRestored',
+  unchanged: 'defaultsUnchanged',
 }
 
 /** Locale key for one refused import. */

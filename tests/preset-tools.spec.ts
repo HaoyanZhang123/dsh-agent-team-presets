@@ -14,6 +14,7 @@ import { apply, inject } from '../src/index.ts'
 import type { Config } from '../src/config.ts'
 import { registerPresetTools } from '../src/preset-tools.ts'
 import type { TeamPreset, TeamSelectionRecord } from '../src/types.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 import { MockAdapter, textResponse, toolCallResponse } from './fixtures/mock-adapter.ts'
 import { subagentServiceDouble } from './fixtures/plugin-harness.ts'
 import { slot, team } from './fixtures/team-presets.ts'
@@ -134,6 +135,7 @@ async function setup(options: {
     teams: teamsRef.ref,
     selections: selectionsRef.ref,
     freshProvider: 'spawn',
+    seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
     forkProvider: 'fork',
   } satisfies Config
   // The plugin injects the subagent service, exactly as a deployment that

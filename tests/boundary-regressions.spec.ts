@@ -42,6 +42,7 @@ import type { MemberStorage } from './fixtures/member-storage.ts'
 import { MockAdapter, textResponse } from './fixtures/mock-adapter.ts'
 import { settlePlugin } from './fixtures/plugin-harness.ts'
 import type { TeamPreset } from '../src/types.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 
 const contexts: Context[] = []
 const temporary: string[] = []
@@ -180,6 +181,7 @@ async function stack(root: string, options: {
     teams: { get: () => [definition] },
     selections: { get: () => [{ sessionId: 'lead', teamId: definition.id }] },
     freshProvider: 'spawn',
+    seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
     forkProvider: 'fork',
   }
   const fiber = await ctx.plugin(Object.assign((owner: Context) => apply(owner, config), { inject }))
@@ -477,6 +479,7 @@ async function applyTeam(h: { ctx: Context; agent: Agent }, definition: TeamPres
     teams: { get: () => [definition] },
     selections: { get: () => [{ sessionId: 'lead', teamId: definition.id }] },
     freshProvider: 'spawn',
+    seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
     forkProvider: 'fork',
   }
   const fiber = await h.ctx.plugin(Object.assign((owner: Context) => apply(owner, config), { inject }))
@@ -551,6 +554,7 @@ describe('complete deployment persona', () => {
       teams: { get: () => [] as TeamPreset[] },
       selections: { get: () => [] as { sessionId: string; teamId: string }[] },
       freshProvider: 'spawn',
+      seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] },
       forkProvider: 'fork',
     }
     const fiber = await h.ctx.plugin(Object.assign((owner: Context) => apply(owner, config), { inject }))

@@ -38,6 +38,15 @@ export interface Config {
     teams: Volatile<TeamPreset[]>;
     /** Every Session's active Team preset. */
     selections: Volatile<TeamSelectionRecord[]>;
+    /**
+     * Identities of the shipped default presets this deployment has been offered.
+     *
+     * A shipped preset is recorded here once, when the deployment first held it —
+     * whether this plugin installed it or the user restored it — so the defaults
+     * are installed exactly once and a preset the user deletes stays deleted. Only
+     * an explicit restore in Settings puts one back.
+     */
+    seededDefaults: Volatile<string[]>;
     /** Continuable-subagent provider used for a fresh member. */
     freshProvider: string;
     /** Continuable-subagent provider used for a member forked from the captain's turns. */
@@ -119,6 +128,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
         sessionId: z<string, string, "defined">;
         teamId: z<string, string, "defined">;
     }>>[]>, "volatile-defined">;
+    seededDefaults: z<NoInfer<string[]>, NoInfer<string[]>, "volatile-defined">;
     freshProvider: z<string, string, "defined">;
     forkProvider: z<string, string, "defined">;
 }>>, Schemastery.ObjectT<NoInfer<{
@@ -196,6 +206,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
         sessionId: z<string, string, "defined">;
         teamId: z<string, string, "defined">;
     }>>[]>, "volatile-defined">;
+    seededDefaults: z<NoInfer<string[]>, NoInfer<string[]>, "volatile-defined">;
     freshProvider: z<string, string, "defined">;
     forkProvider: z<string, string, "defined">;
 }>>, "plain">;

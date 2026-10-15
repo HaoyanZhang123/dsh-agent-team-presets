@@ -8,6 +8,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { apply, inject } from '../src/index.ts'
 import type { Config } from '../src/config.ts'
+import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 import { TeamId } from '@deepseek-ai/dsh-experimental-agent-team'
 import TeamPresetsToolCatalog from '../src/tool-catalog.ts'
 import { routedCaptain, team } from './fixtures/team-presets.ts'
@@ -40,13 +41,18 @@ async function settle(): Promise<void> {
 }
 
 /** Mount the loop dependencies plus the two services `apply` reads. */
-async function setup(teams: TeamPreset[], selections: TeamSelectionRecord[]) {
+async function setup(
+  teams: TeamPreset[],
+  selections: TeamSelectionRecord[],
+  seeded: readonly string[] = BUILTIN_TEAM_IDS,
+) {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   const teamsRef = volatileRef(teams)
   const selectionsRef = volatileRef(selections)
+  const seededRef = volatileRef([...seeded])
   ctx.provide('agentTeams', {
     spawnTeammate: async () => ({ member: { name: 'member', status: 'active' } }),
     // Reconciliation asks the roster whether a Team task is still running. This
@@ -72,11 +78,12 @@ async function setup(teams: TeamPreset[], selections: TeamSelectionRecord[]) {
     drainContinuableChildren: async () => {},
   })
   const configure = vi.fn(() => () => {})
-  const update = vi.fn(async (_ns: string, _patch: { teams: TeamPreset[] }) => {})
+  const update = vi.fn(async (_ns: string, _patch: { teams: TeamPreset[]; seededDefaults: string[] }) => {})
   ctx.provide('settings', { configure, update, describe: () => [{ ns: 'agent-team-presets', revision: 0 }] })
   const config = {
     teams: teamsRef.ref,
     selections: selectionsRef.ref,
+    seededDefaults: seededRef.ref,
     freshProvider: 'spawn',
     forkProvider: 'fork',
   } satisfies Config
@@ -325,11 +332,31 @@ describe('stored captain route migration', () => {
     await settle()
 
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('settings migration refused'),
+      expect.stringContaining('settings reconcile refused'),
       String(failure),
     )
     expect(warn.mock.calls[0]?.[0]).toContain('agent-team-presets')
     expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeDefined()
+
+    await fiber.dispose()
+    await handle.dispose()
+  })
+
+  it('installs the shipped default presets once on a fresh deployment', async () => {
+    // A deployment that was never offered the shipped defaults: the same
+    // startup pass that cleans a legacy document installs them.
+    const { ctx, config, update } = await setup([], [], [])
+    const handle = await createAgent(ctx, 's1')
+    const fiber = await mount(ctx, config)
+    await settle()
+
+    expect(update).toHaveBeenCalledOnce()
+    const [, patch] = update.mock.calls[0]!
+    expect(patch.teams.map(entry => entry.id)).toEqual([...BUILTIN_TEAM_IDS])
+    expect(patch.seededDefaults).toEqual([...BUILTIN_TEAM_IDS])
+    // A Team this Session never selected still leaves the captain able to read
+    // the presets it may select.
+    expect(ctx.tools.get('get_team_preset', handle.agent)).toBeDefined()
 
     await fiber.dispose()
     await handle.dispose()

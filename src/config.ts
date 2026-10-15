@@ -90,6 +90,15 @@ export interface Config {
   teams: Volatile<TeamPreset[]>
   /** Every Session's active Team preset. */
   selections: Volatile<TeamSelectionRecord[]>
+  /**
+   * Identities of the shipped default presets this deployment has been offered.
+   *
+   * A shipped preset is recorded here once, when the deployment first held it —
+   * whether this plugin installed it or the user restored it — so the defaults
+   * are installed exactly once and a preset the user deletes stays deleted. Only
+   * an explicit restore in Settings puts one back.
+   */
+  seededDefaults: Volatile<string[]>
   /** Continuable-subagent provider used for a fresh member. */
   freshProvider: string
   /** Continuable-subagent provider used for a member forked from the captain's turns. */
@@ -100,6 +109,10 @@ export interface Config {
 export const Config = z.object({
   teams: z.array(teamSchema).default([]).volatile(),
   selections: z.array(selectionSchema).default([]).volatile(),
+  // Volatile because it is written beside `teams` in the one startup pass that
+  // installs the shipped defaults: a settings write may only carry volatile
+  // fields, and a second writer on the same document would race the first.
+  seededDefaults: z.array(z.string()).default([]).volatile(),
   freshProvider: z.string().default('spawn'),
   forkProvider: z.string().default('fork'),
 })
