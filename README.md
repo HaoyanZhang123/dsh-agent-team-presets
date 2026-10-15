@@ -24,7 +24,20 @@ A Team contains a **captain** and any number of **member roles**:
 This is a community plugin, not the Harness's bundled `@deepseek-ai/dsh-experimental-agent-team-presets` development package.
 
 <a id="why-this-plugin"></a>
-### Features
+## Why this plugin?
+
+DeepSeek Harness already ships Agent Teams with multi-agent collaboration, but leaves per-team configuration and reuse to the user. This plugin closes five gaps:
+
+- **Teams are hard to reuse.** Native teams focus on runtime creation and collaboration; this plugin saves, duplicates, and reuses named presets.
+- **Role setup is repetitive.** Each role's name, description, and system prompt are configured once instead of re-described every time.
+- **Splitting work across models is awkward.** Every member picks its own model and reasoning effort, so one team combines models by task, while the captain keeps leading on the Session's model.
+- **Tool permissions have no fine-grained entry point.** The captain and each member carry their own allow-list, so roles differ in what they may use.
+- **Switching teams is inconvenient.** Pick a preset team from the composer instead of rebuilding roles by hand.
+
+**Design principle:** native Agent Teams owns collaboration at runtime; this plugin owns configuring, managing, and reusing teams.
+
+<a id="features"></a>
+## Features
 
 - **Reusable Teams:** create, duplicate, edit, select, and delete named presets.
 - **Per-member model routes:** assign models and reasoning effort to individual roles without changing the captain's model.
@@ -35,6 +48,9 @@ This is a community plugin, not the Harness's bundled `@deepseek-ai/dsh-experime
 
 ## Contents
 
+- [Overview](#project-introduction)
+- [Why this plugin?](#why-this-plugin)
+- [Features](#features)
 - [Screenshots](#screenshots)
 - [Requirements](#requirements)
 - [Install and upgrade](#use-this-package)
