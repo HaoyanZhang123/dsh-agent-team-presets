@@ -136,6 +136,15 @@ export type TeamExecutionRow = {
      * so it is no reason to wait.
      */
     pendingSessions: number;
+    /**
+     * Disclosures about how the applied Team runs, in a stable order.
+     *
+     * An empty list means no applied Session needed one. The only note today says
+     * that a Team whose custom tool policy needed a native surface overrode the
+     * Session's PTC batch-calling presentation, which the page must state instead
+     * of claiming the preset's transport is intact.
+     */
+    notes: readonly string[];
 };
 /** Whole-set frame of the Team execution stream. */
 export type TeamExecutionSnapshot = {

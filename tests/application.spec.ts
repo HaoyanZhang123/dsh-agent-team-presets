@@ -6,11 +6,22 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { applyTeamToAgent } from '../src/application.ts'
+import { MemberRuntime } from '../src/member-runtime.ts'
+import { mountMemberStorage } from './fixtures/member-storage.ts'
+import { subagentServiceDouble } from './fixtures/plugin-harness.ts'
 import type { TeamAgentPreset, TeamPreset } from '../src/types.ts'
 
 const signal = new AbortController().signal
+const temporary: string[] = []
+
+afterEach(async () => {
+  for (const path of temporary.splice(0)) await rm(path, { recursive: true, force: true })
+})
 
 function member(tools: readonly string[], toolMode: 'all' | 'custom' = 'custom'): TeamAgentPreset {
   return {
@@ -110,16 +121,35 @@ describe('captain tool permissions', () => {
     await ctx.fiber.dispose()
   })
 
-  it('custom-empty members pass an empty allow-list independently of the captain', async () => {
+  it('custom-empty members keep an empty allow-list independently of the captain', async () => {
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    const spawnTeammate = vi.fn(async (_caller: Agent, options: { toolFilter?: { allow: readonly string[] } }) => {
-      expect(options.toolFilter).toEqual({ allow: [] })
+    // Creation admission reads the depth cap from `subagents` before it writes
+    // anything durable; without it the member tool refuses instead of running.
+    ctx.provide('subagents', subagentServiceDouble())
+    const storeRoot = await mkdtemp(join(tmpdir(), 'team-presets-application-store-'))
+    temporary.push(storeRoot)
+    const storage = await mountMemberStorage(ctx, storeRoot)
+    // The Team request no longer carries the member's configuration: the
+    // durable snapshot does, and the serial creation edge installs it. The
+    // request must therefore carry ONLY official fields.
+    const spawnTeammate = vi.fn(async (_caller: Agent, options: Record<string, unknown>) => {
+      expect(options).toMatchObject({ name: 'reviewer', context: 'fresh', provider: 'fresh' })
+      expect(options).not.toHaveProperty('agentOptions')
+      expect(options).not.toHaveProperty('persona')
+      expect(options).not.toHaveProperty('toolFilter')
       return { member: { name: 'reviewer', status: 'inactive' } }
     })
     ctx.provide('agentTeams', { spawnTeammate, listMembers: () => [] })
     const memberTool = fixtureTool('member-only-global-tool', () => 'unexpected')
-    const agent = { id: 'captain-with-member-tool' } as Agent
+    // Creation admission reads the official delegation depth of the calling
+    // Agent, so this fixture models an ordinary top-level Session at depth 0
+    // rather than a bare id that the official helper cannot read.
+    const agent = {
+      id: 'captain-with-member-tool',
+      options: { subagentDepth: 0 },
+      session: { header: { delegationDepth: 0 } },
+    } as unknown as Agent
     let scope!: Scope
     const scopeFiber = await ctx.plugin(Object.assign(
       (root: Context) => { scope = createScope(root, agent) },
@@ -127,12 +157,27 @@ describe('captain tool permissions', () => {
     ))
     scope.ctx.tools.register(memberTool)
     Object.assign(agent, { ctx: scope.ctx })
-    const application = applyTeamToAgent(ctx, agent, preset(['spawn_team_member'], 'custom', [member([])]), { fresh: 'fresh', fork: 'fork' })
+    // The member runtime owns the durable snapshot the creation edge installs.
+    const members = new MemberRuntime(ctx)
+    const application = applyTeamToAgent(
+      ctx, agent, preset(['spawn_team_member'], 'custom', [member([])]), { fresh: 'fresh', fork: 'fork' }, undefined, members,
+    )
     expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain('member-only-global-tool')
     const result = await execute(ctx, agent, 'spawn_team_member', { member: 'reviewer', task: 'review' })
-    expect(result.isError).toBe(false)
+    expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(spawnTeammate).toHaveBeenCalledOnce()
+    // The member's own policy is frozen, not the captain's and not the team's.
+    const unit = await storage.readUnit()
+    const records = Object.values((unit?.tables as Record<string, Record<string, unknown>>)?.members ?? {})
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({
+      memberName: 'reviewer',
+      policy: { mode: 'custom', allow: [] },
+      lifecycle: 'intent',
+    })
+    expect((records[0] as { persona: string }).persona).toContain('You are "reviewer"')
     application.dispose()
+    await members.close()
     await scope.dispose()
     await scopeFiber.dispose()
     await ctx.fiber.dispose()

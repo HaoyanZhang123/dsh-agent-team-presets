@@ -18,7 +18,7 @@ import type {
   ExternalUpdateNotice, TeamPresetImportPlan, TeamPresetsInjected,
 } from './team-presets-controller.ts'
 import { downloadPresetText, presetFileName, readPresetFile } from './preset-file.ts'
-import { EXECUTION_NOTICE_KEYS, IMPORT_FAILURE_KEYS } from './locales.ts'
+import { DISCLOSURE_NOTICE_KEYS, EXECUTION_NOTICE_KEYS, IMPORT_FAILURE_KEYS } from './locales.ts'
 import type { TeamPresetsLocaleKey } from './locales.ts'
 import type { TeamAgentPreset, TeamCaptainPreset } from '../types.ts'
 import css from './TeamPresetsSection.module.css'
@@ -171,6 +171,12 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   // The page promises when a save takes effect, so the footer reports the
   // execution state of the Team being edited — never a state it cannot support.
   const execution = team === undefined ? undefined : executionStateOf(state, team.id)
+  // Host disclosures about how the applied Team runs — for example that a strict
+  // custom policy replaced this Session's PTC presentation. One the page cannot
+  // translate is shown verbatim rather than hidden.
+  const disclosures = team === undefined || state.execution !== 'ready'
+    ? []
+    : state.executions.find(row => row.teamId === team.id)?.notes ?? []
   // An unnamed Team has no identity anywhere it is shown — the list falls back to
   // its id, so do the composer and this page's own breadcrumb. The save is
   // withheld and the offender is named rather than letting an id leak into the UI.
@@ -272,6 +278,11 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
               {execution === 'busy' ? ` ${t('executionBusyShared')}` : ''}
             </span>
           )}
+          {disclosures.map(disclosure => (
+            <span key={disclosure} className={css.footerNote} role="status">
+              {DISCLOSURE_NOTICE_KEYS[disclosure] === undefined ? disclosure : t(DISCLOSURE_NOTICE_KEYS[disclosure])}
+            </span>
+          ))}
           {state.failed ? <span className={css.warn} role="status">{t('saveFailed')}</span> : null}
           {unnamedTeams.length === 0 ? null : (
             <span className={css.warn} role="status">

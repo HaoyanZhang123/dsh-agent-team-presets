@@ -15,6 +15,13 @@ const scopedRequire = createRequire(join(harness, 'packages/experimental/agent-t
 const ts = require('typescript')
 const { build } = await import(pathToFileURL(require.resolve('tsdown')).href)
 const { transform } = require('lightningcss')
+const zodDir = dirname(scopedRequire.resolve('zod/package.json'))
+// The staging workspace has no node_modules. Resolve the build-time schema
+// dependency explicitly, then inline it in every shipped Typert entrypoint.
+const schemaDependency = {
+  name: 'team-presets-schema-dependency',
+  resolveId(id) { if (id === 'zod') return join(zodDir, 'index.js') },
+}
 const { WorkspaceTypertGenerator } = await import(pathToFileURL(join(harness, 'packages/typert/generator/lib/index.js')).href)
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const stage = mkdtempSync(join(tmpdir(), 'team-presets-build-'))
@@ -43,6 +50,10 @@ try {
     '@deepseek-ai/dsh-experimental-client-ui-agent-team/client': [join(harness, 'packages/experimental/client-ui-agent-team/src/client/index.ts')],
     'dsh-agent-team-presets/remote': [join(pkg, 'lib/typert.remote-client.d.ts')],
     react: [join(reactTypes, 'index.d.ts')], 'react/*': [join(reactTypes, '*.d.ts')],
+    // Host sources validate the durable member domain with zod. The staging
+    // workspace has no node_modules, so the build-time resolution the bundler
+    // already uses is stated here too instead of relying on ambient types.
+    zod: [join(zodDir, 'index.d.ts')],
   })
   const options = { ...base.config.compilerOptions, paths, composite: false, incremental: false, noEmit: false, sourceMap: false, declarationMap: false,
     declaration: true, jsx: 'react-jsx', types: ['node', 'react'], typeRoots: [dirname(reactTypes), join(harness, 'node_modules/@types')], ignoreDeprecations: '6.0' }
@@ -80,17 +91,28 @@ try {
       if (result.emitSkipped || result.diagnostics.length) throw new Error(`Emit failed: ${source.fileName}`)
     }
   }
-  const production = new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.peerDependencies ?? {}), ...Object.keys(manifest.optionalDependencies ?? {})])
+  // Harness peers must retain the Host's service identities. Private schema
+  // code, unlike those peers, must not depend on a file-linked source checkout
+  // having its own node_modules (Node resolves from the link's real path).
+  const production = new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.peerDependencies ?? {}), ...Object.keys(manifest.optionalDependencies ?? {})].filter(name => name !== 'zod'))
   const prod = id => [...production].some(name => id === name || id.startsWith(name + '/'))
   const common = { config: false, workspace: false, cwd: pkg, outDir: join(pkg, 'lib'), target: 'es2024', fixedExtension: false, dts: false, clean: false, tsconfig: false }
-  await build({ ...common, entry: { index: join(pkg, 'lib/types/index.js') }, format: 'esm', platform: 'node', deps: { neverBundle: prod, alwaysBundle: id => !isBuiltin(id) && !prod(id) } })
+  await build({ ...common, entry: { index: join(pkg, 'lib/types/index.js') }, format: 'esm', platform: 'node', deps: { neverBundle: prod, alwaysBundle: id => !isBuiltin(id) && !prod(id) }, plugins: [schemaDependency] })
+  // The Typert loader imports ./typert before plugin activation. Bundle both
+  // generated wire faces, not just the browser factory; never weaken or remove
+  // their strict schemas to work around a missing runtime dependency.
+  for (const face of ['host', 'remote-client']) {
+    const entry = `typert.${face}`
+    await build({ ...common, entry: { [entry]: join(pkg, 'lib', entry + '.js') }, format: 'esm', platform: 'neutral', deps: { neverBundle: id => isBuiltin(id), alwaysBundle: id => !isBuiltin(id) }, plugins: [schemaDependency] })
+  }
+  writeFileSync(join(pkg, 'lib/THIRD-PARTY-NOTICES.txt'), `Bundled dependency: zod\n\n${readFileSync(join(zodDir, 'LICENSE'), 'utf8')}`)
   const external = new Set(['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'])
   const clientPlugin = {
     name: 'team-presets-client-surface',
     resolveId(id, importer) {
       if (external.has(id)) return { id, external: true }
       if (id === manifest.name + '/remote') return join(pkg, 'lib/typert.remote-client.js')
-      if (id === 'zod') return scopedRequire.resolve('zod').replace(/index\.cjs$/, 'index.js')
+      if (id === 'zod') return join(zodDir, 'index.js')
       if (id.endsWith('.module.css') && importer) return '\0team-css:' + resolve(dirname(importer).replace(join(pkg, 'lib/types'), join(pkg, 'src')), id) + '.mjs'
       if (id.startsWith('@deepseek-ai/')) throw new Error(`Undeclared Client value import: ${id}`)
     },

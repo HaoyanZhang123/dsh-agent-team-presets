@@ -1,6 +1,6 @@
 /** Local scripted adapter: tests never call a model provider. */
 import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmModelReasoningInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 
 export function textResponse(text: string): StreamChunk[] {
   return [
@@ -23,9 +23,22 @@ export function toolCallResponse(id: string, name: string, args: object): Stream
 }
 export class MockAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
-  constructor(private readonly script: (StreamChunk[] | ((options: GenerateOptions) => StreamChunk[]))[]) { super() }
+  constructor(
+    private readonly script: (StreamChunk[] | ((options: GenerateOptions) => StreamChunk[]))[],
+    /**
+     * Reasoning efforts this fake route declares. Omitting them makes every
+     * configured effort fail the LLM layer's support check, which is exactly
+     * what a test asserting that failure needs.
+     */
+    private readonly model: LlmModelReasoningInfo | undefined = undefined,
+  ) { super() }
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-    return Promise.resolve({ provider, id: model, name: model })
+    return Promise.resolve({
+      provider,
+      id: model,
+      name: model,
+      ...this.model === undefined ? {} : { reasoning: this.model },
+    })
   }
   async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)

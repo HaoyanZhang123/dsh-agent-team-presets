@@ -15,6 +15,7 @@ import type { Config } from '../src/config.ts'
 import { registerPresetTools } from '../src/preset-tools.ts'
 import type { TeamPreset, TeamSelectionRecord } from '../src/types.ts'
 import { MockAdapter, textResponse, toolCallResponse } from './fixtures/mock-adapter.ts'
+import { subagentServiceDouble } from './fixtures/plugin-harness.ts'
 import { slot, team } from './fixtures/team-presets.ts'
 
 const NAMESPACE = 'agent-team-presets'
@@ -135,6 +136,10 @@ async function setup(options: {
     freshProvider: 'spawn',
     forkProvider: 'fork',
   } satisfies Config
+  // The plugin injects the subagent service, exactly as a deployment that
+  // composes Teams provides it: without it the mount is parked and no preset
+  // tool is ever registered.
+  ctx.provide('subagents', subagentServiceDouble())
   await ctx.plugin(Object.assign((inner: Context) => { apply(inner, config) }, { inject }))
   members = [...options.members ?? []]
 

@@ -5,7 +5,8 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -22,6 +23,7 @@ import { apply, inject } from '../src/index.ts'
 import TeamPresetsToolCatalog from '../src/tool-catalog.ts'
 import { guardPolicy, policyOf } from '../src/tool-policy.ts'
 import { MockAdapter, textResponse, toolCallResponse } from './fixtures/mock-adapter.ts'
+import { mountMemberStorage } from './fixtures/member-storage.ts'
 import { team, slot } from './fixtures/team-presets.ts'
 import { FixtureSessionQuery } from './fixtures/session-query.ts'
 
@@ -173,6 +175,12 @@ describe('real durable preset-managed creation', () => {
     temporary.push(storage)
     await ctx.plugin(JsonlSessionPersistence, { root: storage, compression: 'none' })
     await ctx.plugin(FixtureSessionQuery)
+    // The member runtime's durable unit: the real hub, JSON backend, and domain
+    // form the dsh-base bundle composes. Without it, member creation is
+    // refused by design rather than running on the Lead's route.
+    const memberStorage = await mkdtemp(join(tmpdir(), 'team-presets-security-'))
+    temporary.push(memberStorage)
+    await mountMemberStorage(ctx, memberStorage)
     await ctx.plugin(Subagents)
     await ctx.plugin(Spawn, { providerName: 'spawn' })
     await ctx.plugin(Fork, { providerName: 'fork' })
@@ -183,7 +191,27 @@ describe('real durable preset-managed creation', () => {
       agent.ctx.tools.register({ name: 'own_mutation', description: 'own mutation', parameters: {},
         output: { schema: { type: 'string' }, render: () => [] }, execute: body })
     })
-    const definition = team([slot({ id: 'reviewer-id', name: 'reviewer', toolMode: 'custom', tools: ['send_message', 'list_agents'] })], {
+    // The member's own route must exercise the same probe: every odd request of
+    // a residency tries the own-layer mutation the strict guard must refuse.
+    const memberRoute = new MockAdapter(Array.from({ length: 30 }, () => (options: GenerateOptions) => {
+      const id = options.sessionId ?? ''
+      const count = (requestsPerChild.get(id) ?? 0) + 1
+      requestsPerChild.set(id, count)
+      return count % 2 === 1 ? toolCallResponse(`probe-${count}`, 'own_mutation', {}) : textResponse('done')
+    }), {
+      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
+      defaultEffort: ReasoningEffortId('high'),
+    })
+    ctx.llm.registerAdapter(['member-route'], memberRoute)
+    const definition = team([slot({
+      id: 'reviewer-id',
+      name: 'reviewer',
+      toolMode: 'custom',
+      tools: ['send_message', 'list_agents'],
+      provider: 'member-route',
+      model: 'member-model',
+      reasoningEffort: 'high',
+    })], {
       toolMode: 'custom', tools: ['spawn_team_member', 'list_agents', 'send_message'],
     })
     ctx.provide('settings', { configure: () => () => {}, describe: () => [{ ns: 'agent-team-presets', revision: 0 }], update: async () => {} })
@@ -198,10 +226,14 @@ describe('real durable preset-managed creation', () => {
     expect(rows.map(row => row.name)).toEqual(['reviewer', 'reviewer-2'])
     for (const row of rows) {
       // Continuation owner may have disposed an idle activation already. Verify
-      // the first-request schema and the next cold activation, not a stale Agent.
-      const child = created.find(agent => agent.id === row.id)!
-      expect(child).toBeDefined()
-      expect(adapter.requests.filter(request => request.sessionId === row.id).length).toBeGreaterThan(0)
+      // the registered child and the route its first request actually used.
+      expect(created.find(agent => agent.id === row.id)).toBeDefined()
+      // The member ran on its OWN frozen route and effort, not the Session's.
+      expect(memberRoute.requests.filter(request => request.sessionId === row.id).length).toBeGreaterThan(0)
+      expect(memberRoute.requests.filter(request => request.sessionId === row.id)[0]!.model).toBe('member-model')
+      expect(memberRoute.requests.filter(request => request.sessionId === row.id)[0]!.reasoningEffort).toBe('high')
+      // No request of this member ever reached the Session's own route.
+      expect(adapter.requests.filter(request => request.sessionId === row.id)).toHaveLength(0)
     }
     expect((await call(ctx, root.agent, 'spawn_teammate', { name: 'bypass', description: 'bypass', prompt: 'bypass' })).isError).toBe(true)
     expect(body).not.toHaveBeenCalled()
@@ -213,5 +245,8 @@ describe('real durable preset-managed creation', () => {
     await vi.waitFor(() => expect(created.filter(agent => agent.id === firstId).length).toBeGreaterThan(previousCreations), { timeout: 3000 })
     await vi.waitFor(() => expect(outcomes.filter(outcome => outcome.id === firstId && outcome.error).length).toBeGreaterThanOrEqual(2))
     expect(body).not.toHaveBeenCalled()
+    // Every residency of both members re-entered the frozen route, so a cold
+    // resume rebuilt the strict configuration from the durable snapshot.
+    expect(memberRoute.requests.some(request => request.sessionId === firstId)).toBe(true)
   }, 15_000)
 })

@@ -233,3 +233,41 @@ export function memberBriefing(team: TeamPreset, member: TeamAgentPreset, target
     .filter(part => part !== '')
     .join('\n\n')
 }
+
+/**
+ * Build the team-context section one summoned member reads besides its persona.
+ *
+ * The member's own briefing states who it is; this states the Team it belongs
+ * to and the preset's division of labour, so it can tell which role another
+ * target stands for without being handed the captain's summons instructions or
+ * every sibling's standing prompt. The list is deliberately labelled as role
+ * templates: several instances of one role may exist, and the preset says
+ * nothing about who is running, so live addressing and status stay with
+ * `list_agents`.
+ * @param team - the Team preset that owns the member.
+ * @param target - the real instance target this member was summoned under.
+ * @returns the prompt section text for the member's team context.
+ */
+export function memberTeamDivision(team: TeamPreset, target: string): string {
+  const description = team.description.trim()
+  const heading = description === ''
+    ? `Team preset "${teamLabel(team)}" is active for this Session.`
+    : `Team preset "${teamLabel(team)}" is active for this Session: ${description}`
+  const rows = memberTargets(team).map(({ member, target: rowTarget }) => {
+    const rowDescription = member.description.trim()
+    const label = member.name.trim()
+    const display = label === '' || label === rowTarget ? '' : ` (${label})`
+    return `- ${rowTarget}${display}${rowDescription === '' ? '' : `: ${rowDescription}`}`
+  })
+  const division = rows.length === 0
+    ? 'The preset declares no other roles.'
+    : `Preset division of labour (role templates, not a live roster):
+${rows.join('\n')}`
+  return [
+    heading,
+    division,
+    `Your real instance target is "${target}". A role and an instance are not the same thing: one role may be summoned `
+      + 'more than once, and the template list above does not report who is running now. Read the live roster and its '
+      + 'statuses with list_agents; the Team Lead is addressed as "lead".',
+  ].join('\n\n')
+}

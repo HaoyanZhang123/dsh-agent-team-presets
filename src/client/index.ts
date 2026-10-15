@@ -9,8 +9,6 @@ import type {} from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import teamPresetsRemote from 'dsh-agent-team-presets/remote'
 import type {} from 'dsh-agent-team-presets/remote'
-// Type-only: pulls the Agent Teams roster's Context merge (ctx.agentTeamAppearance).
-import type {} from '@deepseek-ai/dsh-experimental-client-ui-agent-team/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the ctx.configForms Context merge and the `settings.section` slot.
@@ -18,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { ComposerTeamSelect } from './ComposerTeamSelect.tsx'
 import { teamAppearance } from './appearance.ts'
+import type { RosterAppearanceRegistry } from './appearance.ts'
 import { TeamPresetsSection } from './TeamPresetsSection.tsx'
 import { TeamPresetsController, TEAM_PRESETS_NS } from './team-presets-controller.ts'
 import { en, NS, zh } from './locales.ts'
@@ -106,8 +105,15 @@ function registerUi(ctx: ClientContext): void {
 
   // The Agent Teams roster draws each captain and member card with the color
   // this Team configures; the roster owns the registry, this plugin answers it.
+  //
+  // That registry is a deployment extension, not part of official rc.2, so the
+  // service has no Context declaration to read through: the cast below is the
+  // whole extension boundary. `inject` still waits for the service, so a
+  // deployment that ships the extension gets the colors and one that does not
+  // simply never runs this registration and keeps the roster's own colors.
   ctx.inject(['agentTeamAppearance'], (scope) => {
-    scope.effect(() => scope.agentTeamAppearance.register((sessionId) => {
+    const registry = (scope as unknown as { agentTeamAppearance: RosterAppearanceRegistry }).agentTeamAppearance
+    scope.effect(() => registry.register((sessionId) => {
       const state = controller.store.getSnapshot()
       return teamAppearance(state.teams, state.selections, sessionId)
     }), 'agent-team-presets: roster appearance')

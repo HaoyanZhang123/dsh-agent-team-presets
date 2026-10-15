@@ -108,3 +108,18 @@ export declare function captainBriefing(team: TeamPreset): string;
  * @returns the persona text for the summoned member; it always names the Team it joined.
  */
 export declare function memberBriefing(team: TeamPreset, member: TeamAgentPreset, target: string): string;
+/**
+ * Build the team-context section one summoned member reads besides its persona.
+ *
+ * The member's own briefing states who it is; this states the Team it belongs
+ * to and the preset's division of labour, so it can tell which role another
+ * target stands for without being handed the captain's summons instructions or
+ * every sibling's standing prompt. The list is deliberately labelled as role
+ * templates: several instances of one role may exist, and the preset says
+ * nothing about who is running, so live addressing and status stay with
+ * `list_agents`.
+ * @param team - the Team preset that owns the member.
+ * @param target - the real instance target this member was summoned under.
+ * @returns the prompt section text for the member's team context.
+ */
+export declare function memberTeamDivision(team: TeamPreset, target: string): string;

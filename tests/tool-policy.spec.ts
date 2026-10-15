@@ -1,7 +1,7 @@
 /** Persisted strict policy decoding never accepts malformed records as all tools. */
 import { describe, expect, it } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { descriptorPolicy, hasLegacyPresetBriefing, policyPersona } from '../src/tool-policy.ts'
+import { descriptorPolicy, hasLegacyPresetBriefing } from '../src/tool-policy.ts'
 const agentWith = (data: object): Agent => ({ session: { ownEvents: () => [{ type: 'subagent/descriptor', data }] } } as unknown as Agent)
 describe('durable strict tool policy', () => {
   it('distinguishes plugin-authored legacy briefings from ordinary native member personas', () => {
@@ -11,9 +11,13 @@ describe('durable strict tool policy', () => {
     expect(hasLegacyPresetBriefing(agentWith({ mode: 'continuable' }))).toBe(false)
   })
 
-  it('round-trips only a generated policy from the own descriptor suffix', () => {
+  it('round-trips only a policy a legacy plugin version persisted in the descriptor', () => {
+    // The trailer is a FROZEN legacy format: only reading it still matters,
+    // because the current implementation keeps a member's policy in its own
+    // durable snapshot instead of a model-visible persona trailer.
     const policy = { teamId: 'team-1', mode: 'custom' as const, allow: ['read', 'send_message'] }
-    expect(descriptorPolicy(agentWith({ mode: 'continuable', persona: policyPersona('review', policy) }))).toEqual(policy)
+    const persona = `review\n\n[team-presets-tool-policy:v1]${JSON.stringify(policy)}`
+    expect(descriptorPolicy(agentWith({ mode: 'continuable', persona }))).toEqual(policy)
   })
   it('rejects an array masquerading as a custom policy mode', () => {
     expect(() => descriptorPolicy(agentWith({ mode: 'continuable', persona: '\n\n[team-presets-tool-policy:v1]{"teamId":"t","mode":["custom"],"allow":[]}' }))).toThrow('Invalid persisted')

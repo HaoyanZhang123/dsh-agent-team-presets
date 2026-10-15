@@ -40,6 +40,11 @@ export interface AppliedTeam {
     readonly teamId: string;
     /** Definition fingerprint of that applied preset, so the latest stored one can be compared. */
     readonly fingerprint: string;
+    /**
+     * Disclosure of the tool presentation this Session effectively runs with,
+     * when applying the Team overrode the Agent preset's own declaration.
+     */
+    readonly presentationNote?: string;
 }
 /** Host facts one monitor reads, supplied by the plugin that owns them. */
 export interface TeamExecutionSources {

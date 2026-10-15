@@ -137,6 +137,24 @@ dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.
 客户端入口，造成重复插件启动失败。确认插件详情同时显示 `dsh-agent-team-presets` 和
 `v0.1.3`，且组件处于运行中。Harness 自身的 `0.2.0-rc.*` 是另一套兼容版本要求。
 
+### Desktop 与 agent 安装注意事项
+
+**待发布 0.1.4 的启动修复（本项尚未测试）：** Host Typert 与 Remote 入口现将
+`zod` 校验代码内联进预构建产物，避免本地源码链接没有 `node_modules/zod` 时在
+启动前导入失败。保留严格校验；这不替代 Harness peer 兼容性要求。
+旧的 `v0.1.3` 标签或已安装副本不会自动获得该修复。
+
+- 用户给出本仓 GitHub URL 时，使用上面的 `github:` 安装方式；“我自己开发的”
+  不代表授权改成 `file:` / `link:` 或手工编辑 profile。只有明确要求本地开发链接时才使用它。
+- Desktop 应安装到实际运行的 `desktop` profile，而不是默认 `web` profile。
+  通过应用内插件管理器操作即可；仅安装成功且无失败状态时才提示重启。
+- 安装命令非零退出、管理器显示失败或兼容性拒绝时，停止并报告日志，不宣告成功、
+  不追加手写依赖/patch、不让用户反复重启。恢复配置前先备份，保留团队与会话选择记录。
+- Windows 不要用会写入 UTF-8 BOM 的方式改写 profile JSON。插件不会修改
+  profile manifest 的编码、Host 锁或其他插件的依赖。
+- `Unexpected token` BOM 错误、凭据锁超时和其他插件安装失败属于 Harness/安装流程
+  的独立问题，不在此修复范围内。不要为此关闭 Typert 校验或在运行中盲删锁文件。
+
 ### 0.1.4 准备分支的权限变化（尚未发布）
 
 本工作树的自定义策略同时限制继承工具和 Agent 自身注册的工具；协作工具也须明确勾选。
@@ -147,6 +165,8 @@ dsh plugin --profile <profile> add github:bloodarea/dsh-agent-team-presets#v0.1.
 无效首次应用会隔离，失败更新保留旧策略；运行中热重载无法还原旧定义时隔离到任务边界。
 共享提示词修改还须 Host 对具体差异批准，审批禁用时拒绝；普通开发请求不是写配置授权。
 这些说明描述未发布源码，不表示当前 GUI 已安装。详见 [修复与边界报告](docs/evidence/0.1.4-remediation.md)。
+
+**边界修复（同一未发布分支）：** 每个成员改由插件自己的 subagent 执行后端别名创建，该别名由宿主写进 roster 与子会话 descriptor，成为独立于快照的持久身份；快照读不到、durable unit 打不开或身份无法解析时，带标记的子会话会在创建事务内被拒绝，而不会退回队长线路。新建成员前先校验宿主深度上限与固定模型路由；被拒绝的创建不写 intent、不写 roster、不发模型请求。自定义策略改用原生工具调用：若该会话的 Agent 作用域已经声明 PTC/both，Team 不再应用（保留旧策略并在日志说明原因）；覆盖了 preset 级 PTC 时，设置页会明示"已改用原生工具调用"。官方 `minimal` 预设下团队简报仍然可见。插件完全缺席时，后续冷恢复不归本插件管控。边界修复与真机验收报告见本机证据 `docs/evidence/0.1.4-verify/REPORT.md`（`docs/evidence/` 不随仓库提交）。
 
 ### 配置一个 Team
 
@@ -216,6 +236,8 @@ Host 半边拥有实时配置与按会话的应用：
 | 文件 | 作用 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：实时 Config，依据 Agent 生命周期、设置提交与 `team/member` 结算，按会话冻结与采用定义。 |
+| [`src/member-runtime.ts`](src/member-runtime.ts) | 成员运行时协调：创建前意向登记、串行 `agent/created` 作用域注入（路由、persona、工具、分工），以及冷恢复重挂载。 |
+| [`src/member-store.ts`](src/member-store.ts) | 基于 `ctx.storage.domain` 的持久成员快照存储，确保跨会话存续与重启时 fail-closed 安全恢复。 |
 | [`src/execution.ts`](src/execution.ts) | 事件驱动的执行状态监控：队长与队员状态、已应用与已存储定义的比较，以及聚合全量帧。 |
 | [`src/config.ts`](src/config.ts) | 易变的 `teams` 与 `selections` 字段、continuable provider 名称，以及存储 Team 的 captain 路由清理。 |
 | [`src/application.ts`](src/application.ts) | 把一个 Team 应用到一个活动 Agent：提示词区段、工具作用域与 `spawn_team_member` 工具。 |
@@ -233,9 +255,16 @@ Host 半边拥有实时配置与按会话的应用：
 
 Team 与按会话的选择记录保存在插件的易变 Config 字段中；settings 服务把它们投射到 profile 的用户设置文档，并通过 `loader/volatile-update` 提交回运行中的引用。浏览器半边通过 `ctx.configForms.get('agent-team-presets')` 编辑它们，因此 Settings 页面与 composer 控件共享同一个按修订号围栏的写入队列。每个 agent 独立于 `tools` 存储 `toolMode`。缺少 `toolMode` 的记录保留其仅列表的行为：空列表表示 default-all，非空列表表示 custom。若存储的 captain 仍带着 captain 不再拥有的 `provider`、`model` 或 `reasoningEffort`（来自更早的文档），插件会在加载时把它们清掉并回写一次。
 
-### 按 teammate 的设置
+### 按 teammate 的设置（官方 rc.2 纯插件无补丁实现）
 
-`@deepseek-ai/dsh-experimental-agent-team` 增加了三个可选的 `SpawnTeammateRequest` 字段 —— `agentOptions`（provider、model、推理强度）、`persona` 与 `toolFilter` —— 并且现在把请求的成员模型记录到持久成员快照中，因此 roster 行可以为一个不在线的 teammate 命名其模型。`spawn_team_member` 把它们传给 `ctx.agentTeams.spawnTeammate`，因此成员始终留在 Team roster、mailbox 与共享任务板之内。
+在官方 DeepSeek Harness `0.2.0-rc.2` 中，Team 服务的公开 `spawnTeammate` 接口不声明也不透传 `agentOptions`、`persona` 或 `toolFilter`。本插件无需修改宿主源码或打补丁即可实现成员配置注入：
+
+1. **持久成员快照（`src/member-store.ts`）：** 在调用 `ctx.agentTeams.spawnTeammate` 之前，`spawn_team_member` 将成员的冻结配置快照（包含路由、推理强度、独立 persona、团队分工上下文和严格工具策略）原子写入由 `ctx.storage.domain` 承载的持久单元（`agent_team_presets_members` 单元，`single` 布局）。
+2. **仅传官方字段（`src/application.ts`）：** 向 `ctx.agentTeams.spawnTeammate` 仅传入官方接口字段（`name`、`description`、`prompt`、`context`、`provider`、`signal`）。
+3. **串行创建生命周期注入（`src/member-runtime.ts`）：** 在官方串行等待的 `agent/created` 事件期间，插件通过官方 `ctx.agentTeams.tryMembership` 识别成员身份，读取持久快照，并在成员放行首次请求前完成模型选择（`installModelSelection`）、独立 persona（`deployment:persona-prefix`）、团队分工区段（`agent-team-presets:member-team`）和严格工具守卫/限制的注入。
+4. **冷恢复重挂载：** 当成员运行结束退出并在后续通过 `sendMessage` 唤醒时，`agent/created` 再次触发，并从持久存储重载完全一致的冻结配置。
+5. **Fail-Closed 安全保证：** 若环境中未装配 `storageDomain`，或持久单元发生版本不兼容/校验破坏，成员创建将直接拒绝，绝不回退到队长路由或全量工具静默执行。
+6. **已知限制：** 官方 Team 名册（及 `list_agents`）仍将模型显示为队长的模型或创建选项（`lead-model`），这是因为官方 Team 仅读取 `Agent.options`。本插件在 `spawn_team_member` 的返回值中真实报告 `configuredRoute`，且成员实际完全运行在配置的模型线路上。
 
 ### 运行时不变式
 

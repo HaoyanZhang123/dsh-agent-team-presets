@@ -149,9 +149,36 @@ table and produce duplicate-plugin boot failures. Verify the plugin details show
 both `dsh-agent-team-presets` and `v0.1.3`, with its component running. The
 Harness's own `0.2.0-rc.*` version is a separate compatibility requirement.
 
+### Desktop and agent-assisted installation
+
+**Startup fix for the unreleased 0.1.4 (this fix is untested):** the prebuilt Host Typert and
+Remote entrypoints now inline their `zod` schema code so a local source link
+without `node_modules/zod` does not fail its startup import. Strict validation
+remains enabled; this does not replace the Harness peer compatibility requirements.
+The old `v0.1.3` tag and already installed copies do not receive this fix automatically.
+
+- When the user supplies this repository's GitHub URL, use the `github:` install
+  form above. “I developed it myself” is not authorization to substitute a
+  `file:` / `link:` source checkout or hand-edit the profile. Use a development
+  link only when explicitly requested.
+- Install into the profile the Desktop actually runs (`desktop`, not the default
+  `web`). The in-app plugin manager targets it; recommend a restart only after a
+  successful installation with no failed operation status.
+- On a nonzero installation exit, manager failure, or compatibility rejection,
+  stop and report the logs. Do not declare success, hand-append dependencies or
+  patches, or ask the user to keep restarting. Back up configuration before
+  recovery and preserve Team definitions and Session selections.
+- On Windows, do not rewrite profile JSON with a UTF-8 BOM. This plugin does not
+  rewrite profile manifest encoding, Host locks, or other plugins' dependencies.
+- BOM parse errors, credential-lock timeouts, and other plugins' installation
+  failures are independent Harness/install-flow issues, outside this fix. Do not
+  disable Typert validation or blindly delete locks while the Host is running.
+
 ### Configure a Team
 
 **Unreleased 0.1.4 preparation:** custom policies cover inherited and exact-Agent tools, including coordination; the catalog includes standing-preset builtins. Custom mode denies general Node `run_code` and ordinary delegation without a strict durable policy contract. Tool-name policies are not OS/path isolation. Invalid initial applications and busy remounts without their frozen snapshot are quarantined; failed updates retain the old policy. Shared prompt edits require exact Host approval, not merely a human-started turn. These are working-tree changes, not a deployment to the current GUI. See the [remediation report](docs/evidence/0.1.4-remediation.md).
+
+**Boundary fixes (same unreleased branch):** every member is now created through this plugin's own subagent execution-backend alias, which the Host writes into its roster and the child's descriptor as a durable identity independent of the snapshot. A marked child whose snapshot is unreadable, whose durable unit cannot be opened, or whose Team identity cannot be resolved is refused inside the creation transaction instead of resuming on the Team Lead's route. A new member is validated against the host's delegation depth cap and its fixed model route first, and a refused creation leaves no intent, no roster row, and no model request. Strict custom policies are applied with native tool calling: when the Session's own Agent scope already declares PTC/both the Team is not applied at all (the previous policy stays and the reason is logged), and when it covered a preset-level PTC presentation the Settings page says so. The Team briefing stays visible under the official `minimal` preset. With the plugin absent entirely, later cold resumes are outside its control. The boundary-fix and real-instance report (`docs/evidence/0.1.4-verify/REPORT.md`) is local working evidence: `docs/evidence/` is not committed.
 
 Settings → Agent team presets is three stacked pages, so a narrow Settings panel never crowds:
 
@@ -219,6 +246,8 @@ The Host half owns the live configuration and the per-Session applications:
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: live Config, per-Session definition freezing and adoption on Agent lifecycle, settings commits, and `team/member` settlements. |
+| [`src/member-runtime.ts`](src/member-runtime.ts) | Member runtime coordination: pre-spawn intent registration, serial `agent/created` scoped injection (route, persona, tools, team division), and cold-resume re-scoping. |
+| [`src/member-store.ts`](src/member-store.ts) | Durable member snapshot store backed by `ctx.storage.domain` for fail-closed member configuration recovery across residencies and restarts. |
 | [`src/execution.ts`](src/execution.ts) | Event-driven execution monitor: captain and teammate status, applied-versus-stored definitions, and aggregate whole-set frames. |
 | [`src/config.ts`](src/config.ts) | Volatile `teams` and `selections` fields, the continuable-provider names, and the captain-route cleanup of stored Teams. |
 | [`src/application.ts`](src/application.ts) | Applies one Team to one live Agent: prompt sections, tool scope, and the `spawn_team_member` tool. |
@@ -236,9 +265,16 @@ Applying a Team installs the captain's prompt as `deployment:persona-prefix` on 
 
 Teams and per-Session selections live in the plugin's volatile Config fields, which the settings service projects into the profile's user settings document and commits back into the running references with a `loader/volatile-update`. The browser half edits them through `ctx.configForms.get('agent-team-presets')`, so the Settings page and the composer control share one revision-fenced write queue. Each agent stores `toolMode` independently of `tools`. Records without `toolMode` retain their list-only behavior: an empty list means default-all and a nonempty list means custom. A stored captain that still carries `provider`, `model`, or `reasoningEffort` from a document written before captains stopped owning a route is rewritten once without them when the plugin loads.
 
-### Per-teammate settings
+### Per-teammate settings (official rc.2 plugin-only implementation)
 
-`@deepseek-ai/dsh-experimental-agent-team` gained three optional `SpawnTeammateRequest` fields — `agentOptions` (provider, model, reasoning effort), `persona`, and `toolFilter` — and now records the requested member model in the durable member snapshot so a roster row names the model of a teammate that is not live. `spawn_team_member` passes them to `ctx.agentTeams.spawnTeammate`, so members stay inside the Team roster, mailbox, and shared task board.
+In official DeepSeek Harness `0.2.0-rc.2`, the Team service's public `spawnTeammate` API does not pass through custom `agentOptions`, `persona`, or `toolFilter`. This plugin manages member scoping without any host modifications or monkey-patching:
+
+1. **Durable member snapshots (`src/member-store.ts`):** Before calling `ctx.agentTeams.spawnTeammate`, `spawn_team_member` atomically commits a frozen member configuration snapshot (route, reasoning effort, briefing persona, team division of labour, and strict tool policy) into the durable member store backed by `ctx.storage.domain` (the `agent_team_presets_members` unit, `single` layout).
+2. **Official-only spawn request (`src/application.ts`):** `ctx.agentTeams.spawnTeammate` is invoked with official-only fields (`name`, `description`, `prompt`, `context`, `provider`, `signal`).
+3. **Serial creation-edge installation (`src/member-runtime.ts`):** When the official `agent/created` serial event fires, the plugin resolves the child Agent via `ctx.agentTeams.tryMembership`, claims it against its durable snapshot, and installs scoped model selection (`installModelSelection`), persona prefix (`deployment:persona-prefix`), team context (`agent-team-presets:member-team`), and strict tool guard/restriction before the child's first request is admitted.
+4. **Cold resume re-scoping:** When a finished member is awakened later (via `sendMessage`), `agent/created` re-runs and re-applies the exact frozen configuration from the durable store.
+5. **Fail-closed security:** If `storageDomain` is unavailable, or if a stored record fails schema validation or version mismatch, member creation is refused rather than allowing the member to execute on the Session's route with unrestricted tools.
+6. **Known limitation:** The official Team roster (and `list_agents`) displays the model as the Team Lead's model (`lead-model`) or creation options rather than the scoped request model, because the upstream Team service queries creation options. The plugin's `spawn_team_member` result reports `configuredRoute`, and the member actually executes on its configured route.
 
 ### Runtime invariant
 

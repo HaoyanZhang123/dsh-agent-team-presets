@@ -24,16 +24,54 @@ describe('built deliverables', () => {
     expect(exports).toHaveProperty('TEAM_PRESETS_NS', 'agent-team-presets')
     expect(requests).not.toContain('zod')
   })
-  it('keeps direct catalog and cancellable execution stream companions', () => {
-    const remote = readFileSync(new URL('../lib/typert.remote-client.js', import.meta.url), 'utf8')
-    expect(remote).toContain("method: 'catalog'")
-    expect(remote).toContain("invocation: { kind: 'direct' }")
-    expect(remote).toContain("mode: 'stream'")
-    expect(remote).toContain("cancellation: { parameter: 'signal' }")
-    expect(remote).toContain("package: 'dsh-agent-team-presets'")
+  it('keeps direct catalog and cancellable execution stream companions', async () => {
+    // Assert on the imported descriptor rather than the generated text: a
+    // bundler may re-quote the same object literal, and quoting is not part of
+    // the wire contract. The structural counterpart lives in
+    // tests/typert-isolation.spec.ts, which also loads the face without a
+    // resolvable `zod`.
+    const remote = await import(new URL('../lib/typert.remote-client.js', import.meta.url).href) as {
+      TYPERT_REMOTE: { package: string; descriptors: readonly Record<string, any>[] }
+    }
+    const descriptors = remote.TYPERT_REMOTE.descriptors
+    expect(remote.TYPERT_REMOTE.package).toBe('dsh-agent-team-presets')
+    expect(descriptors).toHaveLength(2)
+    expect(descriptors.find(row => row.method === 'catalog')).toMatchObject({
+      invocation: { kind: 'direct' },
+      parameters: [],
+      result: { mode: 'strict' },
+    })
+    expect(descriptors.find(row => row.method === 'execution')).toMatchObject({
+      mode: 'stream',
+      invocation: { kind: 'direct' },
+      cancellation: { parameter: 'signal' },
+      result: { mode: 'strict' },
+    })
   })
   it('accepts the slim full-stack proposal as a shareable import', () => {
     const json = readFileSync(new URL('../contrib/full-stack-team.slim.v1.json', import.meta.url), 'utf8')
     expect(parseTeamPresetText(json)).toMatchObject({ ok: true, transfer: { team: { name: '全栈软件研发团队' } } })
+  })
+
+  it('inlines its private schema code and leaves the Harness peers external', () => {
+    // The Host entry must never depend on a bare `zod` resolving from the
+    // plugin's own directory: that is the load-time failure the 0.1.4 fix
+    // removed, and the durable member domain schema is the newest reason the
+    // build has to inline it.
+    const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+    const specifiers = [...host.matchAll(/(?:from|import\()\s*"([^"]+)"/g)].map(match => match[1]!)
+    expect(specifiers).not.toContain('zod')
+    expect(specifiers.filter(id => id.startsWith('zod/'))).toEqual([])
+    // The member domain form is reached through the `storageDomain` SERVICE, so
+    // a deployment that composes no storage still loads this plugin and only
+    // refuses member creation.
+    expect(specifiers).not.toContain('@deepseek-ai/dsh-storage-domain')
+    // Service identities stay borrowed from the Host, never re-bundled.
+    for (const peer of ['@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-system-prompt']) {
+      expect(specifiers, peer).toContain(peer)
+    }
+    // Zod's validator really is present, rather than the guard above passing
+    // because the schema was dropped.
+    expect(host).toContain('strictObject')
   })
 })

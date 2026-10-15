@@ -27,9 +27,16 @@ function volatileRef<T>(initial: T): { ref: { get: () => T }; set: (next: T) => 
 
 const TEAM: TeamPreset = team([], { systemPrompt: 'Captain prompt' })
 
-/** Let the settings rewrite settle, so its warn lands before an assertion. */
+/**
+ * Let one macrotask turn pass, so every queued edge settles before an
+ * assertion: the member execution aliases, the settings rewrite, and the
+ * per-Session application jobs all resolve on microtasks, and a Team
+ * application is deliberately queued rather than installed synchronously.
+ */
 async function settle(): Promise<void> {
-  await new Promise<void>((resolve) => { setTimeout(resolve, 0) })
+  for (let round = 0; round < 3; round += 1) {
+    await new Promise<void>((resolve) => { setTimeout(resolve, 0) })
+  }
 }
 
 /** Mount the loop dependencies plus the two services `apply` reads. */
@@ -53,6 +60,16 @@ async function setup(teams: TeamPreset[], selections: TeamSelectionRecord[]) {
       status: agent.status === 'running' ? 'running' as const : 'inactive' as const,
       diagnostics: [],
     }],
+  })
+  // The plugin injects the subagent service, exactly as a deployment that
+  // composes Teams provides it. These cases never create a member, so the
+  // stand-in only has to exist for the mount to reach its own scan.
+  ctx.provide('subagents', {
+    registerProvider: () => () => {},
+    getProvider: () => undefined,
+    list: () => [],
+    resolveMaxDepth: () => 2,
+    drainContinuableChildren: async () => {},
   })
   const configure = vi.fn(() => () => {})
   const update = vi.fn(async (_ns: string, _patch: { teams: TeamPreset[] }) => {})
@@ -92,6 +109,7 @@ describe('Team preset reconciliation', () => {
     const handle = await createAgent(ctx, 's1')
     const fiber = await mount(ctx, config)
     expect(configure).toHaveBeenCalledWith({ auto: false }, expect.anything())
+    await settle()
     expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeDefined()
     await fiber.dispose()
     expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeUndefined()
@@ -104,6 +122,7 @@ describe('Team preset reconciliation', () => {
     const fiber = await mount(ctx, config)
     const root = await createAgent(ctx, 'root')
     const child = await createAgent(ctx, 'child', 'subagent')
+    await settle()
     expect(ctx.tools.get('spawn_team_member', root.agent)).toBeDefined()
     expect(ctx.tools.get('spawn_team_member', child.agent)).toBeUndefined()
     await fiber.dispose()
@@ -122,6 +141,7 @@ describe('Team preset reconciliation', () => {
 
     // A committed volatile change re-walks every live Agent, still skipping the child.
     ctx.emit('loader/volatile-update', COMMITTED)
+    await settle()
     expect(ctx.tools.get('spawn_team_member', child.agent)).toBeUndefined()
 
     await fiber.dispose()
@@ -137,6 +157,7 @@ describe('Team preset reconciliation', () => {
 
     selectionsRef.set([])
     ctx.emit('loader/volatile-update', COMMITTED)
+    await settle()
     expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeUndefined()
 
     await fiber.dispose()
@@ -149,6 +170,7 @@ describe('Team preset reconciliation', () => {
     const fiber = await mount(ctx, config)
     expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeDefined()
     await handle.dispose()
+    await settle()
     await fiber.dispose()
   })
 
@@ -163,6 +185,7 @@ describe('Team preset reconciliation', () => {
 
     teamsRef.set([{ ...TEAM, name: 'Renamed' }])
     ctx.emit('loader/volatile-update', COMMITTED)
+    await settle()
     expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeDefined()
     expect(ctx.tools.get('spawn_team_member', handle.agent)).not.toBe(installed)
 
@@ -176,6 +199,7 @@ describe('Team preset reconciliation', () => {
     const fiber = await mount(ctx, config)
     expect(ctx.tools.get('spawn_team_member', handle.agent)).toBeUndefined()
     await fiber.dispose()
+    await settle()
     await handle.dispose()
   })
 
@@ -189,6 +213,7 @@ describe('Team preset reconciliation', () => {
     const handle = await createAgent(ctx, 's1')
     const fiber = await mount(ctx, config)
     // A Session that selected no Team keeps every ordinary tool: no guard and no
+    await settle()
     // restriction is installed, so the plugin never narrows normal operation.
     const result = await ctx.tools.execute({
       callId: ToolCallId('plain'), name: 'plain_tool', arguments: {}, agent: handle.agent,
@@ -213,12 +238,14 @@ describe('Team preset reconciliation', () => {
     const chosen = await createAgent(h.ctx, 's1')
     const plain = await createAgent(h.ctx, 's2')
     const fiber = await mount(h.ctx, h.config)
+    await settle()
     const call = (agent: Agent) => h.ctx.tools.execute({ callId: ToolCallId('ordinary'), name: 'plain_tool', arguments: {}, agent, signal: new AbortController().signal })
     expect((await call(chosen.agent)).isError).toBe(true)
     expect((await call(plain.agent)).isError).toBe(false)
     h.selectionsRef.set([])
     h.ctx.emit('loader/volatile-update', COMMITTED)
     expect((await call(chosen.agent)).isError).toBe(false)
+    await settle()
     expect(h.ctx.tools.get('get_team_preset', chosen.agent)).toBeDefined()
     expect(h.ctx.tools.get('update_team_preset', chosen.agent)).toBeDefined()
     expect(h.ctx.tools.get('spawn_team_member', chosen.agent)).toBeUndefined()
@@ -236,6 +263,7 @@ describe('Team preset reconciliation', () => {
     })
     const handle = await createAgent(ctx, 's1')
     const fiber = await mount(ctx, config)
+    await settle()
     const result = await ctx.tools.execute({
       callId: ToolCallId('stale'), name: 'plain_tool', arguments: {}, agent: handle.agent,
       signal: new AbortController().signal,
@@ -246,6 +274,7 @@ describe('Team preset reconciliation', () => {
     expect(JSON.stringify(result.content)).toContain('composer Team control')
     selectionsRef.set([])
     ctx.emit('loader/volatile-update', COMMITTED)
+    await settle()
     expect((await ctx.tools.execute({ callId: ToolCallId('recovered'), name: 'plain_tool', arguments: {}, agent: handle.agent, signal: new AbortController().signal })).isError).toBe(false)
     expect(ctx.tools.get('get_team_preset', handle.agent)).toBeDefined()
     await fiber.dispose()

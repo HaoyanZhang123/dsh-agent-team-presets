@@ -52,6 +52,11 @@ export interface AppliedTeam {
   readonly teamId: string
   /** Definition fingerprint of that applied preset, so the latest stored one can be compared. */
   readonly fingerprint: string
+  /**
+   * Disclosure of the tool presentation this Session effectively runs with,
+   * when applying the Team overrode the Agent preset's own declaration.
+   */
+  readonly presentationNote?: string
 }
 
 /** Host facts one monitor reads, supplied by the plugin that owns them. */
@@ -68,6 +73,7 @@ interface TeamTally {
   members: number
   pending: number
   unreadable: boolean
+  notes: Set<string>
 }
 
 /** One open consumer of the whole-set frames. */
@@ -190,7 +196,7 @@ export class TeamExecutionMonitor {
     const tally = (teamId: string): TeamTally => {
       const existing = tallies.get(teamId)
       if (existing !== undefined) return existing
-      const created: TeamTally = { busy: 0, members: 0, pending: 0, unreadable: false }
+      const created: TeamTally = { busy: 0, members: 0, pending: 0, unreadable: false, notes: new Set() }
       tallies.set(teamId, created)
       return created
     }
@@ -224,6 +230,9 @@ export class TeamExecutionMonitor {
         if (!readable) row.unreadable = true
         row.members += members
         if (pending) row.pending += 1
+        // Only the row whose definition is actually applied reports its
+        // disclosure; a selection that has not been adopted yet has none.
+        if (applied?.teamId === teamId && applied.presentationNote !== undefined) row.notes.add(applied.presentationNote)
       }
     }
     const rows: TeamExecutionRow[] = [...tallies.entries()]
@@ -234,6 +243,7 @@ export class TeamExecutionMonitor {
         busySessions: row.busy,
         executingMembers: row.members,
         pendingSessions: row.pending,
+        notes: [...row.notes].sort((left, right) => left.localeCompare(right)),
       }))
     return { teams: rows }
   }

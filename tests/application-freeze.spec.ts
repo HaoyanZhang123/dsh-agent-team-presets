@@ -5,6 +5,9 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -19,9 +22,13 @@ import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-system-prompt'
 import { apply, inject } from '../src/index.ts'
 import type { Config } from '../src/config.ts'
 import type { TeamPreset, TeamSelectionRecord } from '../src/types.ts'
+import { memberRecord, mountMemberStorage } from './fixtures/member-storage.ts'
+import type { MemberStorage } from './fixtures/member-storage.ts'
+import { settlePlugin, subagentServiceDouble } from './fixtures/plugin-harness.ts'
 import { slot, team } from './fixtures/team-presets.ts'
 
 const contexts: Context[] = []
+const temporary: string[] = []
 
 /** Every mounted harness, so a case that leaves a turn blocked still tears down. */
 const harnesses: Harness[] = []
@@ -29,6 +36,7 @@ const harnesses: Harness[] = []
 afterEach(async () => {
   for (const harness of harnesses.splice(0)) harness.adapter.open()
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
+  for (const path of temporary.splice(0)) await rm(path, { recursive: true, force: true })
 })
 
 /** Global tool every definition below allows its captain to call. */
@@ -136,6 +144,8 @@ interface Harness {
   readonly ctx: Context
   readonly config: Config
   readonly adapter: GatedAdapter
+  /** The durable member snapshot unit this Team's members are frozen into. */
+  readonly storage: MemberStorage
   readonly spawnTeammate: ReturnType<typeof vi.fn<SpawnCall>>
   /** The mounted plugin fiber, so a case can dispose it like the Loader would. */
   readonly fiber: { dispose(): Promise<void> }
@@ -169,6 +179,10 @@ async function setup(options: {
 
   const adapter = new GatedAdapter()
   ctx.llm.registerAdapter(['fixture'], adapter)
+  // Several cases below route a member to `deepseek`: a member route is
+  // preflighted against the live registry before anything durable is written,
+  // so the deployment has to register the route the Team configures.
+  ctx.llm.registerAdapter(['deepseek'], adapter)
 
   // Two global tools, so a captain allow-list can be seen to include and exclude.
   for (const name of [ALLOWED_TOOL, DENIED_TOOL]) {
@@ -203,6 +217,12 @@ async function setup(options: {
     ],
   })
 
+  // The member runtime's durable unit, mounted exactly as the dsh-base bundle
+  // composes it: member creation is refused without it.
+  const storeRoot = await mkdtemp(join(tmpdir(), 'team-presets-freeze-store-'))
+  temporary.push(storeRoot)
+  const storage = await mountMemberStorage(ctx, storeRoot)
+
   const teamsRef = volatileRef<readonly TeamPreset[]>(options.teams)
   const selectionsRef = volatileRef<readonly TeamSelectionRecord[]>(options.selections)
   ctx.provide('settings', {
@@ -210,6 +230,11 @@ async function setup(options: {
     describe: vi.fn(() => [{ ns: 'agent-team-presets', revision: 0 }]),
     update: vi.fn(async () => {}),
   })
+
+  // The plugin injects the subagent service, exactly as a deployment that
+  // composes Teams provides it: without it the mount is parked and no Team is
+  // ever applied. The double also answers the depth cap member creation checks.
+  ctx.provide('subagents', subagentServiceDouble())
 
   const config = {
     teams: teamsRef.ref,
@@ -225,6 +250,7 @@ async function setup(options: {
     ctx,
     config,
     adapter,
+    storage,
     spawnTeammate,
     fiber,
     create: async (id) => {
@@ -349,6 +375,8 @@ describe('a running Team task keeps its definition', () => {
 
     await h.release()
     expect(captain.status).toBe('idle')
+    // Adoption is a queued job: the idle edge only schedules it.
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
     expect((await applied(h.ctx, captain)).description).toContain('beta')
   })
@@ -398,6 +426,7 @@ describe('a running Team task keeps its definition', () => {
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt A')
 
     await h.release()
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
   })
 
@@ -411,6 +440,7 @@ describe('a running Team task keeps its definition', () => {
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt A')
 
     await h.release()
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt C')
     expect((await applied(h.ctx, captain)).persona).not.toBe('Captain prompt B')
   })
@@ -430,6 +460,8 @@ describe('a running Team task keeps its definition', () => {
     // The next task start re-checks the roster itself, so the missed settlement
     // cannot leave the Session on a stale definition.
     h.wake(captain)
+    // The wake-up edge schedules the re-checked application, so it has to drain.
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt C')
     await h.release()
   })
@@ -444,10 +476,13 @@ describe('a running Team task keeps its definition', () => {
     expect(frozen.isError).toBe(false)
     const request = h.spawnTeammate.mock.calls[0]?.[1]
     expect(request?.name).toBe('alpha')
-    expect(request?.persona).toContain('Team A')
+    // The frozen member's persona lives in its durable snapshot, not in the
+    // Team request the host ignored.
+    expect((await memberRecord(h.storage, 'alpha'))?.persona).toContain('Team A')
     expect((await callMemberTool(h.ctx, captain, { member: 'gamma', task: 'go' })).isError).toBe(true)
 
     await h.release()
+    await settlePlugin()
     expect((await callMemberTool(h.ctx, captain, { member: 'gamma', task: 'go' })).isError).toBe(false)
     expect((await callMemberTool(h.ctx, captain, { member: 'alpha', task: 'go' })).isError).toBe(true)
   })
@@ -461,6 +496,8 @@ describe('a running Team task keeps its definition', () => {
 
     h.teams([definition('B', 'beta')])
     expect((await applied(h.ctx, busy)).persona).toBe('Captain prompt A')
+    // Only the idle Session's queued adoption drains here.
+    await settlePlugin()
     expect((await applied(h.ctx, idle)).persona).toBe('Captain prompt B')
     await h.release()
   })
@@ -506,11 +543,11 @@ describe('a member route is read when the member is spawned', () => {
 
     const spawn = await callMemberTool(h.ctx, captain, { member: 'alpha', task: 'go' })
     expect(spawn.isError).toBe(false)
-    const request = h.spawnTeammate.mock.calls[0]?.[1]
     // Recovery work reaches the member this task summons, without a restart...
-    expect(request?.agentOptions).toMatchObject({ provider: 'deepseek', model: 'deepseek-reasoner' })
+    expect((await memberRecord(h.storage, 'alpha'))?.route)
+      .toMatchObject({ provider: 'deepseek', model: 'deepseek-reasoner' })
     // ...while the definition the task started with still owns everything else.
-    expect(request?.persona).toContain('Team A')
+    expect((await memberRecord(h.storage, 'alpha'))?.persona).toContain('Team A')
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt A')
 
     await h.release()
@@ -525,7 +562,7 @@ describe('a member route is read when the member is spawned', () => {
     expect(h.ctx.tools.get('spawn_team_member', captain)).toBe(installed)
 
     await callMemberTool(h.ctx, captain, { member: 'alpha', task: 'go' })
-    expect(h.spawnTeammate.mock.calls[0]?.[1]?.agentOptions)
+    expect((await memberRecord(h.storage, 'alpha'))?.route)
       .toMatchObject({ provider: 'deepseek', model: 'deepseek-chat' })
   })
 
@@ -539,7 +576,7 @@ describe('a member route is read when the member is spawned', () => {
 
     const spawn = await callMemberTool(h.ctx, captain, { member: 'alpha', task: 'go' })
     expect(spawn.isError).toBe(false)
-    expect(h.spawnTeammate.mock.calls[0]?.[1]?.agentOptions)
+    expect((await memberRecord(h.storage, 'alpha'))?.route)
       .toMatchObject({ provider: 'deepseek', model: 'deepseek-chat' })
     await h.release()
   })
@@ -557,11 +594,12 @@ describe('a member route is read when the member is spawned', () => {
     expect((await callMemberTool(h.ctx, captain, { member: 'gamma', task: 'go' })).isError).toBe(true)
 
     await h.release()
+    await settlePlugin()
     const adopted = await applied(h.ctx, captain)
     expect(adopted.persona).toBe('Captain prompt C')
     expect(adopted.description).toContain('gamma')
     await callMemberTool(h.ctx, captain, { member: 'gamma', task: 'go' })
-    expect(h.spawnTeammate.mock.calls.at(-1)?.[1]?.agentOptions)
+    expect((await memberRecord(h.storage, 'gamma'))?.route)
       .toMatchObject({ provider: 'deepseek', model: 'deepseek-chat' })
   })
 })
@@ -617,6 +655,9 @@ describe('the captain tool scope a Team applies', () => {
 
     // Fixing the stored Team restores the Session.
     h.teams([definition('B', 'beta')])
+    // The refused save left no application behind, so the recovery is applied
+    // by a queued job that has to drain before the restored face is observable.
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
   })
 })
@@ -643,8 +684,13 @@ describe('application lifecycle across status edges', () => {
     const captain = await h.create('s1')
     const denied = await h.ctx.tools.execute({ callId: ToolCallId('initial-invalid'), name: DENIED_TOOL, arguments: {}, agent: captain, signal: new AbortController().signal })
     expect(denied.isError).toBe(true)
-    expect(resultText(denied)).toContain('application failed')
+    // The refusal is the actionable one: the allow-list names a capability this
+    // Session cannot reach, and that reason is what the quarantined Session reads.
+    expect(resultText(denied)).toContain('names capabilities this Session cannot reach')
     h.teams([definition('A', 'alpha')])
+    // The quarantine is only released once the replacement application's
+    // queued job has installed its tool scope.
+    await settlePlugin()
     const allowed = await h.ctx.tools.execute({ callId: ToolCallId('recovered'), name: ALLOWED_TOOL, arguments: {}, agent: captain, signal: new AbortController().signal })
     expect(allowed.isError).toBe(false)
   })
@@ -673,6 +719,8 @@ describe('application lifecycle across status edges', () => {
     expect((await execute(DENIED_TOOL)).isError).toBe(true)
     expect((await execute(ALLOWED_TOOL)).isError).toBe(true)
     await h.release()
+    // The restarted mount adopts the stored definition through its own queued job.
+    await settlePlugin()
     expect((await execute(DENIED_TOOL)).isError).toBe(false)
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
     await restarted.dispose()
@@ -685,6 +733,8 @@ describe('application lifecycle across status edges', () => {
     h.wake(captain)
     h.teams([definition('B', 'beta')])
     await captain.whenIdle()
+    // The idle edge after a failed turn only schedules the adoption.
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
   })
 
@@ -698,6 +748,8 @@ describe('application lifecycle across status edges', () => {
     captain.cancel({ kind: 'user' })
     h.adapter.open()
     await captain.whenIdle()
+    // The idle edge after a cancelled turn only schedules the adoption.
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
   })
 
@@ -716,6 +768,8 @@ describe('application lifecycle across status edges', () => {
 
     await h.release()
     const restarted = await h.ctx.plugin(Object.assign((inner: Context) => { apply(inner, h.config) }, { inject }))
+    // The fresh mount applies the stored definition through its queued job.
+    await settlePlugin()
     expect((await applied(h.ctx, captain)).persona).toBe('Captain prompt B')
     await restarted.dispose()
   })
@@ -764,6 +818,8 @@ describe('application lifecycle across status edges', () => {
       describe: () => [{ ns: 'agent-team-presets', revision: 0 }],
       update: async () => {},
     })
+    // The mount is parked without the injected subagent service.
+    ctx.provide('subagents', subagentServiceDouble())
     root = (await ctx.agents.create({ sessionId: SessionId('s1'), agentOptions: { provider: 'fixture', model: 'fixture' } })).agent
     const child = (await ctx.agents.create({
       sessionId: SessionId('child'),

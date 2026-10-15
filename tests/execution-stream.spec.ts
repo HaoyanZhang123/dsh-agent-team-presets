@@ -196,7 +196,7 @@ describe('Team execution stream', () => {
     const iterator = h.monitor.stream(controller.signal)[Symbol.asyncIterator]()
 
     expect((await nextFrame(iterator)).teams).toEqual([
-      { teamId: 'team-1', state: 'idle', busySessions: 0, executingMembers: 0, pendingSessions: 0 },
+      { teamId: 'team-1', state: 'idle', busySessions: 0, executingMembers: 0, pendingSessions: 0, notes: [] },
     ])
 
     h.wake(captain)

@@ -2,3 +2,14 @@ node_modules/
 *.tsbuildinfo
 .DS_Store
 *.log
+
+# Local working evidence and the archived handoff material: kept on the
+# development machine only, never distributed with the plugin. Use
+# `git add -f` if a specific file must be committed on purpose.
+docs/evidence/
+
+# Internal review/analysis material and tool artifacts: never published.
+audit/
+.brooks-lint-history.json
+__pycache__/
+*.pyc
