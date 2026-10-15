@@ -119,6 +119,23 @@ The plugin version (`0.1.4`) and the Harness version (`0.2.0-rc.2`, for example)
 <a id="use-this-package"></a>
 ## Install and upgrade
 
+### One-click install in the GUI (Add plugin)
+
+No command line required: open **Global panels → Plugins → Add plugin**, paste the line below into **Package name or address**, and click **Install**.
+
+```text
+dsh-agent-team-presets@0.1.4
+```
+
+<!-- release-version: keep in sync with package.json version -->
+
+- **Registry** selects which npm source the download comes from; **Default registry** and **Official npm registry** both work, and **Mainland China mirror** is there when neither answers.
+- `@0.1.4` names the version; drop it and enter `dsh-agent-team-presets` to take whatever npm currently publishes.
+- The field takes the same specs as `dsh plugin add`: a package name, `name@version`, `github:owner/repo`, a tarball URL, or an absolute path. The check before installing queries the package, so a version that does not exist or a package without `dsh.bundle` is refused before anything is written.
+- This package declares its own `dsh.bundle`, so the plugin manager registers it as a profile bundle layer; do not add a loader entry by hand.
+- Once the package is installed the field cannot install it again: the manager matches on package name and reports that it is already installed. To change installation source (for example from `github:…#v0.1.4` to the npm form), uninstall it in the plugin list first, then paste the spec above.
+- The plugin manager only installs and enables; reload or restart as it instructs afterwards. Use the npm form when you want later releases to be offered; a pinned-ref source install is compared only with that ref and never advertises a newer one (see below).
+
 ### Install from GitHub
 
 For an installation that can receive repository-version update notifications:
