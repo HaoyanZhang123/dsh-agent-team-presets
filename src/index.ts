@@ -83,11 +83,23 @@ export function apply(ctx: Context, config: Config): void {
   const members = new MemberRuntime(ctx)
   // Every member is summoned through this plugin's own execution alias, so the
   // Host itself persists the fact that the child is preset-managed. The aliases
-  // delegate the whole provider contract to the deployment's providers.
-  const providers = registerMemberProviders(ctx, { fresh: config.freshProvider, fork: config.forkProvider })
+  // delegate the whole provider contract to the deployment's providers, and
+  // this registry keeps them in step with a provider registry that may still be
+  // filling up: a provider that activates after this plugin is picked up, and a
+  // replaced or withdrawn one is rebound or refused, without restarting.
+  const providers = registerMemberProviders(
+    ctx,
+    { fresh: config.freshProvider, fork: config.forkProvider },
+    (context, state, reason) => {
+      // `missing` is the expected state while a provider plugin is still
+      // loading, so it is not an incident here. It is still the refusal a member
+      // creation reports if it is asked for one in that window.
+      if (state === 'registration' || state === 'unsupported' || state === 'alias' || state === 'unconfigured') {
+        ctx.logger.warn(`${LOG}: ${context} Team members are unavailable: %s`, reason)
+      }
+    },
+  )
   ctx.effect(() => () => { providers.dispose() }, 'agent-team-presets: member execution aliases')
-  if (providers.freshError !== undefined) ctx.logger.warn(`${LOG}: fresh Team members are unavailable: %s`, providers.freshError)
-  if (providers.forkError !== undefined) ctx.logger.warn(`${LOG}: forked Team members are unavailable: %s`, providers.forkError)
   const quarantine = (agent: Agent, reason: string): void => {
     const previous = quarantines.get(agent)
     if (previous !== undefined) { previous.reason = reason; return }

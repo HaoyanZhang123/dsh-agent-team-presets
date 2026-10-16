@@ -6,7 +6,7 @@
 
 English | [中文](<README.zh.md>)
 
-> **Community plugin v0.1.4** · [Release](https://github.com/bloodarea/dsh-agent-team-presets/releases/tag/v0.1.4)
+> **Community plugin v0.1.5** · [Release](https://github.com/bloodarea/dsh-agent-team-presets/releases/tag/v0.1.5)
 >
 > Requires a compatible DeepSeek Harness deployment with Agent Teams enabled. This version uses rc.2 APIs; see [Requirements](#requirements). Prebuilt artifacts are included, so installation does not require a source build.
 
@@ -67,7 +67,7 @@ DeepSeek Harness already ships Agent Teams with multi-agent collaboration. In th
 <a id="screenshots"></a>
 ## Screenshots
 
-The screenshots illustrate the composer control and settings workflow. Example Team and provider names are illustrative; available models and tools depend on your deployment. Some screenshots show an earlier UI revision, so controls and helper text may differ from v0.1.4. The permission rules below describe the current version.
+The screenshots illustrate the composer control and settings workflow. Example Team and provider names are illustrative; available models and tools depend on your deployment. Some screenshots show an earlier UI revision, so controls and helper text may differ from v0.1.5. The permission rules below describe the current version.
 
 **Choose a Team in the composer**
 
@@ -114,7 +114,7 @@ The screenshots illustrate the composer control and settings workflow. Example T
 - **A Web or Desktop profile with Settings and the required client services.** Install into the profile you actually use, typically `web` for the Web GUI or `desktop` for Desktop.
 - **Durable storage and a continuable subagent backend for member execution.** Member creation is refused if the storage domain or the selected execution backend is unavailable. The default backend names are `spawn` and `fork`; custom deployments must configure compatible backends.
 
-The plugin version (`0.1.4`) and the Harness version (`0.2.0-rc.2`, for example) are separate version lines.
+The plugin version (`0.1.5`) and the Harness version (`0.2.0-rc.2`, for example) are separate version lines.
 
 <a id="use-this-package"></a>
 ## Install and upgrade
@@ -124,13 +124,13 @@ The plugin version (`0.1.4`) and the Harness version (`0.2.0-rc.2`, for example)
 No command line required: open **Global panels → Plugins → Add plugin**, paste the line below into **Package name or address**, and click **Install**.
 
 ```text
-dsh-agent-team-presets@0.1.4
+dsh-agent-team-presets@0.1.5
 ```
 
 <!-- release-version: keep in sync with package.json version -->
 
 - **Registry** selects which npm source the download comes from. **Default registry** means whatever pnpm's own configuration names: on a machine whose `~/.npmrc` already points at `registry.npmmirror.com`, that *is* the mainland mirror, so the dialog lists no separate **Mainland China mirror** entry. Pick **Official npm registry** to bypass a mirror, or **Custom address** for a third source — an internal registry, or another mirror such as `https://mirrors.cloud.tencent.com/npm/` or `https://repo.huaweicloud.com/repository/npm/`.
-- `@0.1.4` names the version; drop it and enter `dsh-agent-team-presets` to take whatever npm currently publishes.
+- `@0.1.5` names the version; drop it and enter `dsh-agent-team-presets` to take whatever npm currently publishes.
 - The field takes the same specs as `dsh plugin add`: a package name, `name@version`, `github:owner/repo`, a tarball URL, or an absolute path. The check before installing queries the package, so a version that does not exist or a package without `dsh.bundle` is refused before anything is written.
 - This package declares its own `dsh.bundle`, so the plugin manager registers it as a profile bundle layer; do not add a loader entry by hand.
 - Once the package is installed the field cannot install it again: the manager matches on package name and reports that it is already installed. To change installation source (for example from `github:…#v0.1.4` to the npm form), uninstall it in the plugin list first, then paste the spec above.
@@ -337,7 +337,7 @@ In Harness `0.2.0-rc.2`, the Team roster and `list_agents.model` read creation-t
 - Team definitions and Session selections live in profile settings, not a structured selection history in the Session event log. Rendered prompts may contain the Team name, but they do not make the selection portable: a fork or a move to another deployment needs an explicit Team selection and matching settings.
 - Already-created members retain their creation-time persona, description, route, and tool policy, including when resumed with `send_message`. Saved preset changes apply to future instances; send an existing member a message to adjust its immediate task.
 - Legacy captain route fields are removed during settings reconciliation because captains use the conversation's model. Back up configuration before migrating older profiles.
-- The bundled schema runtime in v0.1.4 fixes missing-`zod` startup imports from earlier package builds. It does not repair unrelated Harness installation, encoding, lock, or third-party plugin failures.
+- The bundled schema runtime fixes missing-`zod` startup imports from earlier package builds. It does not repair unrelated Harness installation, encoding, lock, or third-party plugin failures.
 
 <a id="understand-the-implementation"></a>
 ## How it works

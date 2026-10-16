@@ -17,6 +17,14 @@
  * whole provider contract to the deployment's own provider, so fresh/fork
  * history semantics, cancellation, and concurrency isolation are unchanged.
  *
+ * Aliases therefore have to exist exactly while their upstream provider does,
+ * whatever order the two plugins activate in. The registry built here is
+ * self-maintaining: it scans once when it subscribes, follows
+ * `subagent/provider-added` and `subagent/provider-removed` afterwards, and
+ * re-validates every alias whenever its upstream may have changed. Nothing
+ * about the mount order of this plugin and the provider plugins is assumed, and
+ * no alias failure is remembered past the moment it stops being true.
+ *
  * @module dsh-agent-team-presets/member-identity
  */
 
@@ -29,6 +37,12 @@ export const MEMBER_FRESH_PROVIDER = 'preset-member-fresh-v1'
 
 /** Alias a forked member is created through; persisted by the Host as its provider. */
 export const MEMBER_FORK_PROVIDER = 'preset-member-fork-v1'
+
+/** The two spawn contexts, in the fixed order their aliases are maintained. */
+const CONTEXTS = ['fresh', 'fork'] as const
+
+/** One configured spawn context: the alias name it persists, and its upstream name. */
+type SpawnContext = typeof CONTEXTS[number]
 
 /** Every alias this plugin registers. The set is fixed and versioned. */
 const ALIASES: ReadonlySet<string> = new Set([MEMBER_FRESH_PROVIDER, MEMBER_FORK_PROVIDER])
@@ -73,7 +87,8 @@ export interface MemberProviderAliases {
    *
    * Reported instead of falling back to the deployment's own provider: a member
    * created without the alias would carry no marker, and would then be
-   * indistinguishable from a native teammate after a restart.
+   * indistinguishable from a native teammate after a restart. The value is read
+   * on every access, so it clears as soon as the alias becomes registrable.
    */
   readonly freshError?: string | undefined
   /** Why a FORKED member cannot be created, when the fork alias is unusable. */
@@ -82,13 +97,18 @@ export interface MemberProviderAliases {
 
 /** The provider aliases one activation registered, with their release. */
 export interface MemberProviderRegistry extends MemberProviderAliases {
-  /** Release every alias this activation registered. */
+  /** Release every alias this activation registered, and stop following the registry. */
   dispose(): void
 }
 
 /**
  * Resolve the alias one spawn context must be created through.
- * @param registry - the aliases this activation registered.
+ *
+ * Called at member-creation time, so the answer is read from the aliases that
+ * exist NOW rather than from the state one startup scan happened to observe: a
+ * provider that registered after this plugin activated is usable, and one that
+ * has since been removed is refused.
+ * @param registry - the aliases this activation maintains.
  * @param context - the configured spawn context of the member about to be created.
  * @returns the alias to spawn through, or the refusal for that context.
  */
@@ -99,6 +119,60 @@ export function memberProviderFor(
   const error = context === 'fresh' ? registry.freshError : registry.forkError
   if (error !== undefined) return { error }
   return { name: context === 'fresh' ? registry.fresh : registry.fork }
+}
+
+/** Why one spawn context is currently unusable, or that it is usable. */
+export type MemberProviderUnavailable =
+  /** The configured upstream name is empty. */
+  | 'unconfigured'
+  /** The configured upstream name is this plugin's own alias. */
+  | 'alias'
+  /** The deployment registers no provider under the configured name (yet). */
+  | 'missing'
+  /** The configured provider cannot create continuable children. */
+  | 'unsupported'
+  /** The alias could not be registered, or the provider lookup threw. */
+  | 'registration'
+
+/**
+ * Report one spawn context becoming usable or unusable.
+ *
+ * Called only when a context's availability actually changes, so a caller can
+ * log a refusal once instead of once per registry event. `missing` is the
+ * expected state while a provider plugin is still loading, which is why it is
+ * reported separately from the states that mean the configuration is wrong.
+ * @param context - the spawn context that changed.
+ * @param state - the new state, or undefined once the alias is usable.
+ * @param reason - human-readable refusal for the new state.
+ */
+export type MemberProviderAvailability = (
+  context: 'fresh' | 'fork',
+  state: MemberProviderUnavailable | undefined,
+  reason: string,
+) => void
+
+/** Why one upstream provider lookup failed, in the terms a refusal reports. */
+interface LookupFailure {
+  /** The refusal category. */
+  readonly state: MemberProviderUnavailable
+  /** The refusal sentence, without the spawn context it applies to. */
+  readonly reason: string
+}
+
+/** One alias this activation maintains, and its current registration. */
+interface AliasState {
+  /** Persisted alias name, e.g. `preset-member-fresh-v1`. */
+  readonly alias: string
+  /** Upstream provider name from the plugin config; fixed for this activation. */
+  readonly upstreamName: string
+  /** Upstream provider the live alias delegates to; undefined while no alias is registered. */
+  upstream: SubagentProvider | undefined
+  /** Releases the live alias registration; undefined while no alias is registered. */
+  release: (() => void) | undefined
+  /** Why this context is unusable right now, or undefined when the alias is live. */
+  failure: { state: MemberProviderUnavailable; reason: string } | undefined
+  /** Whether `failure` has already been reported, so a state is reported once. */
+  reported: boolean
 }
 
 /**
@@ -126,90 +200,246 @@ function aliasProvider(alias: string, upstream: SubagentProvider): SubagentProvi
 }
 
 /**
- * Register the member aliases, delegating to the configured providers.
+ * Register the member aliases, delegating to the configured providers, and keep
+ * them in step with the provider registry for as long as this activation lives.
  *
  * The two spawn contexts are independent: a deployment that composes only a
  * fresh provider still serves fresh members, while a forked member is refused
  * with the reason its own backend is unusable. A configured name that is itself
  * an alias is always refused — the wrapper must never become its own backend —
- * and so is a name the deployment does not register, or one whose provider
- * cannot create continuable children. Registration failure is reported per
- * context rather than skipped: a member created through the deployment's own
- * provider would carry no marker and could not be told apart from a native
- * teammate after a restart.
+ * and so is a name whose provider cannot create continuable children, or whose
+ * alias registration fails. A configured name the deployment does not (or does
+ * not yet) register is refused only while it stays absent: the aliases are
+ * re-validated on every provider registry event, so a provider that activates
+ * later is picked up without restarting this plugin, and one that is replaced
+ * has its wrapper rebound to the new object.
+ *
+ * Registration failure is reported per context rather than skipped: a member
+ * created through the deployment's own provider would carry no marker and could
+ * not be told apart from a native teammate after a restart.
  * @param ctx - the plugin context carrying the subagent service.
  * @param configured - the deployment's fresh/fork provider names from the plugin config.
- * @returns the registered aliases plus the refusal of each unusable context.
+ * @param onAvailability - optional observer of each context's availability change.
+ * @returns the maintained aliases, whose `dispose` releases every registration.
  */
 export function registerMemberProviders(
   ctx: Context,
   configured: { readonly fresh: string; readonly fork: string },
+  onAvailability: MemberProviderAvailability = () => {},
 ): MemberProviderRegistry {
-  const errors: { fresh?: string; fork?: string } = {}
-  const sponsored: Array<() => void> = []
-  const unavailable = 'this deployment composes no subagent service, so a Team member cannot be created through '
-    + 'this plugin\'s identity alias.'
-  const subagents = ctx.get('subagents')
-  if (subagents === undefined) {
-    // The Settings page and the preset tools still belong to such a
-    // deployment; only member creation has no channel, so it is refused with a
-    // reason instead of taking the whole plugin down.
-    return {
-      fresh: MEMBER_FRESH_PROVIDER,
-      fork: MEMBER_FORK_PROVIDER,
-      freshError: unavailable,
-      forkError: unavailable,
-      dispose: () => {},
+  const states: Record<SpawnContext, AliasState> = {
+    fresh: { alias: MEMBER_FRESH_PROVIDER, upstreamName: configured.fresh, upstream: undefined, release: undefined, failure: undefined, reported: false },
+    fork: { alias: MEMBER_FORK_PROVIDER, upstreamName: configured.fork, upstream: undefined, release: undefined, failure: undefined, reported: false },
+  }
+  let disposed = false
+  // Reentrancy guard. Registering or releasing an alias is itself a provider
+  // registry event, so every public path that reaches the registry can be
+  // entered again from inside it; the outermost call owns the whole sweep.
+  let reconciling = false
+
+  /**
+   * Look up an upstream provider without letting a broken registry take the
+   * plugin down: the Settings page and the preset tools belong to such a
+   * deployment; only member creation has no channel.
+   * @param name - the configured upstream provider name.
+   * @returns the provider, or the refusal kind and reason instead.
+   */
+  const lookup = (name: string): { provider: SubagentProvider } | LookupFailure => {
+    const subagents = ctx.get('subagents')
+    if (subagents === undefined) {
+      return {
+        state: 'missing',
+        reason: 'this deployment composes no subagent service, so a Team member cannot be created through '
+          + 'this plugin\'s identity alias.',
+      }
+    }
+    try {
+      const provider = subagents.getProvider(name)
+      return provider === undefined
+        ? { state: 'missing', reason: `this deployment registers no subagent provider named "${name}".` }
+        : { provider }
+    } catch (error: unknown) {
+      return { state: 'registration', reason: `the subagent providers could not be read: ${String(error)}` }
     }
   }
-  try {
-    for (const [context, alias, name] of [
-      ['fresh', MEMBER_FRESH_PROVIDER, configured.fresh],
-      ['fork', MEMBER_FORK_PROVIDER, configured.fork],
-    ] as const) {
-      if (name.trim() === '') {
-        errors[context] = `the ${context} subagent provider is not configured, so a ${context} member cannot be `
-          + 'created without losing the identity that proves it is preset-managed.'
-        continue
-      }
-      if (isPresetMemberProvider(name)) {
-        errors[context] = `the ${context} subagent provider "${name}" is this plugin's own member alias; point the `
-          + 'plugin at the deployment provider it should delegate to.'
-        continue
-      }
-      const upstream = subagents.getProvider(name)
-      if (upstream === undefined) {
-        errors[context] = `this deployment registers no subagent provider named "${name}", so a ${context} member `
-          + 'cannot be created through this plugin\'s identity alias.'
-        continue
-      }
-      if (upstream.prepareContinuable === undefined) {
-        errors[context] = `subagent provider "${name}" cannot create continuable children, so it cannot back a `
-          + `${context} Team member.`
-        continue
-      }
-      try {
-        sponsored.push(subagents.registerProvider(aliasProvider(alias, upstream)))
-      } catch (error: unknown) {
-        errors[context] = `the ${context} member execution alias "${alias}" could not be registered: ${String(error)}`
-      }
+
+  /**
+   * Release one context's live alias, if it has one.
+   *
+   * The upstream is cleared BEFORE the registration is released, so the
+   * `subagent/provider-removed` this release emits cannot be mistaken for the
+   * deployment withdrawing the provider, and cannot re-enter this sweep.
+   * @param state - the context whose alias is released.
+   */
+  const detach = (state: AliasState): void => {
+    const release = state.release
+    state.release = undefined
+    state.upstream = undefined
+    if (release !== undefined) release()
+  }
+
+  /**
+   * Report one context's availability, once per actual change.
+   * @param state - the context whose registration was updated.
+   * @param context - the spawn context, for the availability report.
+   */
+  const report = (state: AliasState, context: SpawnContext): void => {
+    const failure = state.failure
+    if (failure === undefined) {
+      // A usable alias is never reported as a recovery: the transient state a
+      // provider plugin passes through while loading is not an incident.
+      state.reported = false
+      return
     }
-  } catch (error: unknown) {
-    // A provider lookup that itself throws leaves no alias usable.
-    for (const dispose of sponsored.reverse()) dispose()
-    return {
-      fresh: MEMBER_FRESH_PROVIDER,
-      fork: MEMBER_FORK_PROVIDER,
-      freshError: `the member execution aliases could not be registered: ${String(error)}`,
-      forkError: `the member execution aliases could not be registered: ${String(error)}`,
-      dispose: () => {},
+    if (state.reported) return
+    state.reported = true
+    onAvailability(context, failure.state, failure.reason)
+  }
+
+  /**
+   * Record why one context is unusable, releasing the alias it may still hold.
+   *
+   * A refusal with a different *kind* than the one already standing is a new
+   * fact — a provider that was merely absent and now actively cannot back a
+   * member, for instance — so it is reported even though the context was
+   * already unusable.
+   * @param state - the context to refuse.
+   * @param reason - the refusal a member creation must report.
+   * @param failureState - the category of the refusal.
+   * @param context - the spawn context, for the availability report.
+   */
+  const fail = (
+    state: AliasState,
+    reason: string,
+    failureState: MemberProviderUnavailable,
+    context: SpawnContext,
+  ): void => {
+    detach(state)
+    const previous = state.failure
+    // A repeat of the same refusal is not news; a refusal that changed kind or
+    // wording is.
+    if (previous?.state !== failureState || previous.reason !== reason) state.reported = false
+    state.failure = { state: failureState, reason }
+    report(state, context)
+  }
+
+  /**
+   * Validate one context and register, rebind, or release its alias to match.
+   *
+   * Registration happens only on a real change — no live alias, or a live alias
+   * still delegating to the same upstream object — so the events this function
+   * causes can never make it re-register what it just registered.
+   * @param context - the spawn context to reconcile.
+   */
+  const reconcile = (context: SpawnContext): void => {
+    const state = states[context]
+    if (state.upstreamName.trim() === '') {
+      fail(state, `the ${context} subagent provider is not configured, so a ${context} member cannot be created `
+        + 'without losing the identity that proves it is preset-managed.', 'unconfigured', context)
+      return
+    }
+    if (isPresetMemberProvider(state.upstreamName)) {
+      fail(state, `the ${context} subagent provider "${state.upstreamName}" is this plugin's own member alias; point `
+        + 'the plugin at the deployment provider it should delegate to.', 'alias', context)
+      return
+    }
+    const found = lookup(state.upstreamName)
+    if ('state' in found) {
+      fail(state, found.state === 'missing'
+        ? found.reason + ` A ${context} member cannot be created through this plugin's identity alias.`
+        : found.reason, found.state, context)
+      return
+    }
+    const { provider } = found
+    if (provider.prepareContinuable === undefined) {
+      fail(state, `subagent provider "${state.upstreamName}" cannot create continuable children, so it cannot back `
+        + `a ${context} Team member.`, 'unsupported', context)
+      return
+    }
+    // The upstream is live and usable, so the previous refusal no longer
+    // describes it. It is cleared only once the alias is actually registered,
+    // so a registration failure never leaves this context usable-looking.
+    if (state.upstream === provider) {
+      state.failure = undefined
+      report(state, context)
+      return
+    }
+    // A replaced provider object must never stay behind a wrapper: release the
+    // old alias first, then bind the new object.
+    detach(state)
+    try {
+      const release = ctx.get('subagents')?.registerProvider(aliasProvider(state.alias, provider))
+      if (release === undefined) {
+        fail(state, `the ${context} member execution alias "${state.alias}" could not be registered: the subagent `
+          + 'service was released while it was being registered.', 'registration', context)
+        return
+      }
+      state.upstream = provider
+      state.release = release
+    } catch (error: unknown) {
+      fail(state, `the ${context} member execution alias "${state.alias}" could not be registered: ${String(error)}`,
+        'registration', context)
+      return
+    }
+    state.failure = undefined
+    report(state, context)
+  }
+
+  /**
+   * Re-validate both contexts. Never runs inside another sweep: the events a
+   * registration or release emits re-enter here, and the outer sweep already
+   * covers them.
+   */
+  const sweep = (): void => {
+    if (disposed || reconciling) return
+    reconciling = true
+    try {
+      // `fresh` first: a forked member must never be the reason a fresh member
+      // is unavailable, and neither context's failure is allowed to abort the
+      // other's registration.
+      for (const context of CONTEXTS) reconcile(context)
+    } finally {
+      reconciling = false
     }
   }
+
+  /**
+   * Follow the provider registry for as long as this activation lives.
+   *
+   * Only providers this plugin does not own are interesting: its own aliases
+   * arrive here too, and following them would be a self-loop. The listeners are
+   * registered before the initial scan so a registration that lands in between
+   * is not missed.
+   * @param name - the provider name the event names, for `provider-added` and `provider-removed` alike.
+   */
+  const follow = (name: string): void => {
+    if (disposed || isPresetMemberProvider(name)) return
+    sweep()
+  }
+  const disposers: Array<() => unknown> = []
+  disposers.push(ctx.on('subagent/provider-added', (provider: SubagentProvider) => { follow(provider.name) }))
+  disposers.push(ctx.on('subagent/provider-removed', (name: string) => { follow(name) }))
+  // One initial scan covers a deployment whose providers were already
+  // registered when this activation mounted.
+  sweep()
+
   return {
-    fresh: MEMBER_FRESH_PROVIDER,
-    fork: MEMBER_FORK_PROVIDER,
-    ...errors.fresh === undefined ? {} : { freshError: errors.fresh },
-    ...errors.fork === undefined ? {} : { forkError: errors.fork },
-    dispose: () => { for (const dispose of sponsored.reverse()) dispose() },
+    get fresh(): string { return states.fresh.alias },
+    get fork(): string { return states.fork.alias },
+    get freshError(): string | undefined { return states.fresh.failure?.reason },
+    get forkError(): string | undefined { return states.fork.failure?.reason },
+    dispose: (): void => {
+      if (disposed) return
+      disposed = true
+      // Stop following first: releasing the aliases emits provider-removed, and
+      // an unloaded activation must never resurrect an alias. The listeners are
+      // taken back off in reverse registration order.
+      for (const off of disposers.splice(0).reverse()) void off()
+      for (const context of CONTEXTS) {
+        const state = states[context]
+        detach(state)
+        state.failure = undefined
+      }
+    },
   }
 }

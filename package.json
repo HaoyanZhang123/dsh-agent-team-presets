@@ -1,7 +1,7 @@
 {
   "name": "dsh-agent-team-presets",
   "description": "Reusable Agent Team presets for DeepSeek Harness: a captain plus members with their own prompt, model, reasoning effort, and tools.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "keywords": [
     "agent-presets",
     "agent-teams",
@@ -68,6 +68,9 @@
     "bundle": "node tools/build.mjs"
   },
   "license": "MIT",
+  "engines": {
+    "dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.4 <5.0.0",
     "@deepseek-ai/dsh-agent": ">=0.2.0-rc.1 <0.3.0",

@@ -6,7 +6,7 @@
 
 [English](<README.md>) | 中文
 
-> **社区插件 v0.1.4** · [发布版本](https://github.com/bloodarea/dsh-agent-team-presets/releases/tag/v0.1.4)
+> **社区插件 v0.1.5** · [发布版本](https://github.com/bloodarea/dsh-agent-team-presets/releases/tag/v0.1.5)
 >
 > 需要启用 Agent Teams 的兼容 DeepSeek Harness 部署。本版本使用 rc.2 API，详见[环境要求](#requirements)。仓库已包含预构建产物，安装时无需从源码构建。
 
@@ -67,7 +67,7 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力。在�
 <a id="screenshots"></a>
 ## 界面预览
 
-以下截图展示会话输入区的团队控件和设置流程。团队与提供商名称仅作示例，实际模型和工具取决于你的部署。部分截图来自较早的界面版本，控件和辅助文案可能与 v0.1.4 不同；当前权限行为以下文说明为准。
+以下截图展示会话输入区的团队控件和设置流程。团队与提供商名称仅作示例，实际模型和工具取决于你的部署。部分截图来自较早的界面版本，控件和辅助文案可能与 v0.1.5 不同；当前权限行为以下文说明为准。
 
 **在会话输入区选择团队**
 
@@ -114,7 +114,7 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力。在�
 - **具备 Settings 与所需客户端服务的 Web 或 Desktop profile。** 安装到实际使用的 profile：Web GUI 通常为 `web`，Desktop 通常为 `desktop`。
 - **成员执行所需的持久存储与支持恢复执行的子智能体后端。** 缺少 storage domain 或所选执行后端时，插件会拒绝创建成员。默认后端名为 `spawn` 和 `fork`，自定义部署须提供兼容后端。
 
-插件版本（如 `0.1.4`）和 Harness 版本（如 `0.2.0-rc.2`）是不同的版本线。
+插件版本（如 `0.1.5`）和 Harness 版本（如 `0.2.0-rc.2`）是不同的版本线。
 
 <a id="use-this-package"></a>
 ## 安装与升级
@@ -124,13 +124,13 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力。在�
 不必使用命令行：打开 **全局面板 → 插件 → 添加插件**，把下面这一行粘贴到「包名或地址」，点 **安装**。
 
 ```text
-dsh-agent-team-presets@0.1.4
+dsh-agent-team-presets@0.1.5
 ```
 
 <!-- release-version: 与 package.json 的 version 同步 -->
 
 - **安装源**决定从哪个 npm 源下载。「默认安装源」指 pnpm 自身配置所指的源：若本机 `~/.npmrc` 已经指向 `registry.npmmirror.com`，默认源就是国内镜像，列表里不会再出现单独的「中国大陆镜像源」项。要绕开镜像选「npm 官方源」；要换第三个源（内网私有源，或腾讯云 `https://mirrors.cloud.tencent.com/npm/`、华为云 `https://repo.huaweicloud.com/repository/npm/` 这类镜像）选「自定义地址」。
-- `@0.1.4` 指定版本；想装 npm 上当前的最新版，去掉它只填 `dsh-agent-team-presets`。
+- `@0.1.5` 指定版本；想装 npm 上当前的最新版，去掉它只填 `dsh-agent-team-presets`。
 - 输入框与 `dsh plugin add` 接受同一套规格：`包名`、`包名@版本`、`github:作者/仓库`、压缩包地址或绝对路径。安装前会对包做一次查询，版本不存在、或包没有声明 `dsh.bundle`，都会在安装前被拒。
 - 本包声明了自己的 `dsh.bundle`，安装后由插件管理器登记为 profile 的 bundle 层，不要再手写 loader 条目。
 - 已安装本包时无法再用输入框安装：插件管理器按包名判定，会提示「该插件已安装」。要更换安装来源（例如把 `github:…#v0.1.4` 换成 npm 形式），先在插件列表里卸载，再执行上面的粘贴安装。
@@ -337,7 +337,7 @@ Configuration for "agent-team-presets" is overridden by a home patch or command-
 - 团队定义和会话选择存储在 profile 设置中，而不是会话事件日志中的结构化选择历史。渲染后的提示词可能包含团队名称，但不能据此迁移选择；fork 或迁移到其他部署时，仍须明确选择团队并具备相应设置。
 - 已创建成员保留创建时的 persona、描述、路由和工具策略，通过 `send_message` 恢复时也不变。预设更新用于未来实例；可向已有成员发消息调整当前任务。
 - 设置协调会移除旧版队长路由字段，因为队长使用会话模型。迁移旧 profile 前应备份配置。
-- v0.1.4 将 schema 运行时代码内联，修复早期构建缺少 `zod` 导致的启动导入失败；不修复无关的 Harness 安装、编码、锁或第三方插件故障。
+- 将 schema 运行时代码内联，修复早期构建缺少 `zod` 导致的启动导入失败；不修复无关的 Harness 安装、编码、锁或第三方插件故障。
 
 <a id="understand-the-implementation"></a>
 ## 工作原理
