@@ -23,7 +23,7 @@ export interface TeamListViewProps {
   readonly onCreate: () => void
   readonly onDuplicate: (teamId: string) => void
   readonly onDelete: (teamId: string) => void
-  /** Puts the three presets this plugin ships back at their shipped content. */
+  /** Puts every preset this plugin ships back at its shipped content. */
   readonly onRestoreDefaults: () => void
   /** Receives the document the user chose to import. */
   readonly onImport: (file: File) => void

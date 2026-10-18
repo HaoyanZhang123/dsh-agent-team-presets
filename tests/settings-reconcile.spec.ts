@@ -6,7 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
-  BUILTIN_TEAMS, FULLSTACK_TEAM_ID, LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, builtinTeamDefinition,
+  AUDIT_TEAM_ID, BUILTIN_TEAMS, DISCOVERY_TEAM_ID, ENGINEERING_TEAM_ID, PLANNING_TEAM_ID, RESEARCH_TEAM_ID,
+  WORKFLOW_TEAM_ID, builtinTeamDefinition,
 } from '../src/builtin-teams.ts'
 import type { Config } from '../src/config.ts'
 import type { TeamPreset } from '../src/types.ts'
@@ -14,7 +15,7 @@ import { teamSettingsReconcile } from '../src/settings-reconcile.ts'
 import { routedCaptain, slot, team } from './fixtures/team-presets.ts'
 
 /** Every shipped identity, in shipped order. */
-const IDS = [LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID]
+const IDS = [DISCOVERY_TEAM_ID, PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID]
 
 /**
  * One deployment that was already offered the shipped defaults.
@@ -158,7 +159,7 @@ describe('minimal settings reconcile', () => {
 })
 
 describe('shipped defaults in the startup reconcile', () => {
-  it('installs the three presets on a deployment that was never offered them', async () => {
+  it('installs every shipped preset on a deployment that was never offered them', async () => {
     const h = fixture([], [])
     await h.reconcile.request()
     expect(h.update).toHaveBeenCalledOnce()
@@ -181,13 +182,17 @@ describe('shipped defaults in the startup reconcile', () => {
 
   it('marks the presets a deployment already holds instead of duplicating them', async () => {
     const stored = builtinTeamDefinition(BUILTIN_TEAMS[0]!)
-    const h = fixture([stored], [STANDARD_TEAM_ID, FULLSTACK_TEAM_ID])
+    const h = fixture([stored], [
+      PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID,
+    ])
     await h.reconcile.request()
     expect(h.update).toHaveBeenCalledOnce()
     expect(h.current()).toEqual([stored])
     // The marker keeps the order it was offered in, with the newly marked
     // preset appended: it is an append-only record, never a reordering.
-    expect(h.currentMarker()).toEqual([STANDARD_TEAM_ID, FULLSTACK_TEAM_ID, LIGHTWEIGHT_TEAM_ID])
+    expect(h.currentMarker()).toEqual([
+      PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID, DISCOVERY_TEAM_ID,
+    ])
     await h.reconcile.request()
     expect(h.update).toHaveBeenCalledOnce()
   })
