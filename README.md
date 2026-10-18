@@ -234,6 +234,21 @@ A fresh installation seeds six editable Teams, one per kind of work:
 
 Their prompts are in Chinese. The same portable documents are available in [contrib/default-presets](<contrib/default-presets>) for manual import.
 
+### Bundled skills
+
+Two role prompts in the shipped Teams name a house method instead of restating it, and
+this plugin ships both methods as skills: `github-repository-presentation` (README
+template, cover, real badge links, Description, Topics, and Release layout) and
+`git-release-hygiene` (Commit, PR, Changelog, version, Tag, and Release delivery).
+Both come from the package's own `assets/skills` and are registered on the
+deployment's skill registry when it composes one, so they arrive and leave with the
+plugin rather than being copied into a user directory.
+
+Skill registration is optional: a deployment that composes no skill service still
+loads every Team, and the role prompts stay correct without the named skill. Skill
+precedence still belongs to the deployment — a project or user skill of the same name
+outranks the bundled copy, exactly as it does for the skills the Harness ships.
+
 Defaults are offered once per profile configuration: deleted presets stay deleted across restarts and upgrades, and edited presets are not overwritten. **Restore defaults** restores the shipped fields while preserving routes and tool policies on matched roles, and leaves user-created Teams alone. It also restores each built-in Team's shipped roster, removing roles you added to that Team; duplicate a customized Team first if you want to keep it. Restored presets are staged until you press **Save**. A deleted preset added back has no previous local route or tool policy to preserve.
 
 ### When saved changes take effect
@@ -399,6 +414,7 @@ Do not publish credentials, private endpoints, full Session logs, or proprietary
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — the Host and its plugin system.
 - [Built-in preset documents](<contrib/default-presets>) — portable copies of the work-mode Teams, for your own use or overrides.
+- [Bundled skill documents](<assets/skills>) — the two methods the shipped role prompts name, as plain `SKILL.md` bundles.
 - [GitHub Releases](https://github.com/bloodarea/dsh-agent-team-presets/releases) — published versions.
 
 <a id="license"></a>

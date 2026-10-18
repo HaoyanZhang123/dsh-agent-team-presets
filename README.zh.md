@@ -234,6 +234,19 @@ dsh plugin --profile <profile> add dsh-agent-team-presets
 
 这些预设的提示词使用中文。同样的可分享文档保存在 [contrib/default-presets](<contrib/default-presets>)，可手动导入。
 
+### 随包技能
+
+随插件提供的团队里，有两个角色提示词点名引用一套既定方法而不复述全文，本插件把
+这两套方法作为技能随包提供：`github-repository-presentation`（README 模板、封面、
+真实徽章链接、Description、Topics 与 Release 排版）和 `git-release-hygiene`
+（Commit、PR、Changelog、版本、Tag 与 Release 的实际交付）。两者都来自包内
+`assets/skills`，在部署组合了技能服务时注册到该服务，因此随插件安装与卸载，不需要
+写入用户目录。
+
+技能注册是可选的：未组合技能服务的部署照常加载全部团队，角色提示词在缺少该技能时
+仍然成立。技能优先级仍由部署决定——同名项目技能或用户技能优先于随包副本，与
+Harness 自带技能遵循同一规则。
+
 默认预设在每份 profile 配置中只提供一次：删除后不会因重启或升级自动恢复，修改后的预设也不会被覆盖。**恢复默认预设** 会恢复随插件提供的字段，保留匹配角色的路由与工具策略，不影响用户自建团队。同时会恢复各内置团队原有的成员名单，移除你向该团队追加的角色；如需保留自定义版本，应先复制团队。恢复结果先进入草稿，点击 **保存** 后生效。重新加入的已删除预设没有旧的本地路由或工具策略可供保留。
 
 ### 保存后何时生效
@@ -399,6 +412,7 @@ npm run bundle
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) —— 宿主与插件系统。
 - [内置预设文档](<contrib/default-presets>) —— 六支工作模式团队的可分享副本，可自行导入或改写。
+- [随包技能文档](<assets/skills>) —— 角色提示词点名的两套方法，以纯 `SKILL.md` 目录提供。
 - [GitHub Releases](https://github.com/bloodarea/dsh-agent-team-presets/releases) —— 已发布版本。
 
 <a id="license"></a>

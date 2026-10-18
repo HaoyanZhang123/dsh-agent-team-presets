@@ -14,6 +14,7 @@
     "src/application.ts",
     "src/execution.ts",
     "src/index.ts",
+    "src/skills.ts",
     "src/tool-catalog.ts"
   ],
   "references": [
