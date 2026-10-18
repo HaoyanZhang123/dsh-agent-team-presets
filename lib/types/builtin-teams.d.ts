@@ -1,14 +1,15 @@
 /**
  * The Team presets this plugin ships as its own defaults.
  *
- * A deployment that installs this plugin gets three ready Teams before its user
- * has read anything about Team presets: a lightweight one for a small module, a
- * standard one for a medium feature or a refactor, and a full-stack one for work
- * that spans web, desktop, and Android. They are ordinary stored Teams in every
- * other respect — editable, duplicable, selectable, and deletable — so the
- * shipped set is a starting point rather than a fixed policy. The one thing that
- * makes them special is that this plugin knows their exact content, which is
- * what lets Settings put them back.
+ * A deployment that installs this plugin gets six ready Teams before its user
+ * has read anything about Team presets: one per kind of work the user is about
+ * to start — discovery, architecture, an established workflow, engineering, an
+ * independent audit, and research — each summoning its specialists only when
+ * the task earns them. They are ordinary stored Teams in every other respect —
+ * editable, duplicable, selectable, and deletable — so the shipped set is a
+ * starting point rather than a fixed policy. The one thing that makes them
+ * special is that this plugin knows their exact content, which is what lets
+ * Settings put them back.
  *
  * Two rules keep that knowledge from becoming a trap:
  *
@@ -23,18 +24,24 @@
  *   for discarding one, exactly as the import path already treats it.
  *
  * The documents below are the shipped source of truth. `contrib/default-presets`
- * holds the same three documents as JSON for readers of this repository, and
+ * holds the same six documents as JSON for readers of this repository, and
  * `tests/builtin-teams.spec.ts` proves the two cannot drift.
  * @module dsh-agent-team-presets/builtin-teams
  */
 import type { TeamPresetTransfer } from './preset-transfer.ts';
 import type { TeamPreset } from './types.ts';
-/** Identity the lightweight Team is stored under. */
-export declare const LIGHTWEIGHT_TEAM_ID = "builtin-lightweight";
-/** Identity the standard Team is stored under. */
-export declare const STANDARD_TEAM_ID = "builtin-standard";
-/** Identity the full-stack Team is stored under. */
-export declare const FULLSTACK_TEAM_ID = "builtin-fullstack";
+/** Identity the discovery Team is stored under. */
+export declare const DISCOVERY_TEAM_ID = "builtin-discovery";
+/** Identity the planning Team is stored under. */
+export declare const PLANNING_TEAM_ID = "builtin-planning";
+/** Identity the workflow Team is stored under. */
+export declare const WORKFLOW_TEAM_ID = "builtin-workflow";
+/** Identity the engineering Team is stored under. */
+export declare const ENGINEERING_TEAM_ID = "builtin-engineering";
+/** Identity the audit Team is stored under. */
+export declare const AUDIT_TEAM_ID = "builtin-audit";
+/** Identity the research Team is stored under. */
+export declare const RESEARCH_TEAM_ID = "builtin-research";
 /** One shipped Team: the identity it is stored under and the document it restores from. */
 export interface BuiltinTeam {
     /** Stable identity every stored copy of this preset keeps. */
@@ -42,7 +49,7 @@ export interface BuiltinTeam {
     /** Shareable content the preset is installed and restored from. */
     readonly document: TeamPresetTransfer;
 }
-/** Every shipped preset, lightest first, in the order a fresh deployment lists them. */
+/** Every shipped preset, in the order a fresh deployment lists them. */
 export declare const BUILTIN_TEAMS: readonly BuiltinTeam[];
 /** Every shipped identity, in shipped order. */
 export declare const BUILTIN_TEAM_IDS: readonly string[];
