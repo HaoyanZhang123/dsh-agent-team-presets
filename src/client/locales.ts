@@ -63,6 +63,8 @@ export type TeamPresetsLocaleKey =
   | 'skillsReset'
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
   | 'skillsAssignTitle' | 'skillsAssignHint' | 'skillsAssignEmpty'
+  | 'skillsBlockedAssign'
+  | 'skillsMcpUnverified'
   | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
   | 'categoryRename'
   | 'categoryUp'
@@ -321,6 +323,8 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsNewTitle: 'New team skill',
   skillsVersion: 'version',
   skillsAssignTitle: 'Team Skill assignment',
+  skillsBlockedAssign: 'Assignment is refused until these required dependencies exist',
+  skillsMcpUnverified: 'These required MCP servers are declared; whether they are connected is decided by the host, not this page',
   skillsDeclared: 'declared',
   categoryManage: 'Manage categories',
   categoryRename: 'Rename',
@@ -554,6 +558,8 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsNewTitle: '新建 Team Skill',
   skillsVersion: '版本',
   skillsAssignTitle: 'Team Skill 分配',
+  skillsBlockedAssign: '缺少必需依赖，分配会被拒绝',
+  skillsMcpUnverified: '以下 MCP 服务为必需项且已声明；是否已连接由宿主决定，本页无法判断',
   skillsDeclared: '已声明',
   categoryManage: '管理分类',
   categoryRename: '重命名',

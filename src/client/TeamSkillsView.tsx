@@ -25,7 +25,7 @@ export type TeamSkillsLocaleKey =
   | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind'
   | 'skillsDeps' | 'skillsNoDeps' | 'skillsDelete' | 'skillsDeleteTitle' | 'skillsDeleteBody'
   | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle'
-  | 'skillsVersion' | 'skillsOverrideOn' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
+  | 'skillsVersion' | 'skillsOverrideOn' | 'skillsBlockedAssign' | 'skillsMcpUnverified' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
 
 /** Props of {@link TeamSkillsView}. */
 export interface TeamSkillsViewProps {
@@ -123,6 +123,18 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
               {detail.asset.updateAvailable === true ? <span className={`${css.tag} ${css.tagWarn}`}>{t('skillsOverrideOn')}</span> : null}
             </div>
 
+            {(() => {
+              const missing = (detail.dependencies?.executables ?? []).filter(row => !row.found)
+              const unverified = detail.asset.mcpServers
+              if (missing.length === 0 && unverified.length === 0) return null
+              return (
+                <div className={css.info} style={missing.length > 0 ? { borderColor: '#f0cbd0', background: '#fff5f6' } : undefined}>
+                  {missing.length > 0
+                    ? <span>{t('skillsBlockedAssign')}：{missing.map(row => row.name).join(', ')}</span>
+                    : <span>{t('skillsMcpUnverified')}：{unverified.join(', ')}</span>}
+                </div>
+              )
+            })()}
             <div className={css.sectionTitle}>{t('skillsResources')}</div>
             <div className={css.fileArea}>
               <div className={css.fileTree}>

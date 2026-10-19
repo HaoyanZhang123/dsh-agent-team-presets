@@ -98,3 +98,38 @@ describe('dependency reporting', () => {
     ])
   })
 })
+
+describe('assignment blockers', () => {
+  it('refuses a skill whose declared executable is absent and keeps optional gaps as hints', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'team-skill-blockers-'))
+    roots.push(root)
+    const store = new TeamSkillStore(root)
+    await store.open()
+    const built = buildSkillPackage([{ path: 'SKILL.md', bytes: TEXT('---\nname: blocked-skill\ndescription: d\n---\n') }])
+    if (!built.ok) throw new Error('fixture')
+    await store.install(built.skill, {
+      id: 'custom:blocked-skill', origin: 'custom', version: '1',
+      dependencies: {
+        mcpServers: [
+          { serverName: 'required-mcp', required: true },
+          { serverName: 'optional-mcp', required: false },
+        ],
+        executables: ['definitely-not-a-real-binary-xyz'],
+        otherSkills: [],
+      },
+    })
+    const manager = new TeamSkillManager(store, root, {
+      teams: () => [], activeAssetIds: () => new Set(), activeSessions: () => [],
+    })
+    await manager.open()
+    const blockers = await manager.assignmentBlockers('custom:blocked-skill')
+    expect(blockers.blocking).toEqual(['the executable "definitely-not-a-real-binary-xyz" is not on PATH'])
+    // A required MCP server is reported, never silently treated as missing.
+    expect(blockers.unverified).toEqual(['required-mcp'])
+    const refused = await manager.assign({ teamId: 't', roleId: 'dev', assetId: 'custom:blocked-skill' })
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.reason).toContain('dependency-missing')
+    expect(manager.assetsFor('t', 'dev')).toEqual([])
+  })
+})

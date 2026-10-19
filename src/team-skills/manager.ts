@@ -51,6 +51,7 @@ export interface TeamSkillGuardContext {
 
 /** Why one assignment was refused. */
 export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-role' | 'asset-missing'
+  | `dependency-missing: ${string}`
 
 /** Result of one assignment attempt. */
 export type TeamSkillAssignResult =
@@ -124,6 +125,10 @@ export class TeamSkillManager {
    */
   async assign(input: { teamId: string; roleId: string; assetId: string; captain?: boolean }): Promise<TeamSkillAssignResult> {
     if (this.store.get(input.assetId) === undefined) return { ok: false, reason: 'unknown-asset' }
+    // A skill whose declared executable is missing cannot run, so binding it
+    // would only move the failure into a running task.
+    const blockers = await this.assignmentBlockers(input.assetId)
+    if (blockers.blocking.length > 0) return { ok: false, reason: `dependency-missing: ${blockers.blocking.join('; ')}` }
     const binding: TeamSkillBinding = {
       teamId: input.teamId,
       roleId: input.roleId,
@@ -298,6 +303,29 @@ export class TeamSkillManager {
       executables.push({ name, found })
     }
     return { executables, mcpServers: [...asset.dependencies.mcpServers.map(server => server.serverName)] }
+  }
+
+  /**
+   * The verifiable reasons this asset cannot be assigned yet.
+   *
+   * Only what this layer can actually check blocks: a declared executable that is
+   * absent from PATH. A required MCP server is reported separately as
+   * unverifiable, because whether one is connected is a composition-level fact —
+   * blocking on it here would be a guess dressed as a diagnosis.
+   * @param assetId - asset identity.
+   * @returns blocking reasons and the required MCP servers this layer cannot see.
+   */
+  async assignmentBlockers(assetId: string): Promise<{ blocking: string[]; unverified: string[] }> {
+    const asset = this.store.get(assetId)
+    if (asset === undefined) return { blocking: [`No Team Skill with id "${assetId}" is installed.`], unverified: [] }
+    const report = await this.dependencyReport(assetId)
+    const blocking = report.executables
+      .filter(row => !row.found)
+      .map(row => `the executable "${row.name}" is not on PATH`)
+    const unverified = (asset.dependencies.mcpServers ?? [])
+      .filter(server => server.required)
+      .map(server => server.serverName)
+    return { blocking, unverified }
   }
 
   /**

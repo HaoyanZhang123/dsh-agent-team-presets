@@ -32,7 +32,7 @@ export interface TeamSkillGuardContext {
     readonly activeSessions: (assetId: string) => readonly string[];
 }
 /** Why one assignment was refused. */
-export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-role' | 'asset-missing';
+export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-role' | 'asset-missing' | `dependency-missing: ${string}`;
 /** Result of one assignment attempt. */
 export type TeamSkillAssignResult = {
     readonly ok: true;
@@ -143,6 +143,20 @@ export declare class TeamSkillManager {
             found: boolean;
         }[];
         mcpServers: string[];
+    }>;
+    /**
+     * The verifiable reasons this asset cannot be assigned yet.
+     *
+     * Only what this layer can actually check blocks: a declared executable that is
+     * absent from PATH. A required MCP server is reported separately as
+     * unverifiable, because whether one is connected is a composition-level fact —
+     * blocking on it here would be a guess dressed as a diagnosis.
+     * @param assetId - asset identity.
+     * @returns blocking reasons and the required MCP servers this layer cannot see.
+     */
+    assignmentBlockers(assetId: string): Promise<{
+        blocking: string[];
+        unverified: string[];
     }>;
     /**
      * Whether an asset is currently referenced by any role.
