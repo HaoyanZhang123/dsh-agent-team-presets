@@ -18,7 +18,7 @@ import css from './TeamSkillsView.module.css'
 // very same classes rather than a lookalike set that can drift.
 import chips from './TeamPresetsSection.module.css'
 import type { TeamSkillsController, TeamSkillsState } from './team-skills-controller.ts'
-import type { TeamSkillAssetView, TeamSkillScanEntry } from '../types.ts'
+import type { TeamSkillAssetView, TeamSkillDeleteView, TeamSkillScanEntry } from '../types.ts'
 
 /** Locale keys this panel reads. */
 export type TeamSkillsLocaleKey =
@@ -29,6 +29,7 @@ export type TeamSkillsLocaleKey =
   | 'skillsEmpty' | 'skillsResources' | 'skillsSaveFile' | 'skillsEditable' | 'skillsReadonly'
   | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind'
   | 'skillsDeps' | 'skillsNoDeps' | 'skillsDelete' | 'skillsDeleteTitle' | 'skillsDeleteBody'
+  | 'skillsDeleteBlocked' | 'skillsDeleteBoundWarning' | 'skillsDeleteBuiltinWarning'
   | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle'
   | 'skillsVersion' | 'skillsOverrideOn' | 'skillsBlockedAssign' | 'skillsMcpUnverified'
   | 'skillsNameClash' | 'skillsNameClashBody' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
@@ -107,6 +108,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteOutcome, setDeleteOutcome] = useState<TeamSkillDeleteView | undefined>(undefined)
 
   useEffect(() => {
     const unsubscribe = controller.subscribe(() => { setState(controller.getSnapshot()) })
@@ -153,7 +155,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
   if (page.kind === 'detail') {
     return (
       <div className={css.page}>
-        <button type="button" className={css.crumb} onClick={() => { setPage({ kind: 'list' }); setConfirmDelete(false) }}>
+        <button type="button" className={css.crumb} onClick={() => { setPage({ kind: 'list' }); setConfirmDelete(false); setDeleteOutcome(undefined) }}>
           ‹ {t('skillsTitle')}
         </button>
         {detail === undefined || selected === undefined ? <div className={css.empty}>{t('skillsEmpty')}</div> : (
@@ -180,7 +182,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
               const unverified = detail.asset.mcpServers
               if (missing.length === 0 && unverified.length === 0) return null
               return (
-                <div className={css.info} style={missing.length > 0 ? { borderColor: '#f0cbd0', background: '#fff5f6' } : undefined}>
+                <div className={`${css.info} ${missing.length > 0 ? css.infoError : ''}`}>
                   {missing.length > 0
                     ? <span>{t('skillsBlockedAssign')}：{missing.map(row => row.name).join(', ')}</span>
                     : <span>{t('skillsMcpUnverified')}：{unverified.join(', ')}</span>}
@@ -226,7 +228,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
               <Button onClick={() => { void navigator.clipboard?.writeText(`${state.library?.root ?? ''}/assets/${detail.asset.id}`) }}>
                 {t('skillsOpenAssetFolder')}
               </Button>
-              <Button onClick={() => { setConfirmDelete(true) }}>{t('skillsDelete')}</Button>
+              <Button onClick={() => { setConfirmDelete(true); setDeleteOutcome(undefined) }}>{t('skillsDelete')}</Button>
             </div>
 
             <div className={css.panel}>
@@ -268,17 +270,74 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
             )}
 
             {confirmDelete ? (
-              <div className={css.dialogBackdrop} onClick={() => { setConfirmDelete(false) }}>
-                <div className={css.dialog} role="dialog" aria-modal="true" onClick={(event) => { event.stopPropagation() }}>
+              <div
+                className={css.dialogBackdrop}
+                onClick={() => {
+                  setConfirmDelete(false)
+                  setDeleteOutcome(undefined)
+                }}
+              >
+                <div
+                  className={css.dialog}
+                  role="dialog"
+                  aria-modal="true"
+                  onClick={(event) => { event.stopPropagation() }}
+                >
                   <h2>{t('skillsDeleteTitle')}</h2>
                   <p className={css.muted}>{t('skillsDeleteBody')}</p>
+
+                  {detail.asset.origin === 'builtin' ? (
+                    <div className={`${css.info} ${css.infoError}`} style={{ margin: '12px 0 0' }}>
+                      <strong>{t('skillsDeleteBuiltinWarning')}</strong>
+                    </div>
+                  ) : null}
+
+                  {detail.asset.bindings.length > 0 ? (
+                    <div
+                      className={`${css.info} ${css.infoError}`}
+                      style={{ margin: '12px 0 0', display: 'flex', flexDirection: 'column', gap: '6px' }}
+                    >
+                      <div><strong>{t('skillsDeleteBoundWarning')}</strong></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', maxHeight: '140px', overflowY: 'auto' }}>
+                        {detail.asset.bindings.map(b => (
+                          <div key={`${b.teamId}:${b.roleId}`}>• {b.teamName} → {b.roleName}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {deleteOutcome?.ok === false && deleteOutcome.blockers.length > 0 ? (
+                    <div
+                      className={`${css.info} ${css.infoError}`}
+                      style={{ margin: '12px 0 0', display: 'flex', flexDirection: 'column', gap: '6px' }}
+                    >
+                      <div><strong>{t('skillsDeleteBlocked')}</strong></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
+                        {deleteOutcome.blockers.map((blocker, idx) => (
+                          <div key={idx}>• {blocker.detail || blocker.kind}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className={css.dialogActions}>
-                    <Button onClick={() => { setConfirmDelete(false) }}>{t('skillsCancel')}</Button>
-                    <Button onClick={() => {
-                      void controller.remove(detail.asset.id).then((outcome) => {
-                        if (outcome?.ok === true) { setConfirmDelete(false); setPage({ kind: 'list' }) }
-                      })
-                    }}>{t('skillsConfirm')}</Button>
+                    <Button onClick={() => { setConfirmDelete(false); setDeleteOutcome(undefined) }}>{t('skillsCancel')}</Button>
+                    <Button
+                      disabled={detail.asset.origin === 'builtin' || detail.asset.bindings.length > 0}
+                      onClick={() => {
+                        void controller.remove(detail.asset.id).then((outcome) => {
+                          if (outcome?.ok === true) {
+                            setConfirmDelete(false)
+                            setDeleteOutcome(undefined)
+                            setPage({ kind: 'list' })
+                          } else {
+                            setDeleteOutcome(outcome)
+                          }
+                        })
+                      }}
+                    >
+                      {t('skillsConfirm')}
+                    </Button>
                   </div>
                 </div>
               </div>

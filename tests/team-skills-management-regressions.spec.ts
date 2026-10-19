@@ -145,4 +145,35 @@ describe('Team Skill management regressions', () => {
     expect(await assignment).toMatchObject({ ok: false, reason: 'unknown-asset' })
     expect(manager.list()).toEqual([])
   })
+
+  it('restores default bindings when restoreBuiltinBindings is called after an explicit unbind', async () => {
+    const { store, manager, setTeams } = await fixture()
+    const preset = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-workflow')!)
+    setTeams([preset])
+    await install(store, 'builtin:git-release-hygiene', 'builtin')
+    await manager.reconcile()
+    const role = preset.members.find(member => member.name === 'repository-specialist')!.id!
+    expect(manager.assetsFor(preset.id, role)).toHaveLength(1)
+
+    await manager.unassign(preset.id, role)
+    expect(manager.assetsFor(preset.id, role)).toEqual([])
+
+    await manager.reconcile()
+    expect(manager.assetsFor(preset.id, role)).toEqual([])
+
+    await manager.restoreBuiltinBindings([preset.id])
+    expect(manager.assetsFor(preset.id, role)).toHaveLength(1)
+  })
+
+  it('automatically binds official skills to executor on fresh install or upgrade for engineering presets', async () => {
+    const { store, manager, setTeams } = await fixture()
+    const fullstack = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-fullstack')!)
+    setTeams([fullstack])
+    await install(store, 'builtin:git-release-hygiene', 'builtin')
+    await install(store, 'builtin:github-repository-presentation', 'builtin')
+    await manager.reconcile()
+    const executorRole = fullstack.members.find(member => member.name === 'executor')!.id!
+    const bound = manager.assetsFor(fullstack.id, executorRole).map(a => a.skillId).sort()
+    expect(bound).toEqual(['git-release-hygiene', 'github-repository-presentation'])
+  })
 })

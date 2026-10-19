@@ -161,4 +161,10 @@ export declare class TeamSkillService extends TypertRemoteService {
      * @returns the refreshed library.
      */
     unassignRole(teamId: string, roleId: string, assetId?: string): Promise<TeamSkillLibraryView>;
+    /**
+     * Restore official default skill bindings for built-in teams.
+     * @param teamIds - optional list of team identities to restore; defaults to all built-in teams.
+     * @returns the refreshed library.
+     */
+    restoreBuiltinBindings(teamIds?: string[]): Promise<TeamSkillLibraryView>;
 }

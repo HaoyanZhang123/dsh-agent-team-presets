@@ -158,7 +158,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   if (tab === 'skills' && props.skills !== undefined) {
     return (
       <div>
-        <div role="tablist" style={{ display: 'flex', gap: 6, marginBottom: 10, borderBottom: '1px solid rgba(128,128,128,.25)' }}>
+        <div role="tablist" className={css.tabs}>
           <TabButton active={false} onClick={() => { setTab('teams') }}>{t('tabTeams')}</TabButton>
           <TabButton active onClick={() => { setTab('skills') }}>{t('tabSkills')}</TabButton>
         </div>
@@ -254,7 +254,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
 
   return (
     <div className={css.section}>
-      <div role="tablist" style={{ display: 'flex', gap: 6, marginBottom: 10, borderBottom: '1px solid rgba(128,128,128,.25)' }}>
+      <div role="tablist" className={css.tabs}>
         <TabButton active={tab === 'teams'} onClick={() => { setTab('teams') }}>{t('tabTeams')}</TabButton>
         {props.skills === undefined ? null : <TabButton active={tab === 'skills'} onClick={() => { setTab('skills') }}>{t('tabSkills')}</TabButton>}
       </div>
@@ -286,7 +286,10 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             onCreate={() => { openTeam(props.createTeam()) }}
             onImport={(file) => { void importDocument(file) }}
             onExport={exportDocument}
-            onRestoreDefaults={() => { props.restoreDefaults() }}
+            onRestoreDefaults={() => {
+              props.restoreDefaults()
+              void props.skills?.restoreBuiltinBindings()
+            }}
             onDuplicate={(teamId) => {
               const index = teamList.findIndex(entry => entry.id === teamId)
               if (index < 0) return

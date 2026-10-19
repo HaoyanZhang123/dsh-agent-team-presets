@@ -23,6 +23,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     prepareImportFolder: () => Promise<RemoteResult<TeamSkillImportFolderView | TeamSkillRefusalView>>
     readFile: (assetId: string, path: string) => Promise<RemoteResult<{ ok: true; path: string; text: string; } | TeamSkillRefusalView>>
     resetSkill: (assetId: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
+    restoreBuiltinBindings: (teamIds?: string[]) => Promise<RemoteResult<TeamSkillLibraryView>>
     scanImportFolder: () => Promise<RemoteResult<TeamSkillScanView | TeamSkillRefusalView>>
     unassignRole: (teamId: string, roleId: string, assetId?: string) => Promise<RemoteResult<TeamSkillLibraryView>>
     updateDependencies: (assetId: string, dependencies: TeamSkillDependencies) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
@@ -41,6 +42,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'teamSkills/prepareImportFolder': () => Promise<RemoteResult<TeamSkillImportFolderView | TeamSkillRefusalView>>
     'teamSkills/readFile': (assetId: string, path: string) => Promise<RemoteResult<{ ok: true; path: string; text: string; } | TeamSkillRefusalView>>
     'teamSkills/resetSkill': (assetId: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
+    'teamSkills/restoreBuiltinBindings': (teamIds?: string[]) => Promise<RemoteResult<TeamSkillLibraryView>>
     'teamSkills/scanImportFolder': () => Promise<RemoteResult<TeamSkillScanView | TeamSkillRefusalView>>
     'teamSkills/unassignRole': (teamId: string, roleId: string, assetId?: string) => Promise<RemoteResult<TeamSkillLibraryView>>
     'teamSkills/updateDependencies': (assetId: string, dependencies: TeamSkillDependencies) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
@@ -65,6 +67,7 @@ export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'teamSkills/prepareImportFolder': TypertRemoteMethod<{  }, TeamSkillImportFolderView | TeamSkillRefusalView>
   readonly 'teamSkills/readFile': TypertRemoteMethod<{ readonly 'assetId': string; readonly 'path': string }, { ok: true; path: string; text: string; } | TeamSkillRefusalView>
   readonly 'teamSkills/resetSkill': TypertRemoteMethod<{ readonly 'assetId': string }, TeamSkillDetailView | TeamSkillRefusalView>
+  readonly 'teamSkills/restoreBuiltinBindings': TypertRemoteMethod<{ readonly 'teamIds'?: string[] }, TeamSkillLibraryView>
   readonly 'teamSkills/scanImportFolder': TypertRemoteMethod<{  }, TeamSkillScanView | TeamSkillRefusalView>
   readonly 'teamSkills/unassignRole': TypertRemoteMethod<{ readonly 'teamId': string; readonly 'roleId': string; readonly 'assetId'?: string }, TeamSkillLibraryView>
   readonly 'teamSkills/updateDependencies': TypertRemoteMethod<{ readonly 'assetId': string; readonly 'dependencies': TeamSkillDependencies }, TeamSkillDetailView | TeamSkillRefusalView>

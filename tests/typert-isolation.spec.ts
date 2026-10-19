@@ -222,7 +222,7 @@ describe('Typert faces load without a schema dependency', () => {
       'teamSkills/assignRole', 'teamSkills/createSkill', 'teamSkills/deleteAsset', 'teamSkills/detail',
       'teamSkills/importSkill', 'teamSkills/library', 'teamSkills/overrideSkill',
       'teamSkills/prepareImportFolder', 'teamSkills/readFile',
-      'teamSkills/resetSkill', 'teamSkills/scanImportFolder', 'teamSkills/unassignRole',
+      'teamSkills/resetSkill', 'teamSkills/restoreBuiltinBindings', 'teamSkills/scanImportFolder', 'teamSkills/unassignRole',
       'teamSkills/updateDependencies', 'teamSkills/writeFile',
     ])
     const update = host.invocations.find(row => row.id === 'dsh-agent-team-presets#teamSkills/updateDependencies')

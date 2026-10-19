@@ -166,4 +166,13 @@ describe('Team Skill override service regressions', () => {
     expect(order).toEqual(['assign', 'update'])
     expect(manager.assetsFor('team-1', 'dev').map(asset => asset.id)).toEqual([custom.id])
   })
+
+  it('restores builtin bindings through the service and triggers resync', async () => {
+    const { manager, service, resync } = await fixture()
+    const spy = vi.spyOn(manager, 'restoreBuiltinBindings')
+    const answer = await service.restoreBuiltinBindings(['builtin-fullstack'])
+    expect(spy).toHaveBeenCalledWith(['builtin-fullstack'])
+    expect(resync).toHaveBeenCalled()
+    expect(answer).toHaveProperty('assets')
+  })
 })

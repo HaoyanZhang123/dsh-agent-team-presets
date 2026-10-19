@@ -142,9 +142,9 @@ describe('the official Team catalog', () => {
     }
   })
 
-  it('declares the two shipped skills only for the two repository-owning Teams', () => {
+  it('declares the two shipped skills for software engineering and repository delivery Teams', () => {
     const owners = BUILTIN_TEAMS.filter(entry => entry.officialSkillBindings.length > 0).map(entry => entry.id)
-    expect(owners).toEqual([WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID])
+    expect(owners).toEqual([LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID])
     for (const id of owners) {
       const entry = builtinEntry(id)!
       const roleNames = new Set(entry.document.team.members.map(member => member.name))

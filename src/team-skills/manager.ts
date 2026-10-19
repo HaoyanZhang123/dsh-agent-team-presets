@@ -22,7 +22,7 @@ import { access, readFile } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { atomicWriteJson } from './store.ts'
 import { assertNoSymlinks } from './paths.ts'
-import { BUILTIN_TEAM_CATALOG } from '../team-catalog.ts'
+import { BUILTIN_TEAM_CATALOG, BUILTIN_TEAM_IDS } from '../team-catalog.ts'
 import { constants } from 'node:fs'
 import type {
   TeamSkillAsset, TeamSkillBinding, TeamSkillBindingSummary, TeamSkillDeleteBlocker,
@@ -484,6 +484,22 @@ export class TeamSkillManager {
       this.seeded = seeded
       await this.flush()
       return removed
+    })
+  }
+
+  /**
+   * Reset default skill binding seeds for the given teams (or all built-in teams)
+   * and reconcile to restore the official default bindings.
+   * @param teamIds - optional list of team identities to restore; defaults to all built-in teams.
+   */
+  async restoreBuiltinBindings(teamIds?: readonly string[]): Promise<void> {
+    return this.mutate(async () => {
+      const targets = new Set(teamIds ?? BUILTIN_TEAM_IDS)
+      this.seeded = new Set([...this.seeded].filter(key => {
+        const owner = seedOwner(key)
+        return owner === undefined || !targets.has(owner[0])
+      }))
+      await this.reconcileNow()
     })
   }
 

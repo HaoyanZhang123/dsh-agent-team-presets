@@ -44,7 +44,7 @@ export interface OfficialSkillBinding {
 
 /**
  * The two shipped skills, assigned by default only to the `repository-specialist`
- * role of the two Teams that own repository delivery work.
+ * role of the Teams that own repository delivery work.
  *
  * A user may add or remove assignments locally; those local changes are not
  * part of the preset document. This declaration is.
@@ -52,6 +52,15 @@ export interface OfficialSkillBinding {
 export const OFFICIAL_REPOSITORY_SKILLS: readonly OfficialSkillBinding[] = [
   { skillId: 'github-repository-presentation', roleName: 'repository-specialist' },
   { skillId: 'git-release-hygiene', roleName: 'repository-specialist' },
+]
+
+/**
+ * The two shipped skills, assigned by default to the `executor` role
+ * of software engineering Teams.
+ */
+export const OFFICIAL_EXECUTOR_SKILLS: readonly OfficialSkillBinding[] = [
+  { skillId: 'github-repository-presentation', roleName: 'executor' },
+  { skillId: 'git-release-hygiene', roleName: 'executor' },
 ]
 
 /** Series display order and stable identity. */
@@ -432,7 +441,7 @@ export const BUILTIN_TEAM_CATALOG: readonly BuiltinTeamCatalogEntry[] = [
           ],
           "notes": "队长与执行者两人即可覆盖大多数小任务。"
     },
-    officialSkillBindings: [],
+    officialSkillBindings: OFFICIAL_EXECUTOR_SKILLS,
   },
   {
     id: 'builtin-standard',
@@ -456,7 +465,7 @@ export const BUILTIN_TEAM_CATALOG: readonly BuiltinTeamCatalogEntry[] = [
           ],
           "notes": "包含独立审查员，适合有明确验收标准的交付。"
     },
-    officialSkillBindings: [],
+    officialSkillBindings: OFFICIAL_EXECUTOR_SKILLS,
   },
   {
     id: 'builtin-fullstack',
@@ -480,7 +489,7 @@ export const BUILTIN_TEAM_CATALOG: readonly BuiltinTeamCatalogEntry[] = [
           ],
           "notes": "顾问按需参与，避免全员并行。"
     },
-    officialSkillBindings: [],
+    officialSkillBindings: OFFICIAL_EXECUTOR_SKILLS,
   },
   {
     id: 'builtin-discovery',

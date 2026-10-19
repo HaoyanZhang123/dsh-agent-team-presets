@@ -64,7 +64,7 @@ export declare class TeamSkillsController {
     constructor(ctx: Context);
     /** Read whether this Host can reveal a folder natively; absence means copy mode. */
     private detectOpenCapability;
-    /** Reveal one Host path in the native file manager, when the Host offers it. */
+    /** Open one Host directory in the native file manager, when the Host offers it. */
     private revealFolder;
     /** Copy one absolute path, reporting whether the browser allowed it. */
     private copyPath;
@@ -171,6 +171,8 @@ export declare class TeamSkillsController {
      * @param roleId - role identity.
      */
     unassign(teamId: string, roleId: string): Promise<void>;
+    /** Restore official default skill bindings for built-in teams. */
+    restoreBuiltinBindings(teamIds?: readonly string[]): Promise<void>;
     /**
      * The generated Client face for this plugin's services.
      * @returns the mounted Remote namespace.

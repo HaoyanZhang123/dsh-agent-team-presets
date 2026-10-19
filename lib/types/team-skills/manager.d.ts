@@ -188,6 +188,12 @@ export declare class TeamSkillManager {
      */
     forgetTeam(teamId: string): Promise<number>;
     /**
+     * Reset default skill binding seeds for the given teams (or all built-in teams)
+     * and reconcile to restore the official default bindings.
+     * @param teamIds - optional list of team identities to restore; defaults to all built-in teams.
+     */
+    restoreBuiltinBindings(teamIds?: readonly string[]): Promise<void>;
+    /**
      * Persist the bindings document atomically enough for a UI write.
      * @returns after the document is on disk.
      */

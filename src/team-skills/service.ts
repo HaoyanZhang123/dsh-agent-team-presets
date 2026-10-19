@@ -455,4 +455,18 @@ export class TeamSkillService extends TypertRemoteService {
     this.config.resync()
     return this.library()
   }
+
+  /**
+   * Restore official default skill bindings for built-in teams.
+   * @param teamIds - optional list of team identities to restore; defaults to all built-in teams.
+   * @returns the refreshed library.
+   */
+  @Remote
+  async restoreBuiltinBindings(teamIds?: string[]): Promise<TeamSkillLibraryView> {
+    if (await this.settle() !== undefined) return await this.library()
+    try { await this.config.manager.restoreBuiltinBindings(teamIds) }
+    catch (error) { return { ...await this.library(), issue: String(error) } }
+    this.config.resync()
+    return this.library()
+  }
 }

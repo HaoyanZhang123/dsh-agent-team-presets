@@ -17,11 +17,11 @@ import type {
   TeamSkillLibraryView, TeamSkillRefusalView, TeamSkillScanView,
 } from '../types.ts'
 
-/** The optional Host desktop carrier this page uses to reveal the import folder. */
+/** The optional Host desktop carrier this page uses to reveal or open the import folder. */
 interface WorkspacePathRemote {
   readonly session?: {
     canOpenWorkspacePath?(): Promise<{ readonly ok: boolean; readonly value?: boolean }>
-    openWorkspacePath?(request: { readonly path: string; readonly action: 'reveal' }): Promise<{ readonly ok: boolean }>
+    openWorkspacePath?(request: { readonly path: string; readonly action?: 'reveal' }): Promise<{ readonly ok: boolean }>
   }
 }
 
@@ -142,11 +142,11 @@ export class TeamSkillsController {
     }
   }
 
-  /** Reveal one Host path in the native file manager, when the Host offers it. */
+  /** Open one Host directory in the native file manager, when the Host offers it. */
   private async revealFolder(path: string): Promise<boolean> {
     try {
       const session = ((this.ctx.remote as unknown) as WorkspacePathRemote).session
-      const answer = await session?.openWorkspacePath?.({ path, action: 'reveal' })
+      const answer = await session?.openWorkspacePath?.({ path })
       return answer?.ok === true
     } catch {
       return false
@@ -458,6 +458,16 @@ export class TeamSkillsController {
     })
   }
 
+  /** Restore official default skill bindings for built-in teams. */
+  async restoreBuiltinBindings(teamIds?: readonly string[]): Promise<void> {
+    await this.run(async () => {
+      const library = unwrap(await this.api().restoreBuiltinBindings(teamIds ? [...teamIds] : undefined))
+      this.publish({ library })
+      if (this.state.selectedId !== undefined) await this.select(this.state.selectedId)
+      return 'restored-bindings'
+    })
+  }
+
   /**
    * The generated Client face for this plugin's services.
    * @returns the mounted Remote namespace.
@@ -477,7 +487,7 @@ export class TeamSkillsController {
       const message = await work()
       // A success is shown by the refreshed panel itself; only a refusal needs
       // words, so a machine key never reaches the user as raw text.
-      const succeeded = /^(saved|created|imported|deleted|assigned|unassigned|scanned|override-)/u.test(message)
+      const succeeded = /^(saved|created|imported|deleted|assigned|unassigned|scanned|override-|restored-bindings)/u.test(message)
       this.publish({ busy: false, message: succeeded ? undefined : message, failed: !succeeded })
     } catch (error: unknown) {
       this.publish({ busy: false, message: String(error), failed: true })
