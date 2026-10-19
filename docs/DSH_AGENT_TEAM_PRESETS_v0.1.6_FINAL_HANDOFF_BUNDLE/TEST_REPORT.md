@@ -202,3 +202,16 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 工具的可见性已由 `tests/team-skills-tool-registration.spec.ts` 在真实装配面上证明。
 
 结论：Web 开发侧除上述 6 条环境阻塞与需凭据的模型实调外，全部 PASS；每次结论都有 3081 真机或单测证据。
+
+## 14. 原型保真度修正（新 goal，round 1）
+
+对照 `NATIVE_UI_PROTOTYPE_REVISED_V2.html` 逐页比对后修正：
+
+| 位置 | 问题 | 修正 | 证据 |
+|---|---|---|---|
+| 技能库/详情 | `css.active` 从未定义（样式表只有嵌套的 `.segment button.active`，CSS Module 不为嵌套选择器导出键），选中文件与按下分段无任何高亮 | 新增顶层 `.active` | 实测 chip `rgb(233,237,243)/550`、文件 `rgb(231,237,246)/550` |
+| 技能库标题行 | 动作在信息块下方，且按钮无边框（`Button` 默认文字变体） | 动作移到标题行右侧，改 `variant="outline"`；导入改用 `htmlFor`+id | 实测三个按钮 `border:1px rgba(0,0,0,.12)`、`padding:0 14px` |
+| 技能详情 | 缺「打开所属文件夹」 | 增加「复制该技能目录路径」 | 详情动作：创建本地可编辑副本 / 复制该技能目录路径 / 删除 |
+| 团队列表 | 0.1.5 的独立卡片堆叠，非原型的单容器行列表 | 改为 `rowlist`：1px 边框、17px 圆角、行间 1px 分隔、行最小高 64px、hover 底色；「管理分类」并入 chips 行 | 实测容器 `radius:17px border:1px`、10 行、行高 81px（含两行内容与行内动作） |
+
+截图已刷新：`docs/shots/skills-library.png`、`skill-git-release-hygiene.png`、`member-skill-grid.png`、`teams-list.png`。

@@ -134,6 +134,11 @@ export function TeamListView(props: TeamListViewProps) {
         <button type="button" className={`${css.chip} ${source === 'all' && series === 'all' ? css.chipActive : ''}`} onClick={() => { setSource('all'); setSeries('all') }}>{t('listAll')}</button>
         <button type="button" className={`${css.chip} ${source === 'builtin' ? css.chipActive : ''}`} onClick={() => { setSource('builtin'); setSeries('all') }}>{t('listBuiltin')}</button>
         <button type="button" className={`${css.chip} ${source === 'custom' ? css.chipActive : ''}`} onClick={() => { setSource('custom'); setSeries('all') }}>{t('listCustom')}</button>
+        {props.onAddCategory === undefined ? null : (
+          <button type="button" className={css.chip} onClick={() => { setManaging(value => !value) }}>
+            {managing ? t('categoryFold') : t('categoryManage')}
+          </button>
+        )}
         {(props.categories ?? []).map(entry => (
           <button
             key={entry.id}
@@ -151,13 +156,7 @@ export function TeamListView(props: TeamListViewProps) {
           >{entry.id === 'classic-development' ? t('seriesDevelopment') : t('seriesWorkModes')}</button>
         ))}
       </div>
-      {props.onAddCategory === undefined ? null : (
-        <div className={css.chipRow} style={{ marginBottom: 6 }}>
-          <button type="button" className={css.chip} onClick={() => { setManaging(value => !value) }}>
-            {managing ? t('categoryFold') : t('categoryManage')}
-          </button>
-        </div>
-      )}
+
       {managing ? (
         <div className={css.categoryPanel}>
           <input
