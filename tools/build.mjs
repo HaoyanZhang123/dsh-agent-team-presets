@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Build local sources in an isolated staging workspace. Never emit into Harness. */
 import { createRequire, isBuiltin } from 'node:module'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, cpSync, readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve, relative, sep } from 'node:path'
@@ -24,35 +25,85 @@ const schemaDependency = {
 }
 const { WorkspaceTypertGenerator } = await import(pathToFileURL(join(harness, 'packages/typert/generator/lib/index.js')).href)
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const stage = mkdtempSync(join(tmpdir(), 'team-presets-build-'))
+// The Typert analyzer only accepts a package whose merged protocol interfaces
+// have every declaring package inside its workspace root. A standalone staging
+// directory therefore cannot satisfy 0.2.1's `TypertResourceMap` merge, so the
+// workspace is mirrored instead: the checkout is hardlinked (same filesystem) or
+// copied, and this package is written into it at the monorepo-shaped path. No
+// existing checkout file is ever modified, because every file this script
+// patches is first re-created as a private copy, which breaks the hard link.
+const stageRoot = dirname(harness) === tmpdir() ? tmpdir() : dirname(harness)
+const stage = mkdtempSync(join(stageRoot, 'team-presets-build-'))
 console.log(`Isolated build workspace: ${stage}`)
-const pkg = join(stage, 'packages/local/team-presets')
-const protocol = join(stage, 'packages/support/protocol')
+const pkg = join(stage, 'packages/experimental/agent-team-presets')
+const mirror = ['packages', 'vendor', 'node_modules']
+for (const entry of mirror) {
+  if (!existsSync(join(harness, entry))) continue
+  try {
+    // `cp -a -l` links when the filesystems allow it, so the mirror costs
+    // inodes rather than gigabytes; anything it refuses falls back to a copy.
+    execFileSync('cp', ['-a', '-l', join(harness, entry), join(stage, entry)], { stdio: 'ignore' })
+  } catch {
+    cpSync(join(harness, entry), join(stage, entry), { recursive: true })
+  }
+}
+for (const name of ['package.json', 'tsconfig.base.json', 'tsconfig.base.client.json']) {
+  if (existsSync(join(harness, name))) cpSync(join(harness, name), join(stage, name))
+}
+/**
+ * Copy one file so the destination is a private inode, never a hard link.
+ * @param from - absolute source path.
+ * @param to - absolute destination path.
+ */
+function privateCopy(from, to) {
+  const text = readFileSync(from, 'utf8')
+  rmSync(to, { force: true })
+  writeFileSync(to, text)
+}
+/** The aggregate faces the analyzer reads: one reference per project, plugins included. */
+for (const face of ['host', 'client']) {
+  const source = join(harness, `tsconfig.${face}.json`)
+  if (!existsSync(source)) continue
+  const target = join(stage, `tsconfig.${face}.json`)
+  privateCopy(source, target)
+  const text = readFileSync(target, 'utf8')
+  // A DIRECTORY reference would resolve to the package's solution tsconfig,
+  // which declares no files, and the analyzer would then look for the entry
+  // sources in a program that never contained them. Naming the face project
+  // file directly is what makes the sources part of the analysis.
+  const reference = `{ "path": "./packages/experimental/agent-team-presets/tsconfig.${face}.json" }`
+  if (!text.includes('agent-team-presets')) writeFileSync(target, text.replace('"references": [', `"references": [\n    ${reference},`))
+}
 mkdirSync(pkg, { recursive: true })
-mkdirSync(protocol, { recursive: true })
 const generatedFiles = ['lib/typert.host.js', 'lib/typert.host.d.ts', 'lib/typert.remote-client.js', 'lib/typert.remote-client.d.ts']
 try {
   cpSync(join(root, 'src'), join(pkg, 'src'), { recursive: true })
-  mkdirSync(join(pkg, 'lib'))
-  // Bootstrap only the previous declaration required by Client aliases; the
-  // generator replaces it before compilation. Never carry stale build outputs.
+  mkdirSync(join(pkg, 'lib'), { recursive: true })
   cpSync(join(root, 'lib/typert.remote-client.d.ts'), join(pkg, 'lib/typert.remote-client.d.ts'))
-  cpSync(join(harness, 'packages/typert/protocol/src'), join(protocol, 'src'), { recursive: true })
-  cpSync(join(harness, 'packages/typert/protocol/package.json'), join(protocol, 'package.json'))
-  writeFileSync(join(pkg, 'package.json'), JSON.stringify({ ...manifest, files: [...new Set([...manifest.files, ...generatedFiles])] }))
+  // Only the exports that resolve to real sources are staged: a host-face pass
+  // cannot resolve `./client` (it is `src/client/index.ts`, not `src/client.ts`),
+  // and the Client artifact is generated from the same Host contract anyway.
+  const stagedManifest = {
+    ...manifest,
+    exports: {
+      '.': manifest.exports['.'],
+      './types': manifest.exports['./types'],
+      './typert': manifest.exports['./typert'],
+      './remote': manifest.exports['./remote'],
+      './package.json': manifest.exports['./package.json'],
+    },
+    files: [...new Set([...manifest.files, ...generatedFiles])],
+  }
+  writeFileSync(join(pkg, 'package.json'), JSON.stringify(stagedManifest))
+  writeFileSync(join(pkg, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './tsconfig.host.json' }, { path: './tsconfig.client.json' }] }))
   const base = ts.readConfigFile(join(harness, 'tsconfig.base.json'), ts.sys.readFile)
   if (base.error) throw new Error(ts.flattenDiagnosticMessageText(base.error.messageText, '\n'))
-  const paths = Object.fromEntries(Object.entries(base.config.compilerOptions.paths).map(([key, values]) => [key, values.map(value => resolve(harness, value))]))
+  const paths = Object.fromEntries(Object.entries(base.config.compilerOptions.paths).map(([key, values]) => [key, values.map(value => resolve(stage, value))]))
   const reactTypes = dirname(scopedRequire.resolve('@types/react/package.json'))
   Object.assign(paths, {
-    '@deepseek-ai/dsh-typert-protocol': [join(protocol, 'src/index.ts')],
-    '@deepseek-ai/dsh-typert-protocol/types': [join(protocol, 'src/types.ts')],
-    '@deepseek-ai/dsh-experimental-client-ui-agent-team/client': [join(harness, 'packages/experimental/client-ui-agent-team/src/client/index.ts')],
+    '@deepseek-ai/dsh-experimental-client-ui-agent-team/client': [join(stage, 'packages/experimental/client-ui-agent-team/src/client/index.ts')],
     'dsh-agent-team-presets/remote': [join(pkg, 'lib/typert.remote-client.d.ts')],
     react: [join(reactTypes, 'index.d.ts')], 'react/*': [join(reactTypes, '*.d.ts')],
-    // Host sources validate the durable member domain with zod. The staging
-    // workspace has no node_modules, so the build-time resolution the bundler
-    // already uses is stated here too instead of relying on ambient types.
     zod: [join(zodDir, 'index.d.ts')],
   })
   const options = { ...base.config.compilerOptions, paths, composite: false, incremental: false, noEmit: false, sourceMap: false, declarationMap: false,
@@ -64,11 +115,9 @@ try {
     faceFiles[face] = [...new Set([...config.files, ...(face === 'host' ? ['src/tool-policy.ts'] : [])])]
     writeFileSync(join(pkg, `tsconfig.${face}.json`), JSON.stringify({ compilerOptions: options, files: faceFiles[face] }))
   }
-  writeFileSync(join(protocol, 'tsconfig.json'), JSON.stringify({ compilerOptions: options, files: ['src/index.ts'] }))
-  writeFileSync(join(stage, 'tsconfig.host.json'), JSON.stringify({ compilerOptions: options, files: [], references: [{ path: join(pkg, 'tsconfig.host.json') }, { path: join(protocol, 'tsconfig.json') }] }))
   const artifacts = new WorkspaceTypertGenerator(stage, { checkDiagnostics: false }).generate([manifest.name], ['host'])
   const host = artifacts.find(row => row.face === 'host' && row.package === manifest.name)
-  if (!host?.remote || !/mode:\s*['"]stream['"]/.test(host.remote.js) || !/method:\s*['"]catalog['"]/.test(host.remote.js)) throw new Error(`Generator did not produce expected contracts: ${JSON.stringify(artifacts.map(row => ({ package: row.package, face: row.face, remote: row.remote?.js })))}`)
+  if (!host?.remote || !/mode:\s*['"]stream['"]/.test(host.remote.js) || !/teamPresets\/catalog|['"]catalog['"]/.test(host.remote.js) || !/teamPresets\/execution|['"]execution['"]/.test(host.remote.js)) throw new Error(`Generator did not produce expected contracts: ${JSON.stringify(artifacts.map(row => ({ package: row.package, face: row.face, remote: row.remote?.js })))}`)
   for (const [name, text] of [['typert.host.js', host.js], ['typert.host.d.ts', host.dts], ['typert.remote-client.js', host.remote.js], ['typert.remote-client.d.ts', host.remote.dts]]) writeFileSync(join(pkg, 'lib', name), text)
   for (const face of ['host', 'client']) {
     const parsed = ts.parseJsonConfigFileContent({ compilerOptions: options, files: faceFiles[face] }, ts.sys, pkg)
@@ -106,7 +155,9 @@ try {
     await build({ ...common, entry: { [entry]: join(pkg, 'lib', entry + '.js') }, format: 'esm', platform: 'neutral', deps: { neverBundle: id => isBuiltin(id), alwaysBundle: id => !isBuiltin(id) }, plugins: [schemaDependency] })
   }
   writeFileSync(join(pkg, 'lib/THIRD-PARTY-NOTICES.txt'), `Bundled dependency: zod\n\n${readFileSync(join(zodDir, 'LICENSE'), 'utf8')}`)
-  const external = new Set(['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'])
+  // 0.2.1's generated remote factory imports the protocol's runtime helper, so
+  // that subpath is external too: it ships with the Host's own protocol package.
+  const external = new Set(['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-typert-protocol/remote-info'])
   const clientPlugin = {
     name: 'team-presets-client-surface',
     resolveId(id, importer) {
@@ -152,6 +203,7 @@ try {
 } finally {
   // Verify the exact mkdtemp root before deleting only our isolated workspace.
   const checked = realpathSync(stage)
-  if (checked !== stage || !checked.startsWith(join(realpathSync(tmpdir()), 'team-presets-build-'))) throw new Error('Refused unsafe staging cleanup')
-  rmSync(checked, { recursive: true, force: true })
+  if (checked !== stage || !/team-presets-build-/.test(checked)) throw new Error('Refused unsafe staging cleanup')
+  if (process.env.DSH_BUILD_KEEP !== '1') rmSync(checked, { recursive: true, force: true })
+  else console.log(`Kept build workspace at ${checked}`)
 }

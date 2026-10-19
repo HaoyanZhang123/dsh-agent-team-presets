@@ -2,27 +2,60 @@
  * Fixed JSON transfer format for one Team preset.
  *
  * A shared document carries the parts of a Team that keep working after the
- * document moves to another deployment: the Team's own name and purpose, and
- * each agent's name, description, standing system prompt, and accent color.
- * Model routes and tool permissions stay local, because a route names a
- * provider this deployment may not run and an allow-list names tools it may not
- * expose. A document that carries them is refused rather than silently reduced,
- * so a reader never believes it imported something it did not.
+ * document moves to another deployment: the Team's own name and purpose, each
+ * agent's name, description, standing system prompt, and accent color, the
+ * display-only discovery metadata, and — for an official template — the
+ * shipped skill ids it assigns to its role slots. Model routes and tool
+ * permissions stay local, because a route names a provider this deployment may
+ * not run and an allow-list names tools it may not expose. A document that
+ * carries them is refused rather than silently reduced, so a reader never
+ * believes it imported something it did not.
  *
- * The format is deliberately not the stored record: the Host document keeps
- * `toolMode`, `tools`, `provider`, `model`, and `reasoningEffort` beside the
- * shared fields, and an import writes only the fields a document carries.
+ * Version 2 adds `metadata` and `officialSkills` to version 1 without changing
+ * any version 1 meaning. The writer emits version 2; the reader accepts both,
+ * so a document written before this release still imports. A version 1 reader
+ * meeting a version 2 document refuses it as `unsupported-version` instead of
+ * guessing — that is why the version is bumped rather than the fields being
+ * silently added to version 1.
+ *
+ * Personal Team Skill assets, member bindings, category membership, and local
+ * paths are never part of this document.
  * @module dsh-agent-team-presets/preset-transfer
  */
-import type { TeamAgentPreset, TeamCaptainPreset, TeamPreset, TeamSlotPreset } from './types.ts';
+import type { TeamAgentPreset, TeamCaptainPreset, TeamDisplayMetadata, TeamPreset, TeamSlotPreset } from './types.ts';
 /** Format marker every shareable Team document carries. */
 export declare const TEAM_PRESET_FORMAT = "dsh-agent-team-preset";
-/** Format revision this plugin writes and the only one it reads. */
-export declare const TEAM_PRESET_FORMAT_VERSION = 1;
+/** Format revision this plugin writes. */
+export declare const TEAM_PRESET_FORMAT_VERSION = 2;
+/** The older revision this plugin still reads. */
+export declare const TEAM_PRESET_FORMAT_VERSION_V1 = 1;
 /** Members one shared document may declare. */
 export declare const MAX_TRANSFER_MEMBERS = 64;
 /** Characters one shared document may hold, so one paste cannot exhaust the page. */
 export declare const MAX_TRANSFER_CHARS: number;
+/** Upper bounds of the display metadata fields. */
+export declare const METADATA_LIMITS: {
+    /** Characters in `summary`. */
+    readonly summary: 500;
+    /** Characters in one tag. */
+    readonly tag: 64;
+    /** Tags in `tags`. */
+    readonly tags: 30;
+    /** Characters in one use case. */
+    readonly useCase: 200;
+    /** Entries in `useCases`. */
+    readonly useCases: 20;
+    /** Characters in one quick prompt. */
+    readonly quickPrompt: 500;
+    /** Entries in `quickPrompts`. */
+    readonly quickPrompts: 20;
+    /** Characters in `notes`. */
+    readonly notes: 2000;
+    /** Characters across the whole metadata object, JSON-encoded. */
+    readonly total: number;
+    /** Official skill declarations one document may carry. */
+    readonly officialSkills: 16;
+};
 /** The shareable fields of one captain or member slot. */
 export type TeamSlotTransfer = {
     /** Display name; a member's name also derives the teammate target. */
@@ -33,6 +66,13 @@ export type TeamSlotTransfer = {
     readonly systemPrompt: string;
     /** Accent color as `#rrggbb`; empty keeps the theme default. */
     readonly color: string;
+};
+/** One official default Team Skill declaration carried by an official template. */
+export type OfficialSkillTransfer = {
+    /** Shipped skill id; resolvable on another deployment of this plugin version. */
+    readonly skillId: string;
+    /** Role name inside the document, matched case-insensitively on import. */
+    readonly roleName: string;
 };
 /** One Team as a shareable document. */
 export type TeamPresetTransfer = {
@@ -46,14 +86,21 @@ export type TeamPresetTransfer = {
         readonly name: string;
         /** What this Team is for. */
         readonly description: string;
+        /** Display-only discovery metadata, absent in version 1 documents. */
+        readonly metadata?: TeamDisplayMetadata;
         /** The captain's shareable role. */
         readonly captain: TeamSlotTransfer;
         /** Every member's shareable role, in declared order. */
         readonly members: readonly TeamSlotTransfer[];
+        /**
+         * Official default skill assignments declared by the shipped template.
+         * Never carries skill bodies, local bindings, or paths.
+         */
+        readonly officialSkills?: readonly OfficialSkillTransfer[];
     };
 };
 /** Why one document was refused. */
-export type TeamPresetImportFailure = 'invalid-json' | 'invalid-format' | 'unsupported-version' | 'unsupported-fields' | 'duplicate-members' | 'too-many-members' | 'too-large';
+export type TeamPresetImportFailure = 'invalid-json' | 'invalid-format' | 'unsupported-version' | 'unsupported-fields' | 'duplicate-members' | 'too-many-members' | 'too-large' | 'invalid-metadata';
 /** Result of reading one shared document. */
 export type TeamPresetImportResult = {
     readonly ok: true;
@@ -62,6 +109,12 @@ export type TeamPresetImportResult = {
     readonly ok: false;
     readonly reason: TeamPresetImportFailure;
 };
+/**
+ * Count the characters one metadata object adds to a document.
+ * @param metadata - the metadata to measure.
+ * @returns its JSON-encoded length.
+ */
+export declare function metadataChars(metadata: TeamDisplayMetadata): number;
 /**
  * Read one already-parsed document.
  * @param value - candidate document.
@@ -91,18 +144,28 @@ export declare function slotNameKey(name: string): string;
  * @returns the preferred name, or that name with the first free numeric suffix.
  */
 export declare function uniqueName(base: string, taken: Iterable<string>): string;
+/** Options accepted when exporting one Team. */
+export interface TeamPresetExportOptions {
+    /**
+     * Official default skill declarations of the shipped template this Team came
+     * from. Local assignments are never accepted here.
+     */
+    readonly officialSkills?: readonly OfficialSkillTransfer[];
+}
 /**
  * Project one Team onto the document that shares it.
  * @param team - the Team preset to share.
+ * @param options - official template declarations, when exporting a builtin Team.
  * @returns the shareable document.
  */
-export declare function exportTeamPreset(team: TeamPreset): TeamPresetTransfer;
+export declare function exportTeamPreset(team: TeamPreset, options?: TeamPresetExportOptions): TeamPresetTransfer;
 /**
  * Serialize one Team as the fixed document this plugin imports.
  * @param team - the Team preset to share.
+ * @param options - official template declarations, when exporting a builtin Team.
  * @returns the document text, newline-terminated.
  */
-export declare function serializeTeamPreset(team: TeamPreset): string;
+export declare function serializeTeamPreset(team: TeamPreset, options?: TeamPresetExportOptions): string;
 /**
  * Build one captain from a shared slot.
  * @param slot - the shared captain.

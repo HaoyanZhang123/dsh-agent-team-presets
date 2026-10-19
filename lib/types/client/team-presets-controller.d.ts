@@ -6,7 +6,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-remotes/client';
 import { type SnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type { TeamPresetImportFailure, TeamPresetTransfer } from '../preset-transfer.ts';
-import type { TeamAgentPreset, TeamCaptainPreset, TeamExecutionRow, TeamExecutionState, TeamPreset, ToolChoice } from '../types.ts';
+import type { TeamAgentPreset, TeamCaptainPreset, TeamCategory, TeamCategoryAssignment, TeamExecutionRow, TeamExecutionState, TeamPreset, ToolChoice } from '../types.ts';
 /**
  * Loader entry id of the Host row that owns the Team preset namespace. Spelled
  * here rather than imported: a client package must not depend on a Host package.
@@ -83,6 +83,34 @@ export interface TeamPresetsState {
     readonly tools: readonly ToolChoice[];
     /** Whether the tool catalogue is still loading or failed. */
     readonly toolCatalogue: 'idle' | 'loading' | 'ready' | 'error';
+    /**
+     * The reader's own Team categories, in display order.
+     *
+     * Local view data only: never part of a Team preset, never exported with one,
+     * and never read by the runtime. Deleting one removes the grouping, never a
+     * Team, which is why the page can offer it without a preset-level warning.
+     */
+    readonly categories: readonly TeamCategory[];
+    /**
+     * The live `teamId → categoryId` memberships.
+     *
+     * A membership whose Team or category no longer resolves is dropped from this
+     * projection rather than shown as a broken group, and the next category write
+     * persists the pruned list.
+     */
+    readonly teamCategories: readonly TeamCategoryAssignment[];
+    /** Whether a category write is crossing the wire, so the dialog can settle. */
+    readonly categorySaving: boolean;
+    /** The last category write this client could not complete, until the next attempt. */
+    readonly categoryFailure: CategoryWriteFailure | undefined;
+    /**
+     * The Session whose Team write this client is waiting on.
+     *
+     * The page promises when a selection takes effect, so the control shows that
+     * it is still waiting instead of claiming the new Team before the Host has
+     * reported the write.
+     */
+    readonly selectionPending: SelectionTarget | undefined;
 }
 /**
  * Why the stored section is not editable, as this client can observe it.
@@ -103,6 +131,26 @@ export interface TeamSelectionFailure {
     readonly sessionId: string;
     /** The Team the user tried to apply, or undefined for "no Team". */
     readonly teamId: string | undefined;
+    /** The Host's own refusal text, or the transport failure, when one exists. */
+    readonly detail: string | undefined;
+}
+/** The Session whose Team selection this client is waiting on. */
+export interface SelectionTarget {
+    /** Session identity. */
+    readonly sessionId: string;
+    /** The Team being applied, or undefined when the selection is being cleared. */
+    readonly teamId: string | undefined;
+}
+/**
+ * One category write this client could not complete.
+ *
+ * Categories are local view data written on their own, so a failure here must
+ * be reported on the dialog that caused it rather than in the page's save
+ * status: the Team draft was not involved and is still exactly as it was.
+ */
+export interface CategoryWriteFailure {
+    /** `unavailable`: nothing to write to. `refused`: the Host rejected the write. `failed`: the write did not complete. */
+    readonly kind: 'unavailable' | 'refused' | 'failed';
     /** The Host's own refusal text, or the transport failure, when one exists. */
     readonly detail: string | undefined;
 }
@@ -264,6 +312,12 @@ export declare class TeamPresetsController {
     private defaultsRestore;
     /** The last selection write this client could not complete, until the user acts again. */
     private selectionFailure;
+    /** The Session whose Team write this client is waiting on, while it is in flight. */
+    private selectionPending;
+    /** Whether a category write this client started is still crossing the wire. */
+    private categorySaving;
+    /** The last category write this client could not complete, until the next attempt. */
+    private categoryFailure;
     /** Whether a write this page started is still crossing the wire. */
     private saving;
     /** Stream health of the Host execution state, and the frames it delivered. */
@@ -313,7 +367,7 @@ export declare class TeamPresetsController {
      * where the form may hold a section the mirror has not published yet: once the
      * mirror HAS answered, a namespace it does not list is not served, and the
      * form's older value must not be shown as if it were stored.
-     * @returns the stored Teams and selections, or undefined while nothing is known.
+     * @returns the stored Teams, selections, and local view fields, or undefined while nothing is known.
      */
     private storedSection;
     /**

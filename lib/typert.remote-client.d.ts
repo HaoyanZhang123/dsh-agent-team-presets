@@ -2,7 +2,8 @@
 import type {
   RemoteResult,
   RemoteStreamHandle,
-  TypertRemoteContribution,
+  TypertRemoteInfo,
+  TypertRemoteMethod,
 } from '@deepseek-ai/dsh-typert-protocol'
 import type { TeamExecutionSnapshot, ToolCatalogValue } from 'dsh-agent-team-presets/types'
 
@@ -20,6 +21,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
-export declare const TYPERT_REMOTE: TypertRemoteContribution
+export declare const TYPERT_REMOTE: TypertRemoteInfo<{
+  readonly 'teamPresets/catalog': TypertRemoteMethod<{  }, ToolCatalogValue>
+  readonly 'teamPresets/execution': TypertRemoteMethod<{  }, TeamExecutionSnapshot, 'stream'>
+}>
 export default TYPERT_REMOTE
 //# sourceMappingURL=typert.remote-client.d.ts.map

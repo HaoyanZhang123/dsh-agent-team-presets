@@ -7,7 +7,8 @@
  *
  * - the legacy captain route, which no current schema declares,
  * - a member identity a stored record never carried,
- * - the shipped default presets, installed once per deployment.
+ * - the shipped default presets, installed once per deployment,
+ * - a local category membership whose category or custom Team is gone.
  *
  * The pass never touches Session policy, and it writes only when a repair
  * really applies. Read-only and conflict errors are not retried for the same

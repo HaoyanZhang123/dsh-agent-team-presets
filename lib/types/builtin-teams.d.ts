@@ -1,35 +1,36 @@
 /**
- * The Team presets this plugin ships as its own defaults.
+ * The official Team presets this plugin ships, as installable and restorable
+ * definitions.
  *
- * A deployment that installs this plugin gets six ready Teams before its user
- * has read anything about Team presets: one per kind of work the user is about
- * to start — discovery, architecture, an established workflow, engineering, an
- * independent audit, and research — each summoning its specialists only when
- * the task earns them. They are ordinary stored Teams in every other respect —
- * editable, duplicable, selectable, and deletable — so the shipped set is a
- * starting point rather than a fixed policy. The one thing that makes them
- * special is that this plugin knows their exact content, which is what lets
- * Settings put them back.
- *
- * Two rules keep that knowledge from becoming a trap:
+ * The catalog in `team-catalog.ts` is the source of truth; this module turns one
+ * catalog entry into the stored record a deployment holds, installs the
+ * official set exactly once, and restores it on request. Two rules keep that
+ * knowledge from becoming a trap:
  *
  * - Installing a shipped preset never overwrites a stored one. Seeding appends a
  *   preset the deployment does not hold and records its identity in
  *   `seededDefaults`, so a shipped preset the user deletes or edits stays
  *   exactly as they left it across restarts. Restoring it is a deliberate act.
  * - Restoring a shipped preset replaces the fields a shared document carries —
- *   the name, the purpose, every standing prompt, the accent colors, and the
- *   roster — and keeps the fields it does not: a member's model route and every
- *   slot's tool policy. A document that never carried a route cannot be evidence
- *   for discarding one, exactly as the import path already treats it.
+ *   the name, the purpose, every standing prompt, the accent colors, the
+ *   roster, and the display metadata — and keeps the fields it does not: a
+ *   member's model route and every slot's tool policy.
  *
- * The documents below are the shipped source of truth. `contrib/default-presets`
- * holds the same six documents as JSON for readers of this repository, and
- * `tests/builtin-teams.spec.ts` proves the two cannot drift.
+ * `contrib/default-presets` holds the same nine documents as JSON for readers of
+ * this repository, and `tests/builtin-teams.spec.ts` proves the two cannot
+ * drift.
  * @module dsh-agent-team-presets/builtin-teams
  */
 import type { TeamPresetTransfer } from './preset-transfer.ts';
-import type { TeamPreset } from './types.ts';
+import type { OfficialSkillBinding } from './team-catalog.ts';
+import type { TeamDisplayMetadata, TeamPreset, TeamSeries } from './types.ts';
+export { BUILTIN_TEAM_IDS } from './team-catalog.ts';
+/** Identity the lightweight Team is stored under. */
+export declare const LIGHTWEIGHT_TEAM_ID = "builtin-lightweight";
+/** Identity the standard Team is stored under. */
+export declare const STANDARD_TEAM_ID = "builtin-standard";
+/** Identity the full-stack Team is stored under. */
+export declare const FULLSTACK_TEAM_ID = "builtin-fullstack";
 /** Identity the discovery Team is stored under. */
 export declare const DISCOVERY_TEAM_ID = "builtin-discovery";
 /** Identity the planning Team is stored under. */
@@ -46,22 +47,47 @@ export declare const RESEARCH_TEAM_ID = "builtin-research";
 export interface BuiltinTeam {
     /** Stable identity every stored copy of this preset keeps. */
     readonly id: string;
+    /** Fixed official series this Team belongs to. */
+    readonly series: TeamSeries;
     /** Shareable content the preset is installed and restored from. */
     readonly document: TeamPresetTransfer;
+    /** Presentation-only discovery metadata. */
+    readonly metadata: TeamDisplayMetadata;
+    /** Official default Team Skill assignments for this template. */
+    readonly officialSkillBindings: readonly OfficialSkillBinding[];
 }
-/** Every shipped preset, in the order a fresh deployment lists them. */
+/** Every shipped preset, in install order: the three development Teams, then the six work modes. */
 export declare const BUILTIN_TEAMS: readonly BuiltinTeam[];
-/** Every shipped identity, in shipped order. */
-export declare const BUILTIN_TEAM_IDS: readonly string[];
+/**
+ * Stable role identity of one shipped member.
+ *
+ * A member's `id` is the identity a durable member snapshot binds to and the one
+ * the runtime re-reads a route through, so a shipped member is stored under a
+ * derived identity rather than a random one: restoring the preset a second time
+ * addresses the same role instead of creating a second one.
+ * @param teamId - identity of the shipped Team that owns the member.
+ * @param name - the member's name in the document.
+ * @param index - the member's position, used only when the document names none.
+ * @returns the role identity a shipped member is stored under.
+ */
+export declare function memberRoleId(teamId: string, name: string, index: number): string;
 /**
  * Build the preset one shipped document describes.
  *
  * Everything the document does not carry starts empty, exactly as an import
  * starts: the route follows the Session and the tool policy stays unrestricted.
+ * The display metadata rides along because it belongs to the template, not to
+ * any runtime field.
  * @param entry - the shipped Team to materialize.
  * @returns a fresh preset carrying the document's content.
  */
 export declare function builtinTeamDefinition(entry: BuiltinTeam): TeamPreset;
+/**
+ * Copy one metadata object so a stored Team never shares the catalog's arrays.
+ * @param metadata - the catalog metadata.
+ * @returns a detached copy.
+ */
+export declare function cloneMetadata(metadata: TeamDisplayMetadata): TeamDisplayMetadata;
 /** What one seeding pass did to the stored Team list. */
 export interface BuiltinSeedResult {
     /** The Team list, with every shipped preset the deployment did not hold appended. */
@@ -87,6 +113,13 @@ export interface BuiltinSeedResult {
  * @returns the next Team list, the next marker, and whether either changed.
  */
 export declare function seedBuiltinTeams(teams: readonly TeamPreset[], seeded: readonly string[]): BuiltinSeedResult;
+/**
+ * Whether two metadata objects are equal field by field.
+ * @param a - left metadata, or undefined.
+ * @param b - right metadata, or undefined.
+ * @returns whether both describe the same display data.
+ */
+export declare function sameMetadata(a: TeamDisplayMetadata | undefined, b: TeamDisplayMetadata | undefined): boolean;
 /** What one restore did to the Team list. */
 export interface BuiltinRestoreResult {
     /** The Team list, with every shipped preset at its document's content. */
