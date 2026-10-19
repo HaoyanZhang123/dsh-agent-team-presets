@@ -49,6 +49,13 @@ type Page = { kind: 'list' } | { kind: 'detail'; assetId: string }
  * @param asset - the row.
  * @returns a short label.
  */
+/** The colour class that pairs with one origin, shared with the member cards. */
+function originTone(styles: Record<string, string | undefined>, origin: string): string {
+  if (origin === 'builtin') return styles.originBuiltin ?? ''
+  if (origin === 'override') return styles.originOverride ?? ''
+  return styles.originCustom ?? ''
+}
+
 function originLabel(asset: TeamSkillAssetView, t: (key: TeamSkillsLocaleKey) => string): string {
   if (asset.origin === 'builtin') return t('originBuiltin')
   if (asset.origin === 'override') return t('originOverride')
@@ -121,7 +128,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
             <h2 className={css.title}>{detail.asset.skillId}</h2>
             <p className={css.sub}>{detail.asset.description}</p>
             <div className={css.pills}>
-              <span className={`${css.tag} ${detail.asset.origin === 'builtin' ? css.tagOrigin : ''}`}>
+              <span className={`${chips.originTag} ${originTone(chips, detail.asset.origin)}`}>
                 {originLabel(detail.asset, t)} · {detail.asset.editable ? t('skillsEditable') : t('skillsReadonly')}
               </span>
               <span className={css.tag}>{t('skillsVersion')} {detail.asset.version}</span>
@@ -296,7 +303,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
             <span className={css.main}>
               <span className={css.rowTitle}>
                 {asset.skillId}
-                <span className={`${css.tag} ${asset.origin === 'builtin' ? css.tagOrigin : ''}`}>{originLabel(asset, t)}</span>
+                <span className={`${chips.originTag} ${originTone(chips, asset.origin)}`}>{originLabel(asset, t)}</span>
                 {asset.updateAvailable === true ? <span className={`${css.tag} ${css.tagWarn}`}>{t('skillsOverrideOn')}</span> : null}
               </span>
               <span className={css.rowSub}>

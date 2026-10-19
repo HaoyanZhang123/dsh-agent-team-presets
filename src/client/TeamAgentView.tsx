@@ -70,6 +70,13 @@ export interface TeamAgentViewProps {
  * @param props - the controller and the role slot being edited.
  * @returns the section, or nothing while the library is unavailable.
  */
+/** The colour class that pairs with one origin, shared with the skill library. */
+function originToneClass(styles: Record<string, string | undefined>, origin: string): string {
+  if (origin === 'builtin') return styles.originBuiltin ?? ''
+  if (origin === 'override') return styles.originOverride ?? ''
+  return styles.originCustom ?? ''
+}
+
 /** The origin of a Team Skill as the reader sees it, never the raw field value. */
 function originCopy(origin: string, t: (key: TeamPresetsLocaleKey) => string): string {
   if (origin === 'builtin') return t('originBuiltin')
@@ -111,7 +118,7 @@ function SkillAssignmentGrid(props: { controller: TeamSkillsController; teamId: 
                   />
                 </span>
                 <span className={css.skillCardDesc}>{asset.description}</span>
-                <span className={css.skillCardTag}>{originCopy(asset.origin, props.t)}</span>
+                <span className={`${css.skillCardTag} ${css.originTag} ${originToneClass(css, asset.origin)}`}>{originCopy(asset.origin, props.t)}</span>
               </label>
             ))}
           </div>
