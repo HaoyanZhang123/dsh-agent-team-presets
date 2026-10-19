@@ -6,6 +6,7 @@ through CDP. The Desktop environment is not covered here.
 | File | What it shows |
 |---|---|
 | `teams-list.png` | Settings → 智能体团队预设: the two tabs, the discovery row (search + all/built-in/custom + series chips) and the `matched N · display metadata is never injected` line |
-| `skill-git-release-hygiene.png` | Team Skill detail page: provenance pills, resource area with file tree and editor, create-copy / delete actions, member references, MCP dependency panel |
-| `member-skill-grid.png` | Member page: the Team Skill assignment grid with its `scoped to this Agent` note |
+| `skills-library.png` | Team Skill library: title row with its actions on the right, private-directory note, search, all/built-in/custom segment, and one row per asset with origin tag, file count and binding count |
+| `skill-git-release-hygiene.png` | Team Skill detail page: provenance pills, the same-name notice, resource area with file tree (selected file highlighted) and editor, copy-path / create-copy / delete actions |
+| `member-skill-grid.png` | Member page: Team Skill assignment grid with the assigned count beside the title, bordered panel, and three-column cards carrying name, checkbox, two-line description and origin tag |
 | `composer-picker.png` | Composer Team picker: the pinned `不使用团队` entry, search field, source chips, and Team rows grouped by series |

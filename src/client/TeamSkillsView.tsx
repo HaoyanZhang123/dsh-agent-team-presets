@@ -20,6 +20,7 @@ import type { TeamSkillAssetView } from '../types.ts'
 /** Locale keys this panel reads. */
 export type TeamSkillsLocaleKey =
   | 'skillsTitle' | 'skillsSub' | 'skillsNote' | 'skillsNew' | 'skillsImport' | 'skillsOpenFolder'
+  | 'skillsOpenAssetFolder'
   | 'skillsSearch' | 'skillsAll' | 'skillsBuiltin' | 'skillsCustom' | 'skillsFiles' | 'skillsBound'
   | 'skillsEmpty' | 'skillsResources' | 'skillsSaveFile' | 'skillsEditable' | 'skillsReadonly'
   | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind'
@@ -178,6 +179,9 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
               {detail.asset.origin === 'override'
                 ? <Button onClick={() => { void controller.resetOverride(detail.asset.id) }}>{t('skillsResetCopy')}</Button>
                 : null}
+              <Button onClick={() => { void navigator.clipboard?.writeText(`${state.library?.root ?? ''}/assets/${detail.asset.id}`) }}>
+                {t('skillsOpenAssetFolder')}
+              </Button>
               <Button onClick={() => { setConfirmDelete(true) }}>{t('skillsDelete')}</Button>
             </div>
 
@@ -243,26 +247,28 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
 
   return (
     <div className={css.page}>
-      <h2 className={css.title}>{t('skillsTitle')}</h2>
-      <p className={css.sub}>{t('skillsSub')}</p>
+      <div className={css.headRow}>
+        <div className={css.headText}>
+          <h2 className={css.title}>{t('skillsTitle')}</h2>
+          <p className={css.sub}>{t('skillsSub')}</p>
+        </div>
+        <div className={css.titleActions}>
+          <Button variant="outline" onClick={() => { setCreating(true) }}>{t('skillsNew')}</Button>
+          <Button variant="outline" onClick={() => { void navigator.clipboard?.writeText(state.library?.root ?? '') }}>{t('skillsOpenFolder')}</Button>
+        </div>
+      </div>
       <div className={css.info}>ⓘ <span>{t('skillsNote')}</span></div>
 
       <div className={css.actions}>
-        <Button onClick={() => { setCreating(true) }}>{t('skillsNew')}</Button>
-        <label style={{ display: 'inline-flex' }}>
-          <input
-            type="file"
-            multiple
-            style={{ display: 'none' }}
-            onChange={(event) => { void importFolder(event.target.files) }}
-            {...{ webkitdirectory: '' }}
-          />
-          <Button onClick={(event) => {
-            const input = (event.currentTarget as HTMLElement).parentElement?.querySelector('input')
-            input?.click()
-          }}>{t('skillsImport')}</Button>
-        </label>
-        <Button onClick={() => { void navigator.clipboard?.writeText(state.library?.root ?? '') }}>{t('skillsOpenFolder')}</Button>
+        <input
+          id="team-skill-import"
+          type="file"
+          multiple
+          style={{ display: 'none' }}
+          onChange={(event) => { void importFolder(event.target.files) }}
+          {...{ webkitdirectory: '' }}
+        />
+        <Button variant="outline" onClick={() => { document.getElementById('team-skill-import')?.click() }}>{t('skillsImport')}</Button>
       </div>
 
       <div className={css.toolbar}>

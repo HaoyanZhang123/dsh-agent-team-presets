@@ -111,6 +111,7 @@ export type TeamPresetsLocaleKey =
   | 'skillsSub'
   | 'skillsNote'
   | 'skillsOpenFolder'
+  | 'skillsOpenAssetFolder'
   | 'skillsSearch'
   | 'skillsAll'
   | 'skillsBuiltin'
@@ -301,6 +302,7 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsSub: 'Manage the plugin Team Skill library. SKILL.md, scripts, references and assets are kept intact; members bind skills on their own edit pages.',
   skillsNote: 'Team Skills live in the plugin private directory and are not registered as user or project skills. Only an assigned team member discovers them through the plugin scope. Global DSH skills are not managed here.',
   skillsOpenFolder: 'Copy library path',
+  skillsOpenAssetFolder: 'Copy this skill\'s folder path',
   skillsSearch: 'Search a team skill by name or description',
   skillsAll: 'All',
   skillsBuiltin: 'Built-in',
@@ -538,6 +540,7 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsSub: '独立管理插件 Team Skills 库。完整保留 SKILL.md、scripts、references 和 assets；成员绑定在各自编辑页配置。',
   skillsNote: 'Team Skills 位于插件私有目录，默认不注册为用户级或项目级 Skill。只有获分配的团队成员才能通过插件作用域发现。普通 DSH 全局 Skills 不在这里管理。',
   skillsOpenFolder: '复制库目录路径',
+  skillsOpenAssetFolder: '复制该技能目录路径',
   skillsSearch: '搜索团队技能名称或简介',
   skillsAll: '全部',
   skillsBuiltin: '插件内置',
