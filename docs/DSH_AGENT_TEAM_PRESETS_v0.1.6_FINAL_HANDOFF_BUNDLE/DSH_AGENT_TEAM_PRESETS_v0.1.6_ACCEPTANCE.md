@@ -125,7 +125,7 @@ log relative path: [path]
 | S01 | Team 私有目录不被 DSH 原生用户/项目 Skill 扫描 | `PASS` | `NOT_RUN` | 根目录为 `$DSH_HOME/agent-team-presets/team-skills`，非用户/项目技能目录；无全局 provider |
 | S02 | 只含 SKILL.md 的标准包安装正确，YAML 必填/命名验证正确 | `PASS` | `NOT_RUN` | import 用例 |
 | S03 | 完整资源包 scripts/*.py、*.sh、assets、references、任意合法目录保留 | `PASS` | `NOT_RUN` | RICH 夹具用例 |
-| S04 | 可选 frontmatter license/compatibility/metadata/allowed-tools 无损保留 | `PASS` | `NOT_RUN` | 逐字节保留用例 |
+| S04 | 可选 frontmatter license/compatibility/metadata/allowed-tools 无损保留 | `PASS` | `NOT_RUN` |  真机：导入后磁盘出现在私有库目录下，2 个文件、路径未被拍平 |
 | S05 | 同名但不同来源冲突给出真实处理，不偷改原生 Skill | `PARTIAL` | `NOT_RUN` | provider 只列被分配资产、不覆盖原生；冲突提示 UI 未实现 |
 | S06 | 没选 Team 的普通 Agent 看不到本插件专属 Skill 元数据 | `PASS` | `NOT_RUN` | 无全局注册用例（构造后立即 list 为空） |
 | S07 | 选 Team 但未 spawn 对应成员，不全局注册它的专属 Skill | `PASS` | `NOT_RUN` | 注册仅发生在成员被 claim 后（`src/index.ts`） |

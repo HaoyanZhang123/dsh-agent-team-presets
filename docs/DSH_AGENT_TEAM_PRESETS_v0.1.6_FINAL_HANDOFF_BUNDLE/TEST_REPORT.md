@@ -128,7 +128,9 @@
 
 ### 仍然记录为通过之外的项
 
-- 原生文件夹选择器（导入完整文件夹）**未能自动化**：页面上有 2 个隐藏 `input[type=file]`，`DOM.setFileInputFiles` 返回成功但 `input.files.length` 仍为 0（Chromium 对隐藏/目录型输入的限制），因此「导入完整文件夹」目前只有模块级单测（`buildSkillPackage` + `store.install` + 导入安全规则）覆盖，端到端需人工点选。
+- 原生文件夹选择器（导入完整文件夹）已用**真实 FileList** 打通：`DOM.setFileInputFiles` 对隐藏的目录型输入无效（`input.files.length` 恒为 0），改为在页面内用 `DataTransfer` 构造带 `webkitRelativePath` 的 File 并派发 `change`，走的是与原生点选完全相同的代码路径（React onChange → controller → Remote → store）。
+  证据：导入 `demo-skill/`（`SKILL.md` + `references/note.md`）后列表出现 `demo-imported | custom | … · 2 文件 · 绑定 0`，磁盘落在 `~/.dsh/agent-team-presets/team-skills/assets/` 下，说明嵌套路径被保留、没有被拍平。
+  仍未经由原生选择器 UI 点击，这一点保留说明。
 - 分类 CRUD 的页面部分未实现（数据层与纯函数已完成）。
 - Agent 侧 Team Skill 管理工具尚未提供。
 - Desktop 生产环境全部条目仍未执行。
