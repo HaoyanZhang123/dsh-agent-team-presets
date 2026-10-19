@@ -50,7 +50,7 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力。在�
 - **角色作用域技能隔离：** 成员编辑页提供专属技能三列卡片网格，分配给角色的技能在召唤时**严格仅在该 Agent 作用域内注册**，其他成员与队长均不可见。
 - **官方内置技能与本地副本：** 随包自带 `github-repository-presentation` 与 `git-release-hygiene`，默认物化入库并绑定给工程角色；支持创建本地可编辑副本，支持一键「恢复为插件内置版本」，并在官方更新时显示新版本提示。
 - **强阻断保护的删除机制：** 若技能仍被任一团队角色绑定、被运行中成员使用或被其它技能依赖，拒绝删除；模态弹窗直观列出所有持有者（如 `标准研发团队 → executor`）并禁用确认按钮。
-- **依赖真实性检查：** 技能声明的 CLI 可执行程序会在宿主 PATH 上实际解析并标注「存在/缺失」（缺失时拒绝分配）；如实展示声明的 MCP 服务。
+- **依赖真实性检查与 MCP 边界：** 技能声明的 CLI 可执行程序会在宿主 PATH 上实际解析并标注「存在/缺失」（缺失时拒绝分配）；如实展示声明的 MCP 服务（声明式展示，不自动拉起连接，不阻断分配）。
 - **面向智能体的会话工具：** 根会话提供 `list_team_skills`、`assign_team_skill`、`unassign_team_skill`、`remove_team_skill`，以及 `get_team_preset`、`update_team_preset`。
 - **实时状态反馈：** 查看在线会话中的团队是空闲、忙碌，还是有修改等待采用。
 - **深浅色主题适配：** 完整适配深色（Dark）与浅色（Light）模式，卡片、弹窗与九宫格均有良好对比度，无白底白字。
@@ -148,7 +148,7 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力。在�
 <a id="requirements"></a>
 ## 环境要求
 
-- **具备所需 rc.2 API 的 DeepSeek Harness。** 支持版本：`>=0.2.0-rc.2 <0.3.0`（已在 `0.2.1-rc.2` 下全面验证）。插件管理器会检查 declared peer dependencies，详见 [package.json](<package.json>)。
+- **具备所需 rc.2 API 的 DeepSeek Harness。** 支持版本：`>=0.2.0-rc.2 <0.3.0`（已在 `0.2.1-rc.2` 下全面验证，包含 Web 端与 Desktop 端真人实机测试通过）。插件管理器会检查 declared peer dependencies，详见 [package.json](<package.json>)。
 - **目标 profile 已启用 Agent Teams。** 标准集成是 `@deepseek-ai/dsh-experimental-agent-team-profile`，提供团队服务、工具和 Web 名册。本插件负责配置与管理团队，不替代该子系统。
 - **具备 Settings 与所需客户端服务的 Web 或 Desktop profile。** 安装到实际使用的 profile：Web GUI 通常为 `web`，Desktop 通常为 `desktop`。
 - **成员执行所需的持久存储与支持恢复执行的子智能体后端。** 缺少 storage domain 或所选执行后端时，插件会拒绝创建成员。默认后端名为 `spawn` 和 `fork`。
@@ -319,7 +319,9 @@ dsh plugin --profile <profile> add dsh-agent-team-presets
 
 - **文件夹与 ZIP 导入：** 支持在前端直接导入外部技能文件夹或 `.zip` 压缩包。
 - **目录扫描检测：** 扫描导入目录下的子文件夹，逐个检查有效性并给出拒绝原因；支持一键复制私有库绝对路径。
-- **依赖检查：** 自动检查 `SKILL.md` 中声明的命令行工具是否在 PATH 上存在，缺失时标记并在分配时阻断（`dependency-missing`）；MCP 服务如实展示。
+- **依赖检查与 MCP 边界：**
+  - **CLI 可执行程序：** 自动检查 `SKILL.md` 中声明的命令行工具是否在宿主 `PATH` 上存在，缺失时标记并在分配时阻断（`dependency-missing`）。
+  - **MCP 服务边界（声明式展示，不自动拉起）：** 技能声明的 MCP 服务仅作依赖声明与信息展示，插件**不会自动拉起、配置或连接**外部 MCP 服务（MCP 服务的生命周期由宿主环境与 Profile 决定）。由于 MCP 服务连接状态属于宿主环境级事实，插件将其如实标记为 `unverified`（未核实）进行提示，而不会在私有库层强行阻断角色分配。若宿主环境中已接入相应 MCP 服务，其提供的工具将在成员工具配置的 MCP 分组下可见并可通过工具策略勾选授权。
 - **强阻断保护的删除：** 技能只要被任何团队角色分配、被活跃成员占用或被其它技能依赖，删除即被强阻断。删除弹窗会完整列出所有阻断持有者（如 `标准研发团队 → executor`），此时确认删除按钮强制置灰禁用。
 
 <a id="share-presets"></a>
@@ -384,7 +386,7 @@ Configuration for "agent-team-presets" is overridden by a home patch or command-
 |---|---|
 | 看不到设置页或插件处于 pending | 检查 profile 类型、peer 依赖兼容性、Agent Teams 是否启用及客户端服务。 |
 | 技能删除按钮置灰不可点击 | 技能受保护：查看弹窗中的阻断列表，需先在对应团队角色中取消分配。 |
-| 技能分配被拒绝 (`dependency-missing`) | 技能声明的某个必需命令行程序在宿主 `PATH` 上未找到。 |
+| 技能分配被拒绝 (`dependency-missing`) | 技能声明的某个必需命令行程序在宿主 `PATH` 上未找到。注意声明的 MCP 服务仅供展示参考，不阻断分配；如需使用请确认 profile 中已正确配置并连接对应 MCP。 |
 | 成员创建被拒绝 | 检查持久存储、执行后端（`spawn`/`fork`）、模型配额及并发限额。 |
 | 成员显示的模型与配置不一致 | 在 Harness rc.2 中，`list_agents.model` 读取 fallback 元数据。实际路由以 `spawn_team_member` 返回的 `configuredRoute` 或会话请求日志为准。 |
 

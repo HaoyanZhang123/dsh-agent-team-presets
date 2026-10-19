@@ -50,7 +50,7 @@ DeepSeek Harness already ships Agent Teams with multi-agent collaboration. In th
 - **Per-agent skill isolation:** a 3-column assignment grid on member pages assigns skills to specific roles. Assigned skills are registered **strictly in that Agent's scope** when summoned—never leaked globally.
 - **Official built-in skills & local overrides:** ships `github-repository-presentation` and `git-release-hygiene` materialized into the private library and pre-bound to engineering roles. Create local editable overrides and one-click restore them to the built-in copy (`恢复为插件内置版本`).
 - **Guarded deletion with blocker modal:** deleting a skill bound to any role, in use by an active member, or required as a dependency is refused, with a confirmation modal detailing every blocking holder.
-- **Dependency verification:** checks declared CLI executables against host `PATH` (flags found/missing and refuses assignment when absent) and reports declared MCP servers.
+- **Dependency verification & MCP boundaries:** checks declared CLI executables against host `PATH` (flags found/missing and refuses assignment when absent) and reports declared MCP servers (declarative display; never auto-connected or hard-blocking).
 - **Agent-facing tools:** root sessions provide `list_team_skills`, `assign_team_skill`, `unassign_team_skill`, and `remove_team_skill` alongside `get_team_preset` and `update_team_preset`.
 - **Live settings feedback:** see whether a Team is idle, busy, or awaiting an update in an online Session.
 - **Theme integration:** robust light and dark mode adaptation across all cards, dialogs, inputs, and dropdowns.
@@ -148,7 +148,7 @@ The screenshots illustrate the v0.1.6 settings interface, Team Skill management,
 <a id="requirements"></a>
 ## Requirements
 
-- **DeepSeek Harness with the required rc.2 APIs.** Supported versions: `>=0.2.0-rc.2 <0.3.0` (tested with `0.2.1-rc.2`). The plugin manager checks declared peer dependencies; see [package.json](<package.json>).
+- **DeepSeek Harness with the required rc.2 APIs.** Supported versions: `>=0.2.0-rc.2 <0.3.0` (tested with `0.2.1-rc.2`). Fully verified via manual real-device end-to-end acceptance testing across both Web and Desktop platforms. The plugin manager checks declared peer dependencies; see [package.json](<package.json>).
 - **Agent Teams enabled in the target profile.** The standard integration is `@deepseek-ai/dsh-experimental-agent-team-profile`, which supplies the Team service, tools, and Web roster. This plugin configures and manages Teams; it does not replace that subsystem.
 - **A Web or Desktop profile with Settings and the required client services.** Install into the profile you actually use, typically `web` for the Web GUI or `desktop` for Desktop.
 - **Durable storage and a continuable subagent backend for member execution.** Member creation is refused if the storage domain or selected execution backend is unavailable. The default backend names are `spawn` and `fork`.
@@ -319,7 +319,9 @@ Traditional skills in Harness are typically registered into the global environme
 
 - **Folder and ZIP import:** Import external skill folders or `.zip` packages directly in the Web GUI.
 - **Directory scan:** Scans candidate folders in the import path, reporting eligibility and reasons for any rejected folder. Users can copy the absolute library path with one click.
-- **Dependency checks:** Declared CLI executables in `SKILL.md` are resolved against host `PATH`. Missing required executables are flagged and assignment is refused (`dependency-missing`). Declared MCP servers are clearly reported.
+- **Dependency checks and MCP boundaries:**
+  - **CLI executables:** Declared CLI executables in `SKILL.md` are resolved against host `PATH`. Missing required executables are flagged and assignment is refused (`dependency-missing`).
+  - **MCP servers (declarative only, not auto-connected):** Declared MCP servers are strictly declarative dependencies displayed in the UI (`skillsDeclared`). The plugin **never connects, launches, or manages** external MCP servers automatically (their lifecycle belongs to the Harness environment and profile). Because MCP connectivity is an environment-level fact, declared MCP servers are reported as `unverified` rather than hard-blocking role assignment. When an MCP server is configured and running in the Harness profile, its exposed tools (`mcp__<server>__<name>`) appear under the MCP tool group in the role's tool configuration and can be authorized via tool policies.
 - **Guarded deletion:** Deletion is strongly guarded. If a skill is currently bound to any team role, used by a running member, or required by another skill, deletion is blocked. The confirmation dialog explicitly lists every holding team and member role (e.g. `标准研发团队 → executor`), keeping the confirm button disabled until bindings are cleared.
 
 <a id="share-presets"></a>
@@ -384,7 +386,7 @@ Check profile patches, `$DSH_HOME/cordis.patch.yml`, and `--patch` overlays for 
 |---|---|
 | Settings page is absent or plugin pending | Confirm profile type, peer dependencies, Agent Teams enablement, and client services. |
 | Skill deletion button is disabled | The skill is protected: inspect the blocker list in the modal (bound roles or dependencies must be unassigned first). |
-| Skill assignment refused (`dependency-missing`) | A required executable declared by the skill is absent from host `PATH`. |
+| Skill assignment refused (`dependency-missing`) | A required executable declared by the skill is absent from host `PATH`. Note that declared MCP servers are reported for visibility and do not block assignment; ensure MCP servers are configured in your profile. |
 | Member creation refused | Check storage domain availability, subagent execution backend (`spawn`/`fork`), model quota, and concurrency limits. |
 | Model route display mismatch | In Harness rc.2, `list_agents.model` reports fallback metadata. Verify actual routing via `spawn_team_member`'s `configuredRoute` or session `request/header` logs. |
 

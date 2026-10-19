@@ -36,7 +36,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 // copied, and this package is written into it at the monorepo-shaped path. No
 // existing checkout file is ever modified, because every file this script
 // patches is first re-created as a private copy, which breaks the hard link.
-const stageRoot = dirname(harness) === tmpdir() ? tmpdir() : dirname(harness)
+const stageRoot = process.env.BUILD_STAGE_ROOT || tmpdir()
 const stage = mkdtempSync(join(stageRoot, 'team-presets-build-'))
 console.log(`Isolated build workspace: ${stage}`)
 const pkg = join(stage, 'packages/experimental/agent-team-presets')

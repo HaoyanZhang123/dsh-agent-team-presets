@@ -13,7 +13,7 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import type { ConfigForm, SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { toolMode, withSelection } from '../presets.ts'
-import { restoreBuiltinTeams } from '../builtin-teams.ts'
+import { cloneMetadata, restoreBuiltinTeams } from '../builtin-teams.ts'
 import { builtinEntry } from '../team-catalog.ts'
 import {
   applySharedFields,
@@ -448,8 +448,19 @@ function sectionOf(value: unknown): StoredSection | undefined {
     categories?: unknown
     teamCategories?: unknown
   }
+  const rawTeams = Array.isArray(section.teams) ? section.teams as TeamPreset[] : []
+  const teams = rawTeams.map(team => {
+    const entry = builtinEntry(team.id)
+    if (entry !== undefined && (team.metadata === undefined || (team.metadata.summary ?? '').trim() === '')) {
+      return {
+        ...team,
+        metadata: cloneMetadata(entry.metadata),
+      }
+    }
+    return team
+  })
   return {
-    teams: Array.isArray(section.teams) ? section.teams as TeamPreset[] : [],
+    teams,
     selections: Array.isArray(section.selections) ? section.selections as TeamSelectionRecordView[] : [],
     categories: categoryRows(section.categories),
     teamCategories: assignmentRows(section.teamCategories),
@@ -517,6 +528,18 @@ function teamJson(team: TeamPreset): JsonValue {
     description: team.description,
     captain: captainJson(team.captain),
     members: team.members.map(member => agentJson(member)),
+    ...team.metadata === undefined ? {} : {
+      metadata: {
+        summary: team.metadata.summary ?? '',
+        tags: [...(team.metadata.tags ?? [])],
+        useCases: [...(team.metadata.useCases ?? [])],
+        quickPrompts: [...(team.metadata.quickPrompts ?? [])],
+        notes: team.metadata.notes ?? '',
+      },
+    },
+    ...team.officialSkills === undefined ? {} : {
+      officialSkills: team.officialSkills.map(binding => ({ skillId: binding.skillId, roleName: binding.roleName })),
+    },
   }
 }
 

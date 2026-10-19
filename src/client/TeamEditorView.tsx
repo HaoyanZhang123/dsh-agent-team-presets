@@ -3,7 +3,7 @@
  * member roster. Choosing the captain or a member opens that agent's page.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProviderChoice } from './team-presets-controller.ts'
 import type { TeamAgentPreset, TeamPreset } from '../types.ts'
@@ -50,6 +50,16 @@ function MetadataPanel(props: { team: TeamPreset; disabled: boolean; onPatch: (p
     quickPrompts: (existing.quickPrompts ?? []).join('\n'),
     notes: existing.notes ?? '',
   })
+  useEffect(() => {
+    const meta = props.team.metadata ?? {}
+    setFields({
+      summary: meta.summary ?? '',
+      tags: (meta.tags ?? []).join(', '),
+      useCases: (meta.useCases ?? []).join('\n'),
+      quickPrompts: (meta.quickPrompts ?? []).join('\n'),
+      notes: meta.notes ?? '',
+    })
+  }, [props.team.id, props.team.metadata])
   const [open, setOpen] = useState(false)
   const commit = (next: MetadataFields): void => {
     setFields(next)

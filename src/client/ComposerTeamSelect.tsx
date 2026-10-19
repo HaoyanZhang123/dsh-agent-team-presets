@@ -200,7 +200,7 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
                       onClick={() => { choose(team.id) }}
                     >
                       <span className={css.popOptionName}>{team.name === '' ? team.id : team.name}</span>
-                      <span className={css.popOptionSub}>{team.metadata?.summary ?? team.description}</span>
+                      <span className={css.popOptionSub} title={team.description}>{team.description || team.metadata?.summary || ''}</span>
                     </button>
                   ))}
                 </div>

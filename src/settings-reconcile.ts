@@ -20,7 +20,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import type {} from '@deepseek-ai/dsh-settings'
-import { seedBuiltinTeams } from './builtin-teams.ts'
+import { cloneMetadata, seedBuiltinTeams } from './builtin-teams.ts'
+import { builtinEntry } from './team-catalog.ts'
 import type { Config } from './config.ts'
 import { withoutCaptainRoutes } from './config.ts'
 import { reconciledAssignments } from './team-search.ts'
@@ -68,7 +69,12 @@ export function teamSettingsReconcile(ctx: Context, config: Config, namespace: s
               used.add(id)
               return { ...member, id }
             })
-            return changed ? { ...team, members } : team
+            let nextTeam = changed ? { ...team, members } : team
+            const entry = builtinEntry(team.id)
+            if (entry !== undefined && (nextTeam.metadata === undefined || (nextTeam.metadata.summary ?? '').trim() === '')) {
+              nextTeam = { ...nextTeam, metadata: cloneMetadata(entry.metadata) }
+            }
+            return nextTeam
           })
           // The shipped defaults are appended, never substituted: a preset the
           // user edited keeps every edit, and one the user deleted stays deleted
