@@ -249,3 +249,14 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 | 空态 | `padding:18px; border:1px dashed #dfe3e7; radius:9px; 13px 居中` | 已按此实现（`未分配给任何成员`、`还没有安装任何团队技能` 等处） |
 
 截图：`docs/shots/skill-delete-dialog.png`。
+
+### 续（round 9）：行高复核、composer 间距、窄宽回退
+
+| 项 | 原型 | 实测 |
+|---|---|---|
+| 技能列表行 | `padding:12px 14px; min-height:64px` | **h 64、pad 12/14、minH 64** ✓ |
+| composer 选项/置顶项 | `padding:8px 9px` | 均为 **8px 9px**，置顶项高 53px（两行内容） |
+| composer 分组标题 | 原型无对应类，按节奏保留 | `padding:6px 8px 2px` |
+| 九宫格窄宽回退 | 原型用视口媒体查询（1032px 窗） | 改为**按自身宽度自适应**：`repeat(auto-fill, minmax(148px,1fr))`。实测 867px 视口 → 3 列（157.3px×3）、620px 视口 → **2 列（146px×2）** |
+
+说明：原型的三列/两列断点基于 1032px 视口，而本页嵌在约 490px 的设置面板里，视口媒体查询不会触发，所以改用容器自适应——这是**有意偏离**，并已在此记录。

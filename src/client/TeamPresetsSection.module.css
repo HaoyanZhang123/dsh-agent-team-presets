@@ -515,7 +515,10 @@ select.select:disabled {
 
 /* Team Skill assignment grid on one member page (v0.1.6 prototype). */
 .sepTitle { font-size: 13px; font-weight: 550; margin: 18px 0 8px; }
-.skillGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 10px 0 13px; }
+/* The prototype rides the viewport (a 1032px window), but this grid lives inside a
+ * ~490px settings panel, so it adapts to its own width instead: three columns when
+ * they fit, two or one when they do not. */
+.skillGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 9px; margin: 10px 0 13px; }
 .skillCard input { width: 16px; height: 16px; margin: 0; accent-color: #4787ed; flex: 0 0 auto; }
 .skillCard { position: relative; cursor: pointer; display: flex; min-width: 0; min-height: 128px; flex-direction: column; gap: 8px; border: 1px solid #e0e4e9; background: #fff; border-radius: 10px; padding: 11px; transition: border-color .15s, background .15s, box-shadow .15s; }
 .skillCard:hover { background: #f8faff; border-color: #b9c9e1; }
