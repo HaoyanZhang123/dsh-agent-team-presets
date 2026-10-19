@@ -91,7 +91,7 @@ export type TeamPresetsLocaleKey =
   | 'metadataUseCases'
   | 'metadataQuickPrompts'
   | 'metadataNotes'
-  | 'filterSource' | 'filterCategory'
+  | 'filterSource' | 'filterCategory' | 'filterNoCategory'
   | 'listSearch'
   | 'listAll'
   | 'listBuiltin'
@@ -365,7 +365,8 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   metadataUseCases: 'Use cases (one per line)',
   metadataQuickPrompts: 'Suggested tasks (one per line)',
   metadataNotes: 'Notes',
-  filterSource: 'Source',
+  filterSource: 'Team source',
+  filterNoCategory: 'No custom category yet — add one under 管理团队预设分类',
   filterCategory: 'Category',
   listSearch: 'Search name, summary, tags, use cases, suggested tasks',
   listAll: 'All',
@@ -611,7 +612,8 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   metadataUseCases: '适用场景（每行一项）',
   metadataQuickPrompts: '推荐任务（每行一项）',
   metadataNotes: '备注',
-  filterSource: '来源',
+  filterSource: '团队来源',
+  filterNoCategory: '还没有自定义分类，可在「管理团队预设分类」里创建',
   filterCategory: '分类',
   listSearch: '搜索名称、简介、标签、适用场景、推荐任务',
   listAll: '全部',
