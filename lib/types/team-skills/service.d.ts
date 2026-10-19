@@ -1,0 +1,136 @@
+/**
+ * The settings page's view of the private Team Skill library.
+ *
+ * Every judgement stays in the manager and the store: this service only shapes
+ * their answers for a Remote call, so the page and any Agent-facing tool cannot
+ * disagree about whether an import is safe, a delete is allowed, or a role may
+ * receive an asset. The one thing it adds is the roster a binding dialog needs —
+ * the Teams the page already shows, with their role identities.
+ * @module dsh-agent-team-presets/team-skills/service
+ */
+import { Context } from '@deepseek-ai/cordis';
+import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
+import { TeamSkillManager } from './manager.ts';
+import { TeamSkillStore } from './store.ts';
+import type { TeamPreset, TeamSkillDeleteView, TeamSkillDetailView, TeamSkillImportFile, TeamSkillLibraryView, TeamSkillRefusalView } from '../types.ts';
+declare module '@deepseek-ai/cordis' {
+    interface Context {
+        /** Remote management surface for the private Team Skill library. */
+        teamSkills: TeamSkillService;
+    }
+}
+/** Configuration of {@link TeamSkillService}. */
+export interface TeamSkillServiceConfig {
+    /** The asset store. */
+    readonly store: TeamSkillStore;
+    /** The binding table and its delete guards. */
+    readonly manager: TeamSkillManager;
+    /** The Teams the page shows, read live from Settings. */
+    readonly teams: () => readonly TeamPreset[];
+    /** Shipped skill ids this deployment provides. */
+    readonly official: readonly string[];
+    /** Re-applies every live Agent after a binding changed. */
+    readonly resync: () => void;
+}
+/**
+ * Remote management surface over the private Team Skill library.
+ */
+export declare class TeamSkillService extends TypertRemoteService {
+    private readonly config;
+    /**
+     * @param ctx - the owning plugin context.
+     * @param config - the store, the manager, and the live roster.
+     */
+    constructor(ctx: Context, config: TeamSkillServiceConfig);
+    /**
+     * Shape one asset for the page.
+     * @param assetId - asset identity.
+     * @returns the row, or undefined when it no longer exists.
+     */
+    private row;
+    /**
+     * Read the Teams the binding dialog addresses.
+     * @returns one row per Team, captain slot first.
+     */
+    private roster;
+    /**
+     * List the library, the roster, and the shipped skill ids.
+     * @returns one page load.
+     */
+    library(): TeamSkillLibraryView;
+    /**
+     * Read one asset with its files and body.
+     * @param assetId - asset identity.
+     * @returns the detail, or a refusal when the asset is gone.
+     */
+    detail(assetId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
+    /**
+     * Read one text file of an asset.
+     * @param assetId - asset identity.
+     * @param path - relative path.
+     * @returns the text, or a refusal.
+     */
+    readFile(assetId: string, path: string): Promise<{
+        ok: true;
+        path: string;
+        text: string;
+    } | TeamSkillRefusalView>;
+    /**
+     * Write one file, publishing a new asset version.
+     * @param assetId - asset identity.
+     * @param path - relative path.
+     * @param text - new content.
+     * @returns the refreshed detail, or a refusal.
+     */
+    writeFile(assetId: string, path: string, text: string): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
+    /**
+     * Create one editable skill from the blank template.
+     * @param skillId - kebab-case name the new skill takes.
+     * @param description - frontmatter description.
+     * @returns the new detail, or a refusal when the folder is not a legal skill.
+     */
+    create(skillId: string, description: string): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
+    /**
+     * Import one folder, as the browser's picker sends it.
+     * @param files - relative paths and base64 content.
+     * @returns the new detail, or a refusal naming the exact rule that failed.
+     */
+    importFiles(files: readonly TeamSkillImportFile[]): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
+    /**
+     * Copy one shipped skill into an editable override.
+     * @param skillId - shipped skill id.
+     * @returns the new detail, or a refusal.
+     */
+    createOverride(skillId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
+    /**
+     * Reset one override back to the shipped copy.
+     * @param assetId - override identity.
+     * @returns the refreshed detail, or a refusal.
+     */
+    resetOverride(assetId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
+    /**
+     * Delete one asset, listing every blocker at once.
+     * @param assetId - asset identity.
+     * @returns the outcome.
+     */
+    remove(assetId: string): Promise<TeamSkillDeleteView>;
+    /**
+     * Bind one asset to one role slot.
+     * @param teamId - Team identity.
+     * @param roleId - role identity, or `captain`.
+     * @param assetId - asset identity.
+     * @returns whether the assignment landed, and the refreshed library.
+     */
+    assign(teamId: string, roleId: string, assetId: string): Promise<{
+        ok: boolean;
+        detail: string;
+        library: TeamSkillLibraryView;
+    }>;
+    /**
+     * Remove one role's assignment.
+     * @param teamId - Team identity.
+     * @param roleId - role identity.
+     * @returns the refreshed library.
+     */
+    unassign(teamId: string, roleId: string): Promise<TeamSkillLibraryView>;
+}

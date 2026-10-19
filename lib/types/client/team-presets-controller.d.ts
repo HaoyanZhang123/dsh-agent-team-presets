@@ -637,6 +637,8 @@ export declare class TeamPresetsController {
 }
 /** Business face the page and composer registrations inject. */
 export interface TeamPresetsInjected {
+    /** Team Skill panel state, absent when this build ships no library service. */
+    skills?: import('./team-skills-controller.ts').TeamSkillsController;
     hooks: {
         /** Page state bound by the renderer as `useTeamPresets`. */
         teamPresets: SnapshotStore<TeamPresetsState>;

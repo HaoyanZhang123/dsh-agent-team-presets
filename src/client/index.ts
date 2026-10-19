@@ -19,6 +19,7 @@ import { teamAppearance } from './appearance.ts'
 import type { RosterAppearanceRegistry } from './appearance.ts'
 import { TeamPresetsSection } from './TeamPresetsSection.tsx'
 import { TeamPresetsController, TEAM_PRESETS_NS } from './team-presets-controller.ts'
+import { TeamSkillsController } from './team-skills-controller.ts'
 import { en, NS, zh } from './locales.ts'
 import type { TeamPresetsLocaleKey } from './locales.ts'
 
@@ -48,7 +49,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * `cannot get property "remote.settings" without inject`, which is exactly the
  * failure mode this plugin's own scope must never reproduce.
  */
-export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.session', 'remote.settings']
+export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.session', 'remote.settings', 'remote.teamSkills']
 
 /**
  * Host notifications that change which provider routes exist.
@@ -73,7 +74,7 @@ const CATALOGUE_INVALIDATIONS = [
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(teamPresetsRemote)
   const ui = ctx.inject(
-    ['remote.teamPresets', 'slots', 'locale', 'configForms', 'remote.session', 'remote.settings'],
+    ['remote.teamPresets', 'remote.teamSkills', 'slots', 'locale', 'configForms', 'remote.session', 'remote.settings'],
     registerUi,
   )
   try {
@@ -97,6 +98,10 @@ function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'agent-team-presets: dictionaries')
 
   const controller = new TeamPresetsController(ctx)
+  // The management panel drives the Host service; if the deployment ships no
+  // store the controller reports that instead of pretending the library is empty.
+  const skills = new TeamSkillsController(ctx)
+  ctx.effect(() => () => { skills.dispose() }, 'agent-team-presets: skills controller')
   ctx.effect(() => () => { controller.dispose() }, 'agent-team-presets: form subscription')
   controller.loadCatalogue()
   for (const event of CATALOGUE_INVALIDATIONS) {
@@ -112,7 +117,7 @@ function registerUi(ctx: ClientContext): void {
     order: 25,
     label: () => t('nav'),
     locale: NS,
-    inject: () => controller.inject(),
+    inject: () => ({ ...controller.inject(), skills }),
   }, TeamPresetsSection)), 'agent-team-presets: settings page')
 
   // The Agent Teams roster draws each captain and member card with the color
@@ -136,6 +141,6 @@ function registerUi(ctx: ClientContext): void {
     id: 'agent-team-presets',
     order: 10,
     locale: NS,
-    inject: () => controller.inject(),
+    inject: () => ({ ...controller.inject(), skills }),
   }, ComposerTeamSelect)), 'agent-team-presets: composer control')
 }

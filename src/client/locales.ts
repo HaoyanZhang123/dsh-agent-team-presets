@@ -44,6 +44,24 @@ export type TeamPresetsLocaleKey =
   | 'importMemberConflict' | 'importMemberReplace' | 'importMemberRename'
   | 'importInvalidJson' | 'importInvalidFormat' | 'importUnsupportedVersion' | 'importUnsupportedFields'
   | 'importDuplicateMembers' | 'importTooManyMembers' | 'importTooLarge' | 'importInvalidMetadata'
+  // Team Skills panel copy.
+  | 'skillsEmpty'
+  | 'skillsImport'
+  | 'skillsNew'
+  | 'skillsSave'
+  | 'skillsDelete'
+  | 'skillsAssign'
+  | 'skillsUnassign'
+  | 'skillsOfficial'
+  | 'skillsFiles'
+  | 'skillsBindings'
+  | 'skillsNamePlaceholder'
+  | 'skillsDescriptionPlaceholder'
+  | 'skillsRoot'
+  | 'skillsRefresh'
+  | 'skillsOverride'
+  | 'skillsReset'
+  | 'skillsBody' | 'tabTeams' | 'tabSkills'
 
 /** Locale namespace owned by this plugin. */
 export const NS = 'settings.agentTeamPresets'
@@ -186,6 +204,25 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   importTooManyMembers: 'That document declares too many members.',
   importTooLarge: 'That file is too large to be a Team preset.',
   importInvalidMetadata: 'That file carries display metadata this release cannot read.',
+  skillsEmpty: 'No Team Skill is installed yet.',
+  skillsImport: 'Import folder',
+  skillsNew: 'New skill',
+  skillsSave: 'Save',
+  skillsDelete: 'Delete',
+  skillsAssign: 'Assign',
+  skillsUnassign: 'Remove',
+  skillsOfficial: 'Official skills',
+  skillsFiles: 'Files',
+  skillsBindings: 'Assigned to',
+  skillsNamePlaceholder: 'kebab-case name, e.g. release-notes',
+  skillsDescriptionPlaceholder: 'When should this method apply?',
+  skillsRoot: 'Private library',
+  skillsRefresh: 'Refresh',
+  skillsOverride: 'Create editable copy',
+  skillsReset: 'Reset to official',
+  tabTeams: 'Team presets',
+  tabSkills: 'Team skills',
+  skillsBody: 'SKILL.md body',
 }
 
 /** Simplified Chinese copy. */
@@ -326,6 +363,25 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   importTooManyMembers: '该文档声明的队员数量过多。',
   importTooLarge: '该文件过大，不像是团队预设。',
   importInvalidMetadata: '该文件包含本版本无法读取的展示信息。',
+  skillsEmpty: '还没有安装任何团队技能。',
+  skillsImport: '导入文件夹',
+  skillsNew: '新建技能',
+  skillsSave: '保存',
+  skillsDelete: '删除',
+  skillsAssign: '分配',
+  skillsUnassign: '解除',
+  skillsOfficial: '官方技能',
+  skillsFiles: '文件',
+  skillsBindings: '已分配给',
+  skillsNamePlaceholder: 'kebab-case 名称，例如 release-notes',
+  skillsDescriptionPlaceholder: '这个方法在什么情况下适用？',
+  skillsRoot: '私有库目录',
+  skillsRefresh: '刷新',
+  skillsOverride: '创建可编辑副本',
+  skillsReset: '恢复为官方版本',
+  tabTeams: '团队预设',
+  tabSkills: '团队技能',
+  skillsBody: 'SKILL.md 正文',
 }
 
 /**

@@ -91,6 +91,8 @@ export class TeamSkills {
   readonly manager: TeamSkillManager
   /** The per-Agent provider lifecycle. */
   readonly runtime: TeamSkillRuntime
+  /** Shipped skill ids this deployment actually provides. */
+  official: readonly string[] = []
   private opened = false
 
   /**
@@ -145,6 +147,7 @@ export class TeamSkills {
           log(`the shipped skill "${skillId}" is not present in this installation`)
         }
       }
+      this.official = entries.map(entry => entry.skillId)
       const changed = await this.store.ensureOfficial(entries)
       if (changed.length > 0) log(`Team Skill store updated: ${changed.join(', ')}`)
       this.opened = true

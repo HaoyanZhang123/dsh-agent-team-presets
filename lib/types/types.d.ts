@@ -368,3 +368,111 @@ export type TeamSearchHit = {
     /** Which fields matched, in a fixed order. */
     fields: readonly ('name' | 'tags' | 'summary' | 'useCases' | 'quickPrompts' | 'notes')[];
 };
+/** One role a binding can address. */
+export interface TeamSkillRoleView {
+    /** Role identity used in a binding. */
+    readonly id: string;
+    /** Display name shown in the page. */
+    readonly name: string;
+    /** Whether this is the captain slot. */
+    readonly captain: boolean;
+}
+/** One Team the binding dialog can address. */
+export interface TeamSkillTeamView {
+    /** Team identity. */
+    readonly id: string;
+    /** Display name. */
+    readonly name: string;
+    /** The captain slot plus every member slot, in Team order. */
+    readonly roles: readonly TeamSkillRoleView[];
+}
+/** One role currently holding an asset. */
+export interface TeamSkillBindingView {
+    /** Team identity. */
+    readonly teamId: string;
+    /** Team display name. */
+    readonly teamName: string;
+    /** Role identity. */
+    readonly roleId: string;
+    /** Role display name. */
+    readonly roleName: string;
+    /** Whether the holder is the captain. */
+    readonly captain: boolean;
+}
+/** One asset as the page lists it. */
+export interface TeamSkillAssetView {
+    /** Asset identity. */
+    readonly id: string;
+    /** Kebab-case skill name. */
+    readonly skillId: string;
+    /** Frontmatter description. */
+    readonly description: string;
+    /** Where the asset came from. */
+    readonly origin: string;
+    /** Immutable version currently served. */
+    readonly version: string;
+    /** Shipped skill this override started from, when it is an override. */
+    readonly officialSkillId?: string;
+    /** Whether the shipped copy has moved past this override. */
+    readonly updateAvailable?: boolean;
+    /** Whether the page may edit it. */
+    readonly editable: boolean;
+    /** File count. */
+    readonly fileCount: number;
+    /** Total bytes. */
+    readonly totalBytes: number;
+    /** Declared dependencies (MCP servers, executables, other skills). */
+    readonly mcpServers: readonly string[];
+    /** Every role holding it. */
+    readonly bindings: readonly TeamSkillBindingView[];
+}
+/** The whole library, as one page load. */
+export interface TeamSkillLibraryView {
+    /** Absolute private root, shown so the user can open it in a file manager. */
+    readonly root: string;
+    /** Every asset, name-ordered. */
+    readonly assets: readonly TeamSkillAssetView[];
+    /** Every Team and its addressable roles. */
+    readonly teams: readonly TeamSkillTeamView[];
+    /** Shipped skill ids this deployment provides. */
+    readonly official: readonly string[];
+}
+/** One file of an asset. */
+export interface TeamSkillFileView {
+    /** POSIX-relative path inside the asset. */
+    readonly path: string;
+    /** Byte length. */
+    readonly size: number;
+    /** Whether the page may show it as text. */
+    readonly text: boolean;
+}
+/** One asset with its file list and instruction body. */
+export interface TeamSkillDetailView {
+    /** The asset row. */
+    readonly asset: TeamSkillAssetView;
+    /** Every file, path-ordered. */
+    readonly files: readonly TeamSkillFileView[];
+    /** The `SKILL.md` body, without frontmatter. */
+    readonly body: string;
+}
+/** Why a management call was refused. */
+export interface TeamSkillRefusalView {
+    /** `ok` is always false here, so a caller can branch on it. */
+    readonly ok: false;
+    /** Machine-readable reason. */
+    readonly reason: string;
+    /** Human-readable detail, already specific. */
+    readonly detail: string;
+}
+/** Result of a delete attempt. */
+export interface TeamSkillDeleteView {
+    /** Whether the asset is gone. */
+    readonly ok: boolean;
+    /** Everything that blocked it, so the page can list them all. */
+    readonly blockers: readonly {
+        readonly kind: string;
+        readonly detail: string;
+    }[];
+    /** Advisory text matches that did not block. */
+    readonly warnings: readonly string[];
+}

@@ -38,6 +38,7 @@ import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { registerPresetTools } from './preset-tools.ts'
 import { CAPTAIN_ROLE, TeamSkills, resolveSkillRoot, roleOfMember } from './team-skills/index.ts'
+import { TeamSkillService } from './team-skills/service.ts'
 import { installShippedSkills } from './skills.ts'
 import { definitionFingerprint, findTeam, selectedTeam, toolMode } from './presets.ts'
 import type { TeamPreset } from './types.ts'
@@ -98,6 +99,7 @@ export function apply(ctx: Context, config: Config): void {
   void teamSkills.open(message => { ctx.logger.warn(`${LOG}: %s`, message) }).then((ready) => {
     if (!ready || disposed) return
     for (const [agent, role] of agentRoles) teamSkills.syncAgent(agent, role)
+    if (ready) ctx.plugin(TeamSkillService, teamSkillService)
   })
   // Every member is summoned through this plugin's own execution alias, so the
   // Host itself persists the fact that the child is preset-managed. The aliases
@@ -285,6 +287,16 @@ export function apply(ctx: Context, config: Config): void {
     applied: agent => applications.get(agent),
   })
   ctx.plugin(TeamPresetsToolCatalog, { monitor })
+  // The management page reaches the private library through this one service, so
+  // every import, edit, assignment and delete runs the same manager rules as the
+  // Agent-facing path instead of a second, page-only implementation.
+  const teamSkillService = {
+    store: teamSkills.store,
+    manager: teamSkills.manager,
+    teams: () => config.teams.get(),
+    official: [...teamSkills.official],
+    resync: () => { for (const [agent, role] of agentRoles) teamSkills.syncAgent(agent, role) },
+  }
   ctx.effect(() => () => { monitor.dispose() }, 'agent-team-presets: execution monitor')
 
   // The settings page owns this entry's editing surface, so the Plugins page

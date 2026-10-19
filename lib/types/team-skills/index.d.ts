@@ -64,6 +64,8 @@ export declare class TeamSkills {
     readonly manager: TeamSkillManager;
     /** The per-Agent provider lifecycle. */
     readonly runtime: TeamSkillRuntime;
+    /** Shipped skill ids this deployment actually provides. */
+    official: readonly string[];
     private opened;
     /**
      * @param ctx - the plugin context.

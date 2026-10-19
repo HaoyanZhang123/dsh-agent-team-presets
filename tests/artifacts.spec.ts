@@ -30,12 +30,17 @@ describe('built deliverables', () => {
     // the wire contract. The structural counterpart lives in
     // tests/typert-isolation.spec.ts, which also loads the face without a
     // resolvable `zod`.
+    // Host 0.2.1's Remote face is `{ spec, zod, index }`: the descriptors moved
+    // under `spec.methods`, keyed by `namespace/method`.
     const remote = await import(new URL('../lib/typert.remote-client.js', import.meta.url).href) as {
-      TYPERT_REMOTE: { package: string; descriptors: readonly Record<string, any>[] }
+      TYPERT_REMOTE: { spec: { package: string; methods: Record<string, Record<string, any>> } }
     }
-    const descriptors = remote.TYPERT_REMOTE.descriptors
-    expect(remote.TYPERT_REMOTE.package).toBe('dsh-agent-team-presets')
-    expect(descriptors).toHaveLength(2)
+    const methods = remote.TYPERT_REMOTE.spec.methods
+    expect(remote.TYPERT_REMOTE.spec.package).toBe('dsh-agent-team-presets')
+    const descriptors = Object.entries(methods).map(([key, value]) => ({ ...value, method: key.slice(key.indexOf('/') + 1) }))
+    // The two original endpoints must be present; the Team Skill library adds
+    // its own methods beside them.
+    expect(Object.keys(methods)).toEqual(expect.arrayContaining(['teamPresets/catalog', 'teamPresets/execution', 'teamSkills/library']))
     expect(descriptors.find(row => row.method === 'catalog')).toMatchObject({
       invocation: { kind: 'direct' },
       parameters: [],
