@@ -273,6 +273,7 @@ export function apply(ctx: Context, config: Config): void {
   /** Team Skill tools, registered on the same Session roots as the preset tools. */
   const skillTools = new Map<Agent, () => void>()
   const skillToolDeps = {
+    ready: async () => await ready ? undefined : teamSkills.issue ?? 'The Team Skill store could not be opened.',
     store: teamSkills.store,
     manager: teamSkills.manager,
     teams: () => config.teams.get(),
@@ -326,6 +327,7 @@ export function apply(ctx: Context, config: Config): void {
     teams: () => config.teams.get(),
     official: () => teamSkills.official,
     ready,
+    startupIssue: () => teamSkills.issue,
     resync: () => { for (const [agent, role] of agentRoles) teamSkills.syncAgent(agent, role) },
   }
   ctx.plugin(TeamSkillService, teamSkillService)

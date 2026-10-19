@@ -7,15 +7,22 @@ export interface OfficialSkillEntry {
 }
 export declare function folderDigest(files: readonly TeamSkillFile[]): string;
 export declare function fileTable(files: readonly ImportedFile[]): TeamSkillFile[];
+/** Logical ids stay unchanged in JSON; only their disk coordinates are encoded.
+ * `~` was never a valid logical component, so encoded and old names cannot clash.
+ * Uppercase, DOS devices and trailing dots are encoded on every platform too. */
+export declare function diskComponent(value: string): string;
 /** Atomically replace one JSON document; failed writes leave its previous bytes intact. */
 export declare function atomicWriteJson(path: string, value: unknown): Promise<void>;
 export declare class TeamSkillStore {
-    readonly root: string;
+    private readonly configuredRoot;
     private assets;
     private revision;
     private opened;
     private readonly transactions;
-    constructor(root: string);
+    private physicalRoot;
+    constructor(configuredRoot: string);
+    /** Pinned once open starts. Resolving it is kept out of plugin construction. */
+    get root(): string;
     get registryRevision(): number;
     private get table();
     assetPath(assetId: string, version: string): string;
@@ -30,6 +37,10 @@ export declare class TeamSkillStore {
     private cleanup;
     private recover;
     open(): Promise<void>;
+    /** Move v1 POSIX directory names without changing identities or losing pinned
+     * historical versions. A write-ahead relocate can be undone after a crash;
+     * unlike deletion backups, committed destinations are never cleaned up. */
+    private migrateLayout;
     list(): readonly TeamSkillAsset[];
     get(assetId: string): TeamSkillAsset | undefined;
     bySkillId(skillId: string): TeamSkillAsset | undefined;

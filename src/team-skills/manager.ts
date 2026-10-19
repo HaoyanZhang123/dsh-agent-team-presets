@@ -97,11 +97,14 @@ export class TeamSkillManager {
    */
   constructor(
     private readonly store: TeamSkillStore,
-    private readonly root: string,
+    _root: string,
     guards: TeamSkillGuardContext,
   ) {
     this.guards = guards
   }
+
+  /** Use the store's pinned physical root, including for bindings writes. */
+  private get root(): string { return this.store.root }
 
   /** Binding revision, bumped by every assignment change. */
   get bindingRevision(): number {

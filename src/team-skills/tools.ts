@@ -78,6 +78,8 @@ const REMOVE_VALUE_SCHEMA = {
 
 /** What the tools need from the plugin. */
 export interface TeamSkillToolDeps {
+  /** Wait for startup and return its failure reason instead of a misleading empty library. */
+  readonly ready?: () => Promise<string | undefined>
   /** The asset store. */
   readonly store: TeamSkillStore
   /** The binding table and its guards. */
@@ -109,7 +111,9 @@ export function registerTeamSkillTools(ctx: Context, agent: Agent, deps: TeamSki
       output: jsonOutput(LIST_VALUE_SCHEMA),
       async execute() {
         try {
-            await deps.manager.reconcile()
+          const issue = await deps.ready?.()
+          if (issue !== undefined) return { skills: [], teams: [], message: issue }
+          await deps.manager.reconcile()
           const skills = deps.store.list().map(asset => ({
             assetId: asset.id,
             skillId: asset.skillId,
@@ -145,6 +149,8 @@ export function registerTeamSkillTools(ctx: Context, agent: Agent, deps: TeamSki
       output: jsonOutput(ASSIGN_VALUE_SCHEMA),
       async execute(args) {
         try {
+          const issue = await deps.ready?.()
+          if (issue !== undefined) throw new Error(issue)
           const asset = deps.store.get(args.skill_id) ?? deps.store.bySkillId(args.skill_id)
           if (asset === undefined) return { ok: false, message: `No Team Skill named "${args.skill_id}" is installed.` }
           const team = deps.teams().find(candidate => candidate.id === args.team_id)
@@ -172,6 +178,8 @@ export function registerTeamSkillTools(ctx: Context, agent: Agent, deps: TeamSki
       output: jsonOutput(ASSIGN_VALUE_SCHEMA),
       async execute(args) {
         try {
+          const issue = await deps.ready?.()
+          if (issue !== undefined) throw new Error(issue)
           const asset = deps.store.get(args.skill_id) ?? deps.store.bySkillId(args.skill_id)
           if (asset === undefined) return { ok: false, message: `No Team Skill named "${args.skill_id}" is installed.` }
           const removed = await deps.manager.unassign(args.team_id, args.role_id, asset.id)
@@ -190,6 +198,8 @@ export function registerTeamSkillTools(ctx: Context, agent: Agent, deps: TeamSki
       output: jsonOutput(REMOVE_VALUE_SCHEMA),
       async execute(args) {
         try {
+          const issue = await deps.ready?.()
+          if (issue !== undefined) throw new Error(issue)
           const asset = deps.store.get(args.skill_id) ?? deps.store.bySkillId(args.skill_id)
           if (asset === undefined) return { ok: true, blockers: [], message: `No Team Skill named "${args.skill_id}" is installed.` }
           const outcome = await deps.manager.remove(asset.id)
@@ -217,6 +227,8 @@ export function registerTeamSkillTools(ctx: Context, agent: Agent, deps: TeamSki
       output: jsonOutput(ASSIGN_VALUE_SCHEMA),
       async execute(args) {
         try {
+          const issue = await deps.ready?.()
+          if (issue !== undefined) throw new Error(issue)
           const asset = deps.store.get(args.skill_id) ?? deps.store.bySkillId(args.skill_id)
           if (asset === undefined) return { ok: false, message: `No Team Skill named "${args.skill_id}" is installed.` }
           await deps.store.updateDependencies(asset.id, JSON.parse(args.dependencies_json) as TeamSkillDependencies)

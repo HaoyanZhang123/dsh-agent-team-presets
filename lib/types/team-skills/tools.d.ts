@@ -14,6 +14,8 @@ import type { TeamSkillManager } from './manager.ts';
 import type { TeamSkillStore } from './store.ts';
 /** What the tools need from the plugin. */
 export interface TeamSkillToolDeps {
+    /** Wait for startup and return its failure reason instead of a misleading empty library. */
+    readonly ready?: () => Promise<string | undefined>;
     /** The asset store. */
     readonly store: TeamSkillStore;
     /** The binding table and its guards. */

@@ -52,7 +52,6 @@ export interface TeamSkillDeleteOutcome {
 /** The Team Skill library plus its role bindings. */
 export declare class TeamSkillManager {
     private readonly store;
-    private readonly root;
     private bindings;
     private revision;
     private opened;
@@ -64,7 +63,9 @@ export declare class TeamSkillManager {
      * @param root - the same private root the store uses.
      * @param guards - live facts a delete has to consult.
      */
-    constructor(store: TeamSkillStore, root: string, guards: TeamSkillGuardContext);
+    constructor(store: TeamSkillStore, _root: string, guards: TeamSkillGuardContext);
+    /** Use the store's pinned physical root, including for bindings writes. */
+    private get root();
     /** Binding revision, bumped by every assignment change. */
     get bindingRevision(): number;
     /**

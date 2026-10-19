@@ -246,10 +246,11 @@ describe('Typert faces load without a schema dependency', () => {
       id: 'custom:x', skillId: 'x', description: 'x', origin: 'custom', version: '1', editable: true,
       fileCount: 1, totalBytes: 12, mcpServers: [], bindings: [],
     }
-    expect(codec.parse({ asset, files: [], body: 'Body' })).toMatchObject({ asset: { id: 'custom:x' } })
+    expect(codec.parse({ asset, files: [], body: 'Body', directory: '/store/assets/x/1' })).toMatchObject({ asset: { id: 'custom:x' } })
     expect(codec.parse({ ok: false, reason: 'unknown-asset', detail: 'gone' })).toMatchObject({ ok: false, reason: 'unknown-asset' })
     expect(() => codec.parse({ ok: true })).toThrow()
-    expect(() => codec.parse({ asset, files: [] })).toThrow()
+    // The page copies this path, so a detail without it must not type-check.
+    expect(() => codec.parse({ asset, files: [], body: 'Body' })).toThrow()
   })
 
   it('keeps the direct catalog and the cancellable execution stream', () => {

@@ -42,6 +42,8 @@ export interface TeamSkillServiceConfig {
   readonly official: () => readonly string[]
   /** Resolves once the store and its index are loaded, or `false` when they cannot be. */
   readonly ready: Promise<boolean>
+  /** Exact degraded-start reason, when available. */
+  readonly startupIssue?: () => string | undefined
   /** Re-applies every live Agent after a binding changed. */
   readonly resync: () => void
 }
@@ -78,7 +80,7 @@ export class TeamSkillService extends TypertRemoteService {
     } catch (error: unknown) {
       return `${UNAVAILABLE}: ${String(error)}`
     }
-    if (!opened) return UNAVAILABLE
+    if (!opened) return this.config.startupIssue?.() ?? UNAVAILABLE
     try { await this.config.manager.reconcile() } catch (error) { return String(error) }
     return undefined
   }
@@ -177,6 +179,7 @@ export class TeamSkillService extends TypertRemoteService {
       asset: row,
       files: asset.files.map(file => ({ path: file.path, size: file.size, text: file.text })),
       body,
+      directory: this.config.store.assetPath(asset.id, asset.version),
       dependencies: report,
     }
   }
@@ -279,6 +282,7 @@ export class TeamSkillService extends TypertRemoteService {
     if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     const path = join(this.config.store.root, IMPORT_FOLDER)
     try {
+      await assertNoSymlinks(path)
       await mkdir(path, { recursive: true })
       await assertNoSymlinks(path)
     } catch (error: unknown) {
@@ -302,7 +306,7 @@ export class TeamSkillService extends TypertRemoteService {
     if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     const root = join(this.config.store.root, IMPORT_FOLDER)
     let dirents
-    try { dirents = await readdir(root, { withFileTypes: true }) }
+    try { await assertNoSymlinks(root); dirents = await readdir(root, { withFileTypes: true }) }
     catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return { ok: true, root, scanned: 0, imported: 0, existing: 0, invalid: 0, entries: [] }

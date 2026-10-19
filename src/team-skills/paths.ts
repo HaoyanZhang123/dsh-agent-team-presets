@@ -11,7 +11,8 @@
  */
 
 import { lstat } from 'node:fs/promises'
-import { parse, resolve, sep } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { basename, dirname, join, parse, resolve, sep } from 'node:path'
 
 /** Most files one Team Skill folder may hold. */
 export const MAX_SKILL_FILES = 2000
@@ -180,7 +181,27 @@ export function checkNotSymlink(stats: { isSymbolicLink(): boolean }, path: stri
   if (stats.isSymbolicLink()) throw new SkillPathError('symlink-escape', path)
 }
 
-/** Reject actual symlinks in every existing component, including root ancestors. */
+/**
+ * Pin the existing ancestors of a caller-selected root to their physical path.
+ * A relocated home/package may have a symlink or junction in those ancestors.
+ * The final root itself is deliberately not resolved: assertNoSymlinks still
+ * rejects a link at that boundary, and at every descendant inside it.
+ * Missing parent suffixes are retained for a fresh installation.
+ */
+export function canonicalRoot(path: string): string {
+  const absolute = resolve(path)
+  let ancestor = dirname(absolute)
+  const suffix = [basename(absolute)]
+  for (;;) {
+    try { return join(realpathSync(ancestor), ...suffix) } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || dirname(ancestor) === ancestor) throw error
+      suffix.unshift(basename(ancestor))
+      ancestor = dirname(ancestor)
+    }
+  }
+}
+
+/** Reject actual symlinks in every existing component of an already pinned path. */
 export async function assertNoSymlinks(path: string): Promise<void> {
   const absolute = resolve(path)
   const root = parse(absolute).root

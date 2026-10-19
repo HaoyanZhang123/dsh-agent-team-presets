@@ -66,6 +66,8 @@ export declare class TeamSkills {
     readonly runtime: TeamSkillRuntime;
     /** Shipped skill ids this deployment actually provides. */
     official: readonly string[];
+    /** Retain a degraded-start reason for both GUI and tool callers. */
+    issue: string | undefined;
     private opened;
     private readonly syncGeneration;
     private closed;

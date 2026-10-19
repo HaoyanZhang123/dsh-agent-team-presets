@@ -93,6 +93,8 @@ export class TeamSkills {
   readonly runtime: TeamSkillRuntime
   /** Shipped skill ids this deployment actually provides. */
   official: readonly string[] = []
+  /** Retain a degraded-start reason for both GUI and tool callers. */
+  issue: string | undefined
   private opened = false
   private readonly syncGeneration = new WeakMap<Agent, number>()
   private closed = false
@@ -154,9 +156,11 @@ export class TeamSkills {
       if (changed.length > 0) log(`Team Skill store updated: ${changed.join(', ')}`)
       await this.manager.reconcile()
       this.opened = true
+      this.issue = undefined
       return true
     } catch (error: unknown) {
-      log(`Team Skills are unavailable in this deployment: ${String(error)}`)
+      this.issue = `Team Skills are unavailable in this deployment: ${String(error)}`
+      log(this.issue)
       return false
     }
   }

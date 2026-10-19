@@ -31,6 +31,8 @@ export interface TeamSkillServiceConfig {
     readonly official: () => readonly string[];
     /** Resolves once the store and its index are loaded, or `false` when they cannot be. */
     readonly ready: Promise<boolean>;
+    /** Exact degraded-start reason, when available. */
+    readonly startupIssue?: () => string | undefined;
     /** Re-applies every live Agent after a binding changed. */
     readonly resync: () => void;
 }

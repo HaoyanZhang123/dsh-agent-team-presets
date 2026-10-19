@@ -103,5 +103,13 @@ export declare function assetDirectoryName(skillId: string): string;
 export declare function checkNotSymlink(stats: {
     isSymbolicLink(): boolean;
 }, path: string): void;
-/** Reject actual symlinks in every existing component, including root ancestors. */
+/**
+ * Pin the existing ancestors of a caller-selected root to their physical path.
+ * A relocated home/package may have a symlink or junction in those ancestors.
+ * The final root itself is deliberately not resolved: assertNoSymlinks still
+ * rejects a link at that boundary, and at every descendant inside it.
+ * Missing parent suffixes are retained for a fresh installation.
+ */
+export declare function canonicalRoot(path: string): string;
+/** Reject actual symlinks in every existing component of an already pinned path. */
 export declare function assertNoSymlinks(path: string): Promise<void>;

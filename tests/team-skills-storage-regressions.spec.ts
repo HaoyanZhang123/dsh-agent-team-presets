@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { TeamSkillStore, installFromDirectory } from '../src/team-skills/store.ts'
+import { TeamSkillStore, diskComponent, installFromDirectory } from '../src/team-skills/store.ts'
 import { buildSkillPackage, parseSkillFrontmatter } from '../src/team-skills/import.ts'
 import { MAX_SKILL_FILE_BYTES } from '../src/team-skills/paths.ts'
 
@@ -49,7 +49,7 @@ describe('Team Skill storage regressions', () => {
     expect(store.get(asset.id)).toEqual(asset)
     expect(await readFile(join(path, 'registry.json'), 'utf8')).toBe(registry)
     expect(await store.readText(asset.id, 'notes.txt')).toBe('original')
-    expect(await readdir(join(path, 'assets', asset.id))).toEqual(['1'])
+    expect(await readdir(join(path, 'assets', diskComponent(asset.id)))).toEqual(['1'])
   })
   it('restores memory and directories when atomic registry replacement fails', async () => {
     const { path, store, asset } = await installed()
@@ -58,7 +58,7 @@ describe('Team Skill storage regressions', () => {
     await mkdir(join(path, 'registry.json'))
     await expect(store.writeFile(asset.id, 'notes.txt', 'changed')).rejects.toThrow()
     expect(store.get(asset.id)).toEqual(asset)
-    expect(await readdir(join(path, 'assets', asset.id))).toEqual(['1'])
+    expect(await readdir(join(path, 'assets', diskComponent(asset.id)))).toEqual(['1'])
     const fresh = new TeamSkillStore(path)
     await expect(fresh.open()).rejects.toThrow()
     await rm(join(path, 'registry.json'), { recursive: true })
@@ -74,7 +74,7 @@ describe('Team Skill storage regressions', () => {
       await mkdir(join(path, 'registry.json'))
     })).rejects.toThrow()
     expect(store.get(asset.id)).toEqual(asset)
-    expect(await readdir(join(path, 'assets', asset.id))).toEqual(['1'])
+    expect(await readdir(join(path, 'assets', diskComponent(asset.id)))).toEqual(['1'])
     await rm(join(path, 'registry.json'), { recursive: true })
     await writeFile(join(path, 'registry.json'), before)
     expect(await store.readText(asset.id, 'notes.txt')).toBe('original')
@@ -163,8 +163,8 @@ describe('Team Skill storage regressions', () => {
     const { path, asset } = await installed()
     const id = '12345678-1234-1234-1234-123456789abc'
     const actions = [
-      { kind: 'move', path: `assets/${asset.id}`, backup: '.removed-11111111' },
-      { kind: 'move', path: `manifests/${asset.id}`, backup: '.removed-22222222' },
+      { kind: 'move', path: `assets/${diskComponent(asset.id)}`, backup: '.removed-11111111' },
+      { kind: 'move', path: `manifests/${diskComponent(asset.id)}`, backup: '.removed-22222222' },
     ]
     await writeFile(join(path, 'transaction.json'), JSON.stringify({ version: 1, id, actions }))
     for (const action of actions) await rename(join(path, action.path), join(path, action.backup))
@@ -172,7 +172,7 @@ describe('Team Skill storage regressions', () => {
     const reopened = new TeamSkillStore(path); await reopened.open()
     if (committed) {
       expect(reopened.get(asset.id)).toBeUndefined()
-      await expect(readFile(join(path, 'assets', asset.id, '1', 'SKILL.md'))).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(readFile(join(path, 'assets', diskComponent(asset.id), diskComponent(asset.version), 'SKILL.md'))).rejects.toMatchObject({ code: 'ENOENT' })
     } else {
       expect(await reopened.readText(asset.id, 'SKILL.md')).toBe(instruction)
       expect(reopened.get(asset.id)).toEqual(asset)
@@ -188,11 +188,11 @@ describe('Team Skill storage regressions', () => {
     // action recorded before its corresponding filesystem effect.
     const donor = await installed()
     const asset = donor.asset
-    const directory = `assets/${asset.id}/1`
-    const manifest = `manifests/${asset.id}/1.json`
+    const directory = `assets/${diskComponent(asset.id)}/${diskComponent(asset.version)}`
+    const manifest = `manifests/${diskComponent(asset.id)}/${diskComponent(asset.version)}.json`
     await mkdir(join(path, directory), { recursive: true })
     for (const file of package_().files) await writeFile(join(path, directory, file.path), file.bytes)
-    await mkdir(join(path, 'manifests', asset.id), { recursive: true })
+    await mkdir(join(path, 'manifests', diskComponent(asset.id)), { recursive: true })
     const actions = [{ kind: 'create', path: '.stage-11111111' }, { kind: 'create', path: directory }, { kind: 'create', path: manifest }]
     await writeFile(join(path, 'transaction.json'), JSON.stringify({ version: 1, id, actions }))
     if (phase !== 'directory') await writeFile(join(path, manifest), JSON.stringify(asset))
@@ -212,7 +212,7 @@ describe('Team Skill storage regressions', () => {
   it('replays recovery interrupted after a backup was already restored', async () => {
     const { path, asset } = await installed()
     await writeFile(join(path, 'transaction.json'), JSON.stringify({ version: 1, id: '12345678', actions: [
-      { kind: 'move', path: `assets/${asset.id}`, backup: '.removed-11111111' },
+      { kind: 'move', path: `assets/${diskComponent(asset.id)}`, backup: '.removed-11111111' },
     ] }))
     const reopened = new TeamSkillStore(path); await reopened.open()
     expect(await reopened.readText(asset.id, 'SKILL.md')).toBe(instruction)
@@ -222,7 +222,7 @@ describe('Team Skill storage regressions', () => {
     const { path, asset } = await installed()
     await writeFile(join(path, 'transaction.json'), JSON.stringify({ version: 1, id: '12345678', actions: [{ kind: 'create', path: '../outside' }] }))
     await expect(new TeamSkillStore(path).open()).rejects.toThrow(/transaction path/u)
-    expect(await readFile(join(path, 'assets', asset.id, '1', 'SKILL.md'), 'utf8')).toBe(instruction)
+    expect(await readFile(join(path, 'assets', diskComponent(asset.id), diskComponent(asset.version), 'SKILL.md'), 'utf8')).toBe(instruction)
   })
   it('shares the manager lock reentrantly with nested mutations', async () => {
     const { store, asset } = await installed()

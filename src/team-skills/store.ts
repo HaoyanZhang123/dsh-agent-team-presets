@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
-import { SkillPathError, assertNoSymlinks, assetDirectoryName, checkFolder, isTextBytes, normalizeSkillPath, resolveInside } from './paths.ts'
+import { SkillPathError, assertNoSymlinks, canonicalRoot, assetDirectoryName, checkFolder, isTextBytes, normalizeSkillPath, resolveInside } from './paths.ts'
 import { buildSkillPackage } from './import.ts'
 import type { ImportedFile, SkillPackage } from './import.ts'
 import type { TeamSkillAsset, TeamSkillDependencies, TeamSkillFile, TeamSkillOrigin } from '../types.ts'
@@ -11,6 +11,7 @@ import type { TeamSkillAsset, TeamSkillDependencies, TeamSkillFile, TeamSkillOri
 const REGISTRY_VERSION = 1
 interface RegistryDocument { readonly version: number; readonly assets: readonly TeamSkillAsset[]; readonly transactionId?: string }
 type JournalAction = { kind: 'create'; path: string } | { kind: 'move'; path: string; backup: string }
+  | { kind: 'relocate'; path: string; destination: string }
 interface TransactionJournal { version: 1; id: string; actions: JournalAction[] }
 export interface OfficialSkillEntry { readonly skillId: string; readonly directory: string; readonly version: string }
 const NO_DEPENDENCIES: TeamSkillDependencies = { mcpServers: [], executables: [], otherSkills: [] }
@@ -27,9 +28,19 @@ export function folderDigest(files: readonly TeamSkillFile[]): string {
 export function fileTable(files: readonly ImportedFile[]): TeamSkillFile[] {
   return [...files].sort((a, b) => a.path.localeCompare(b.path)).map(file => ({ path: file.path, size: file.bytes.byteLength, sha256: digestBytes(file.bytes), text: isTextBytes(file.bytes) }))
 }
+const ENCODED_COMPONENT = /^~(?:[a-f0-9]+|h[a-f0-9]{64})$/u
 function component(value: string): string {
   if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:._-]*$/u.test(value)) throw new Error(`invalid asset path component: ${String(value)}`)
   return value
+}
+/** Logical ids stay unchanged in JSON; only their disk coordinates are encoded.
+ * `~` was never a valid logical component, so encoded and old names cannot clash.
+ * Uppercase, DOS devices and trailing dots are encoded on every platform too. */
+export function diskComponent(value: string): string {
+  component(value)
+  if (value.length <= 120 && /^[a-z0-9][a-z0-9._-]*$/u.test(value) && !value.endsWith('.')
+    && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(value)) return value
+  return value.length <= 120 ? `~${Buffer.from(value, 'utf8').toString('hex')}` : `~h${digestBytes(Buffer.from(value, 'utf8'))}`
 }
 function strings(value: unknown): value is string[] { return Array.isArray(value) && value.every(item => typeof item === 'string') }
 function validateAsset(value: unknown): asserts value is TeamSkillAsset {
@@ -78,11 +89,14 @@ export class TeamSkillStore {
   private revision = 0
   private opened = false
   private readonly transactions = new AsyncLocalStorage<Transaction>()
-  constructor(readonly root: string) {}
+  private physicalRoot: string | undefined
+  constructor(private readonly configuredRoot: string) {}
+  /** Pinned once open starts. Resolving it is kept out of plugin construction. */
+  get root(): string { return this.physicalRoot ?? resolve(this.configuredRoot) }
   get registryRevision(): number { return this.revision }
   private get table(): Map<string, TeamSkillAsset> { return this.transactions.getStore()?.assets ?? this.assets }
-  assetPath(assetId: string, version: string): string { return join(this.root, 'assets', component(assetId), component(version)) }
-  private manifestPath(assetId: string, version: string): string { return join(this.root, 'manifests', component(assetId), `${component(version)}.json`) }
+  assetPath(assetId: string, version: string): string { return join(this.root, 'assets', diskComponent(assetId), diskComponent(version)) }
+  private manifestPath(assetId: string, version: string): string { return join(this.root, 'manifests', diskComponent(assetId), `${diskComponent(version)}.json`) }
 
   /** Share this reentrant lock with manager check-and-commit operations. */
   async withLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -106,14 +120,18 @@ export class TeamSkillStore {
   }
   private get journalPath(): string { return join(this.root, 'transaction.json') }
   private journalTarget(path: string): string {
-    if (!/^(?:(?:assets|manifests)\/[A-Za-z0-9][A-Za-z0-9:._-]*(?:\/[A-Za-z0-9][A-Za-z0-9:._-]*)?|\.(?:stage|removed)-[a-f0-9-]+)$/u.test(path)
+    if (!/^(?:(?:assets|manifests)\/(?:[A-Za-z0-9][A-Za-z0-9:._-]*|~(?:[a-f0-9]+|h[a-f0-9]{64}))(?:\/(?:[A-Za-z0-9][A-Za-z0-9:._-]*|~(?:[a-f0-9]+|h[a-f0-9]{64}))(?:\.json)?)?|\.(?:stage|removed)-[a-f0-9-]+)$/u.test(path)
       || path.split('/').some(part => part === '.' || part === '..')) throw new Error('invalid Team Skill transaction path')
+    // Old POSIX journals may contain ':'. On Windows those coordinates were
+    // never valid directories, and a drive-relative segment must not reset root.
+    if (process.platform === 'win32' && path.includes(':')) throw new Error('invalid Team Skill transaction path')
     return resolveInside(this.root, path)
   }
   private async record(action: JournalAction): Promise<void> {
     const tx = this.transactions.getStore()!
     this.journalTarget(action.path)
     if (action.kind === 'move') this.journalTarget(action.backup)
+    if (action.kind === 'relocate') this.journalTarget(action.destination)
     tx.journal.actions.push(action)
     // Write ahead: the action must be recoverable before any filesystem effect.
     await atomicWriteJson(this.journalPath, tx.journal)
@@ -125,7 +143,7 @@ export class TeamSkillStore {
       await assertNoSymlinks(path)
       if (action.kind === 'create') await rm(path, { recursive: true, force: true })
       else {
-        const backup = this.journalTarget(action.backup)
+        const backup = this.journalTarget(action.kind === 'relocate' ? action.destination : action.backup)
         await assertNoSymlinks(backup)
         let exists = true
         try { await lstat(backup) } catch (error: unknown) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; exists = false }
@@ -153,9 +171,10 @@ export class TeamSkillStore {
     const value = JSON.parse(raw) as TransactionJournal
     if (!value || value.version !== 1 || typeof value.id !== 'string' || !/^[a-f0-9-]+$/u.test(value.id) || !Array.isArray(value.actions)) throw new Error('invalid Team Skill transaction journal')
     for (const action of value.actions) {
-      if (!action || (action.kind !== 'create' && action.kind !== 'move') || typeof action.path !== 'string') throw new Error('invalid Team Skill transaction action')
+      if (!action || (action.kind !== 'create' && action.kind !== 'move' && action.kind !== 'relocate') || typeof action.path !== 'string') throw new Error('invalid Team Skill transaction action')
       this.journalTarget(action.path)
       if (action.kind === 'move') this.journalTarget(action.backup)
+      if (action.kind === 'relocate') this.journalTarget(action.destination)
     }
     // The registry rename is the commit point. A separate committed flag would
     // introduce another ambiguous window between these two durable documents.
@@ -168,7 +187,59 @@ export class TeamSkillStore {
     if (committed) await this.cleanup(value)
     else await this.undo(value)
   }
-  async open(): Promise<void> { await this.withLock(async () => { if (this.opened) return; await this.recover(); this.assets = await this.load(); this.opened = true }) }
+  async open(): Promise<void> {
+    this.physicalRoot ??= canonicalRoot(this.configuredRoot)
+    await this.withLock(async () => {
+      if (this.opened) return
+      await this.recover()
+      this.assets = await this.load()
+      this.opened = true
+      try { await this.migrateLayout() } catch (error) { this.opened = false; throw error }
+    })
+  }
+  /** Move v1 POSIX directory names without changing identities or losing pinned
+   * historical versions. A write-ahead relocate can be undone after a crash;
+   * unlike deletion backups, committed destinations are never cleaned up. */
+  private async migrateLayout(): Promise<void> {
+    await this.transaction(async () => {
+      const relocate = async (from: string, to: string): Promise<void> => {
+        await assertNoSymlinks(from)
+        if (from === to) return
+        await assertNoSymlinks(to)
+        try { await lstat(to); throw new Error('conflicting Team Skill storage layouts; refusing to overwrite') }
+        catch (error: unknown) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+        await this.record({ kind: 'relocate', path: relative(this.root, from).split('\\').join('/'), destination: relative(this.root, to).split('\\').join('/') })
+        await rename(from, to)
+        this.transactions.getStore()!.dirty = true
+      }
+      for (const kind of ['assets', 'manifests'] as const) {
+        const base = join(this.root, kind)
+        await assertNoSymlinks(base)
+        let entries
+        try { entries = await readdir(base, { withFileTypes: true }) }
+        catch (error: unknown) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error }
+        for (const entry of entries) {
+          const source = join(base, entry.name)
+          await assertNoSymlinks(source)
+          if (!entry.isDirectory()) throw new Error('invalid Team Skill asset directory')
+          const name = ENCODED_COMPONENT.test(entry.name) ? entry.name : diskComponent(entry.name)
+          const directory = join(base, name)
+          await relocate(source, directory)
+          for (const version of await readdir(directory)) {
+            // An interrupted atomic manifest write can leave its private temp
+            // file. It is not a published version and must not block reopening.
+            if (kind === 'manifests' && !version.endsWith('.json')) {
+              await assertNoSymlinks(join(directory, version))
+              continue
+            }
+            const logical = kind === 'manifests' ? version.replace(/\.json$/u, '') : version
+            const encoded = ENCODED_COMPONENT.test(logical) ? logical : diskComponent(logical)
+            await relocate(join(directory, version), join(directory, kind === 'manifests' ? `${encoded}.json` : encoded))
+          }
+        }
+      }
+    })
+  }
   list(): readonly TeamSkillAsset[] { return [...this.table.values()].sort((a, b) => a.skillId.localeCompare(b.skillId) || a.id.localeCompare(b.id)) }
   get(assetId: string): TeamSkillAsset | undefined { return this.table.get(assetId) }
   bySkillId(skillId: string): TeamSkillAsset | undefined {
@@ -296,7 +367,7 @@ export class TeamSkillStore {
       const asset = requireAsset(this.table, assetId)
       if (asset.origin === 'builtin') throw new Error('a shipped Team Skill is read-only and cannot be deleted')
       const tx = this.transactions.getStore()!
-      for (const path of [join(this.root, 'assets', component(assetId)), join(this.root, 'manifests', component(assetId))]) {
+      for (const path of [join(this.root, 'assets', diskComponent(assetId)), join(this.root, 'manifests', diskComponent(assetId))]) {
         await assertNoSymlinks(path)
         const backup = join(this.root, `.removed-${randomUUID()}`)
         await this.record({ kind: 'move', path: relative(this.root, path).split('\\').join('/'), backup: relative(this.root, backup).split('\\').join('/') })
@@ -395,7 +466,8 @@ function requireAsset(assets: ReadonlyMap<string, TeamSkillAsset>, assetId: stri
   return asset
 }
 function nextVersion(): string { return `${Date.now()}-${randomUUID()}` }
-async function readDirectory(root: string): Promise<ImportedFile[]> {
+async function readDirectory(source: string): Promise<ImportedFile[]> {
+  const root = canonicalRoot(source)
   await assertNoSymlinks(root)
   const files: ImportedFile[] = []
   const walk = async (relative: string): Promise<void> => {

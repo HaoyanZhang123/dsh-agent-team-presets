@@ -482,6 +482,8 @@ export interface TeamSkillDetailView {
   readonly files: readonly TeamSkillFileView[]
   /** The `SKILL.md` body, without frontmatter. */
   readonly body: string
+  /** Absolute directory holding this version's files, as the store named it. */
+  readonly directory: string
   /** Declared dependencies, with the executable check that can be made here. */
   readonly dependencies?: {
     readonly executables: readonly { readonly name: string; readonly found: boolean }[]

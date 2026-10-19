@@ -14,6 +14,7 @@ import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { TeamSkillManager } from '../src/team-skills/manager.ts'
 import { TeamSkillStore } from '../src/team-skills/store.ts'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { registerTeamSkillTools } from '../src/team-skills/tools.ts'
 
 const roots: string[] = []
@@ -48,6 +49,20 @@ describe('the Team Skill tool registration', () => {
     expect(names).toContain('unassign_team_skill')
     expect(names).toContain('remove_team_skill')
     dispose()
+    const unavailable = 'Team Skills unavailable: symlink-escape at private root'
+    const stop = registerTeamSkillTools(ctx, lead, {
+      store, manager, teams: () => [], resync: () => {}, ready: async () => unavailable,
+    })
+    for (const [name, args] of [
+      ['list_team_skills', {}],
+      ['remove_team_skill', { skill_id: 'missing' }],
+    ] as const) {
+      const result = await ctx.tools.execute({ callId: ToolCallId(name), name, arguments: args, agent: lead, signal: new AbortController().signal })
+      const text = result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+      expect(text).toContain(unavailable)
+      if (name === 'remove_team_skill') expect(JSON.parse(text)).toMatchObject({ ok: false })
+    }
+    stop()
     const after = await lead.ctx.systemPrompt.assemble(assembleContextFor(lead))
     expect(after.tools.map(tool => tool.name)).not.toContain('list_team_skills')
   })
