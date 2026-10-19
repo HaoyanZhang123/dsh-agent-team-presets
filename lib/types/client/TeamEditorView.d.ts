@@ -7,7 +7,6 @@ import type { TeamPreset } from '../types.ts';
 import type { TeamPresetsLocaleKey } from './locales.ts';
 /** The agent page one row opens. */
 export type AgentSlot = 'captain' | number;
-/** Props of one Team's page. */
 export interface TeamEditorViewProps {
     /** The Team being edited. */
     readonly team: TeamPreset;

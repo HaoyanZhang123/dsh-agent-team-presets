@@ -3,6 +3,7 @@
  * member roster. Choosing the captain or a member opens that agent's page.
  */
 
+import { useState } from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProviderChoice } from './team-presets-controller.ts'
 import type { TeamAgentPreset, TeamPreset } from '../types.ts'
@@ -21,6 +22,79 @@ function agentRoute(agent: TeamAgentPreset, providers: readonly ProviderChoice[]
 }
 
 /** Props of one Team's page. */
+/** Local editor state of the display-metadata panel. */
+interface MetadataFields {
+  summary: string
+  tags: string
+  useCases: string
+  quickPrompts: string
+  notes: string
+}
+
+/**
+ * The display-metadata card.
+ *
+ * Everything it edits is user-facing only: the panel says so, and the fields are
+ * written as one `metadata` patch so a Team's fingerprint (and therefore a
+ * running task's applied definition) never changes because a label was edited.
+ * @param props - the Team and the patch writer.
+ * @returns the folded card.
+ */
+function MetadataPanel(props: { team: TeamPreset; disabled: boolean; onPatch: (patch: Partial<TeamPreset>) => void; t: (key: TeamPresetsLocaleKey) => string }): React.ReactElement {
+  const existing = props.team.metadata ?? {}
+  const [fields, setFields] = useState<MetadataFields>({
+    summary: existing.summary ?? '',
+    tags: (existing.tags ?? []).join(', '),
+    useCases: (existing.useCases ?? []).join('\n'),
+    quickPrompts: (existing.quickPrompts ?? []).join('\n'),
+    notes: existing.notes ?? '',
+  })
+  const [open, setOpen] = useState(false)
+  const commit = (next: MetadataFields): void => {
+    setFields(next)
+    props.onPatch({
+      metadata: {
+        ...next.summary.trim() === '' ? {} : { summary: next.summary.trim() },
+        ...next.notes.trim() === '' ? {} : { notes: next.notes.trim() },
+        ...next.tags.trim() === '' ? {} : { tags: next.tags.split(',').map(entry => entry.trim()).filter(entry => entry !== '') },
+        ...next.useCases.trim() === '' ? {} : { useCases: next.useCases.split('\n').map(entry => entry.trim()).filter(entry => entry !== '') },
+        ...next.quickPrompts.trim() === '' ? {} : { quickPrompts: next.quickPrompts.split('\n').map(entry => entry.trim()).filter(entry => entry !== '') },
+      },
+    })
+  }
+  return (
+    <section className={css.card}>
+      <span className={css.cardTitle}>
+        {props.t('metadataTitle')} <span className={css.hint}>{props.t('metadataOnlyDisplay')}</span>
+      </span>
+      <p className={css.hint}>{props.t('metadataNote')}</p>
+      <Button size="sm" variant="ghost" onClick={() => { setOpen(value => !value) }}>
+        {open ? props.t('metadataFold') : props.t('metadataUnfold')}
+      </Button>
+      {open ? (
+        <>
+          <label className={css.fieldLabel}>{props.t('metadataSummary')}</label>
+          <textarea className={css.prompt} rows={2} disabled={props.disabled} value={fields.summary}
+            onChange={(event) => { commit({ ...fields, summary: event.target.value }) }} />
+          <label className={css.fieldLabel}>{props.t('metadataTags')}</label>
+          <input className={css.input} disabled={props.disabled} value={fields.tags}
+            onChange={(event) => { commit({ ...fields, tags: event.target.value }) }} />
+          <p className={css.hint}>{props.t('metadataTagsHint')}</p>
+          <label className={css.fieldLabel}>{props.t('metadataUseCases')}</label>
+          <textarea className={css.prompt} rows={3} disabled={props.disabled} value={fields.useCases}
+            onChange={(event) => { commit({ ...fields, useCases: event.target.value }) }} />
+          <label className={css.fieldLabel}>{props.t('metadataQuickPrompts')}</label>
+          <textarea className={css.prompt} rows={3} disabled={props.disabled} value={fields.quickPrompts}
+            onChange={(event) => { commit({ ...fields, quickPrompts: event.target.value }) }} />
+          <label className={css.fieldLabel}>{props.t('metadataNotes')}</label>
+          <textarea className={css.prompt} rows={2} disabled={props.disabled} value={fields.notes}
+            onChange={(event) => { commit({ ...fields, notes: event.target.value }) }} />
+        </>
+      ) : null}
+    </section>
+  )
+}
+
 export interface TeamEditorViewProps {
   /** The Team being edited. */
   readonly team: TeamPreset
@@ -127,6 +201,8 @@ export function TeamEditorView(props: TeamEditorViewProps) {
           </ul>
         )}
       </section>
+
+      <MetadataPanel team={props.team} disabled={props.disabled} onPatch={props.onPatch} t={props.t} />
     </>
   )
 }

@@ -63,6 +63,26 @@ export type TeamPresetsLocaleKey =
   | 'skillsReset'
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
   | 'skillsAssignTitle' | 'skillsAssignHint' | 'skillsAssignEmpty'
+  | 'metadataTitle'
+  | 'metadataOnlyDisplay'
+  | 'metadataNote'
+  | 'metadataFold'
+  | 'metadataUnfold'
+  | 'metadataSummary'
+  | 'metadataTags'
+  | 'metadataTagsHint'
+  | 'metadataUseCases'
+  | 'metadataQuickPrompts'
+  | 'metadataNotes'
+  | 'listSearch'
+  | 'listAll'
+  | 'listBuiltin'
+  | 'listCustom'
+  | 'seriesDevelopment'
+  | 'seriesWorkModes'
+  | 'listMatched'
+  | 'listNoInject'
+  | 'listNoMatch'
   | 'composeTitle'
   | 'composeClose'
   | 'composeSearch'
@@ -290,6 +310,26 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsVersion: 'version',
   skillsAssignTitle: 'Team Skill assignment',
   composeTitle: 'Choose a team',
+  metadataTitle: 'Team display metadata',
+  metadataOnlyDisplay: 'display only',
+  metadataNote: 'This part is never injected into the runtime context. It is used for search, grouping, the Team intro and preset transfer only; it adds no tokens to any prompt.',
+  metadataFold: 'Fold',
+  metadataUnfold: 'Unfold',
+  metadataSummary: 'Summary',
+  metadataTags: 'Tags (separate with a half-width comma ,)',
+  metadataTagsHint: 'Use a half-width comma, for example: frontend, review, release',
+  metadataUseCases: 'Use cases (one per line)',
+  metadataQuickPrompts: 'Suggested tasks (one per line)',
+  metadataNotes: 'Notes',
+  listSearch: 'Search name, summary, tags, use cases, suggested tasks',
+  listAll: 'All',
+  listBuiltin: 'Built-in',
+  listCustom: 'Custom',
+  seriesDevelopment: 'Development scale',
+  seriesWorkModes: 'Work modes',
+  listMatched: 'Matched',
+  listNoInject: 'display metadata is never injected into runtime context',
+  listNoMatch: 'No team matches this filter',
   composeClose: 'Close',
   composeSearch: 'Search name, tags, use cases…',
   composeAll: 'All',
@@ -489,6 +529,26 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsVersion: '版本',
   skillsAssignTitle: 'Team Skill 分配',
   composeTitle: '选择团队',
+  metadataTitle: '团队展示信息',
+  metadataOnlyDisplay: '仅用于展示',
+  metadataNote: '这部分不会注入运行时上下文。仅用于搜索、分类、团队介绍及预设导入导出，不会增加任何 Prompt 的 Token。',
+  metadataFold: '折叠',
+  metadataUnfold: '展开',
+  metadataSummary: '团队简介',
+  metadataTags: '标签（使用英文逗号 , 分隔）',
+  metadataTagsHint: '多个标签请用英文半角逗号，例如：frontend, review, release',
+  metadataUseCases: '适用场景（每行一项）',
+  metadataQuickPrompts: '推荐任务（每行一项）',
+  metadataNotes: '备注',
+  listSearch: '搜索名称、简介、标签、适用场景、推荐任务',
+  listAll: '全部',
+  listBuiltin: '插件内置',
+  listCustom: '自定义',
+  seriesDevelopment: '研发规模',
+  seriesWorkModes: '工作模式',
+  listMatched: '匹配',
+  listNoInject: '展示信息不会注入运行时上下文',
+  listNoMatch: '没有匹配的团队',
   composeClose: '关闭',
   composeSearch: '搜索名称、标签、适用场景…',
   composeAll: '全部',

@@ -3,9 +3,12 @@
  * opens that Team's own page.
  */
 
-import { useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeamPreset } from '../types.ts'
+import { matchTeam, queryTokens, teamOrigin } from '../team-search.ts'
+import { TEAM_SERIES, teamSeriesOf } from '../team-catalog.ts'
+import type { TeamSeries } from '../types.ts'
 import type { TeamPresetsLocaleKey } from './locales.ts'
 import css from './TeamPresetsSection.module.css'
 
@@ -39,6 +42,20 @@ export interface TeamListViewProps {
 export function TeamListView(props: TeamListViewProps) {
   const { t, disabled } = props
   const fileInput = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useState('')
+  const [source, setSource] = useState<'all' | 'builtin' | 'custom'>('all')
+  const [series, setSeries] = useState<'all' | TeamSeries>('all')
+
+  const tokens = queryTokens(query)
+  const visible = useMemo(() => props.teams.filter((team) => {
+    const matchesSource = source === 'all' || teamOrigin(team.id).source === source
+    const matchesSeries = series === 'all' || teamSeriesOf(team.id) === series
+    // The shared matcher decides what a token matches, so the list and the
+    // composer picker can never disagree about which Teams a query finds.
+    const matchesQuery = tokens.length === 0 || matchTeam(team, tokens) !== undefined
+    return matchesSource && matchesSeries && matchesQuery
+  }), [props.teams, source, series, tokens])
+
   return (
     <>
       <header className={css.pageHead}>
@@ -85,12 +102,38 @@ export function TeamListView(props: TeamListViewProps) {
         ? null
         : <p className={css.warn} role="status">{t(props.importError)}</p>}
 
+      <div className={css.listToolbar}>
+        <input
+          className={css.listSearch}
+          value={query}
+          placeholder={t('listSearch')}
+          onChange={(event) => { setQuery(event.target.value) }}
+        />
+      </div>
+      <div className={css.chipRow}>
+        <button type="button" className={`${css.chip} ${source === 'all' && series === 'all' ? css.chipActive : ''}`} onClick={() => { setSource('all'); setSeries('all') }}>{t('listAll')}</button>
+        <button type="button" className={`${css.chip} ${source === 'builtin' ? css.chipActive : ''}`} onClick={() => { setSource('builtin'); setSeries('all') }}>{t('listBuiltin')}</button>
+        <button type="button" className={`${css.chip} ${source === 'custom' ? css.chipActive : ''}`} onClick={() => { setSource('custom'); setSeries('all') }}>{t('listCustom')}</button>
+        {TEAM_SERIES.map(entry => (
+          <button
+            key={entry.id}
+            type="button"
+            className={`${css.chip} ${series === entry.id ? css.chipActive : ''}`}
+            onClick={() => { setSeries(entry.id); setSource('all') }}
+          >{entry.id === 'classic-development' ? t('seriesDevelopment') : t('seriesWorkModes')}</button>
+        ))}
+      </div>
+      <p className={css.hint}>
+        {t('listMatched')} {visible.length} · {t('listNoInject')}
+      </p>
+
       {props.teams.length === 0
         ? <p className={css.empty}>{t('emptyTeams')}</p>
         : (
           <ul className={css.rows}>
-            {props.teams.map(team => (
-              <li key={team.id} className={css.card}>
+            {visible.length === 0 ? <li className={css.empty}>{t('listNoMatch')}</li> : null}
+            {visible.map(team => (
+              <li key={team.id} className={css.card} data-series={teamSeriesOf(team.id) ?? ''}>
                 <button type="button" className={css.rowMain} onClick={() => { props.onOpen(team.id) }}>
                   <span
                     className={css.dot}
