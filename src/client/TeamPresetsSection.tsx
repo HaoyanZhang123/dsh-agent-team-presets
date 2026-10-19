@@ -234,6 +234,14 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   const disclosures = team === undefined || state.execution !== 'ready'
     ? []
     : state.executions.find(row => row.teamId === team.id)?.notes ?? []
+  // The notice container is bordered, so an empty one would draw a stray box.
+  const hasFooterNotes = execution !== undefined
+    || disclosures.length > 0
+    || state.failed
+    || state.formIssue !== undefined
+    || state.externalUpdate !== undefined
+    || state.defaults !== undefined
+    || state.dirty
   // An unnamed Team has no identity anywhere it is shown — the list falls back to
   // its id, so do the composer and this page's own breadcrumb. The save is
   // withheld and the offender is named rather than letting an id leak into the UI.
@@ -358,6 +366,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
       )}
 
       <footer className={css.footer}>
+        {hasFooterNotes ? (
         <div className={css.footerNotes}>
           {execution === undefined ? null : (
             <span className={css.footerNote} role="status">
@@ -390,6 +399,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
           )}
           {state.dirty ? <span className={css.footerNote}>{t('unsaved')}</span> : null}
         </div>
+        ) : null}
         <div className={css.footerActions}>
           <Button
             size="sm"
