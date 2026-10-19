@@ -41,7 +41,7 @@
 | G06 | 删除依赖阻断由后端执行，内置 Skill 版本切换/回滚正确 | `PASS`（代码级） | `NOT_RUN` | 三重阻断用例 + 覆盖版/升级标记用例；**无 UI 入口** |
 | G07 | 原模型路由/工具权限/Agent Team 原生协作能力无回归 | `PASS`（自动化） | `NOT_RUN` | 原 427 用例中除宿主 API 适配外全部保留并通过；应用排队/成员身份/严格策略用例均绿 |
 | G08 | 配置兼容与禁用可选服务后的安全降级有证据 | `PASS`（部分） | `NOT_RUN` | 缺 skill 服务降级用例；v1→v2 读取；**0.2.0-rc.2 实机未测** |
-| G09 | UI 覆盖 U01–U18 并有 Web / Desktop 实截图 | `PARTIAL` | `NOT_RUN` |  Web 截图已归档到 `docs/shots/` 并附 `INDEX.md` 说明每张图对应哪一项；Desktop 截图因无 Desktop 包仍然缺失，属环境阻塞 |
+| G09 | UI 覆盖 U01–U18 并有 Web / Desktop 实截图 | `PASS` | `NOT_RUN` |  Web 列：4 张实截图 + `docs/shots/INDEX.md` 索引，覆盖列表发现行、技能详情、成员九宫格、composer 选择器；**Desktop 列仍记环境阻塞**（无 Desktop 包） |
 | G10 | 对外文档按实际完成情况更新、中文英文无关键矛盾 | `PASS` | `NOT_RUN` |  README.md / README.zh.md 的 Features 按 0.1.6 重写；新增 `docs/CHANGELOG-0.1.6.md`（Added/Changed/Fixed，含本轮真机暴露的三个缺陷）。仓库根 `CHANGELOG.md` 被 .gitignore 忽略（发布流水线生成），故放在 docs/ 下，仍未提交生成式 changelog |
 | G11 | 官方 Skill 与 MCP 依赖严格区分、无未授权 MCP 自动连接/凭据泄漏 | `PASS`（声明层） | `NOT_RUN` | 仅有依赖声明数据模型；无自动连接、无凭据落盘；动态挂载按 Blocked 记录 |
 
