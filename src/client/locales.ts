@@ -64,6 +64,13 @@ export type TeamPresetsLocaleKey =
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
   | 'skillsAssignTitle' | 'skillsAssignHint' | 'skillsAssignEmpty'
   | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
+  | 'categoryManage'
+  | 'categoryFold'
+  | 'categoryName'
+  | 'categoryAdd'
+  | 'categoryEmpty'
+  | 'categoryOf'
+  | 'categoryNone'
   | 'metadataTitle'
   | 'metadataOnlyDisplay'
   | 'metadataNote'
@@ -311,6 +318,13 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsVersion: 'version',
   skillsAssignTitle: 'Team Skill assignment',
   skillsDeclared: 'declared',
+  categoryManage: 'Manage categories',
+  categoryFold: 'Hide categories',
+  categoryName: 'New category name',
+  categoryAdd: 'Add',
+  categoryEmpty: 'No category yet',
+  categoryOf: 'Category',
+  categoryNone: 'Uncategorised',
   skillsFound: 'found on PATH',
   skillsMissing: 'missing from PATH',
   composeTitle: 'Choose a team',
@@ -533,6 +547,13 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsVersion: '版本',
   skillsAssignTitle: 'Team Skill 分配',
   skillsDeclared: '已声明',
+  categoryManage: '管理分类',
+  categoryFold: '收起分类',
+  categoryName: '新分类名称',
+  categoryAdd: '添加',
+  categoryEmpty: '还没有分类',
+  categoryOf: '所属分类',
+  categoryNone: '未分类',
   skillsFound: 'PATH 中存在',
   skillsMissing: 'PATH 中缺失',
   composeTitle: '选择团队',

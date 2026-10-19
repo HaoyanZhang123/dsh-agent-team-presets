@@ -36,6 +36,10 @@ export interface TeamListViewProps {
   readonly categories?: readonly { readonly id: string; readonly name: string }[]
   /** Which Team owns which category. */
   readonly teamCategories?: readonly { readonly teamId: string; readonly categoryId: string }[]
+  /** Adds one category by name. */
+  readonly onAddCategory?: (name: string) => void
+  /** Removes one category and its memberships. */
+  readonly onRemoveCategory?: (id: string) => void
 }
 
 /**
@@ -50,6 +54,8 @@ export function TeamListView(props: TeamListViewProps) {
   const [source, setSource] = useState<'all' | 'builtin' | 'custom'>('all')
   const [series, setSeries] = useState<'all' | TeamSeries>('all')
   const [category, setCategory] = useState('')
+  const [managing, setManaging] = useState(false)
+  const [newCategory, setNewCategory] = useState('')
 
   const tokens = queryTokens(query)
   const visible = useMemo(() => props.teams.filter((team) => {
@@ -139,6 +145,37 @@ export function TeamListView(props: TeamListViewProps) {
           >{entry.id === 'classic-development' ? t('seriesDevelopment') : t('seriesWorkModes')}</button>
         ))}
       </div>
+      {props.onAddCategory === undefined ? null : (
+        <div className={css.chipRow} style={{ marginBottom: 6 }}>
+          <button type="button" className={css.chip} onClick={() => { setManaging(value => !value) }}>
+            {managing ? t('categoryFold') : t('categoryManage')}
+          </button>
+        </div>
+      )}
+      {managing ? (
+        <div className={css.categoryPanel}>
+          <input
+            className={css.listSearch}
+            value={newCategory}
+            placeholder={t('categoryName')}
+            onChange={(event) => { setNewCategory(event.target.value) }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              props.onAddCategory?.(newCategory)
+              setNewCategory('')
+            }}
+          />
+          <Button size="sm" variant="outline" onClick={() => { props.onAddCategory?.(newCategory); setNewCategory('') }}>{t('categoryAdd')}</Button>
+          {(props.categories ?? []).map(entry => (
+            <span key={entry.id} className={css.categoryPill}>
+              {entry.name}
+              <button type="button" className={css.chip} onClick={() => { props.onRemoveCategory?.(entry.id) }}>×</button>
+            </span>
+          ))}
+          {(props.categories ?? []).length === 0 ? <span className={css.hint}>{t('categoryEmpty')}</span> : null}
+        </div>
+      ) : null}
+
       <p className={css.hint}>
         {t('listMatched')} {visible.length} · {t('listNoInject')}
       </p>

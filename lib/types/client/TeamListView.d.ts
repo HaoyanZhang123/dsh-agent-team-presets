@@ -34,6 +34,10 @@ export interface TeamListViewProps {
         readonly teamId: string;
         readonly categoryId: string;
     }[];
+    /** Adds one category by name. */
+    readonly onAddCategory?: (name: string) => void;
+    /** Removes one category and its memberships. */
+    readonly onRemoveCategory?: (id: string) => void;
 }
 /**
  * Render the Team list.

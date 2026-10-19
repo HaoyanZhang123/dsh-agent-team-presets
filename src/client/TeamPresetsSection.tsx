@@ -254,6 +254,8 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             disabled={disabled}
             importError={importError}
             categories={categoriesForList}
+            onAddCategory={(name) => { void props.addCategory(name) }}
+            onRemoveCategory={(id) => { void props.removeCategory(id) }}
             teamCategories={state.teamCategories}
             onOpen={openTeam}
             onCreate={() => { openTeam(props.createTeam()) }}

@@ -462,3 +462,7 @@
 .chipRow { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
 .chip { border: 1px solid var(--dsw-alias-line-regular, #dee2e7); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font-size: 12px; padding: 5px 9px; cursor: pointer; }
 .chipActive { background: var(--dsw-alias-interactive-bg-hover, #e9edf3); color: var(--dsw-alias-label-primary, #202935); }
+
+/* Category management, kept inline so it never opens a second dialog. */
+.categoryPanel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid var(--dsw-alias-line-regular, #dfe3e8); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; background: var(--dsw-alias-bg-elevated, #fff); }
+.categoryPill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #dee2e7; border-radius: 999px; padding: 2px 4px 2px 9px; font-size: 12px; }

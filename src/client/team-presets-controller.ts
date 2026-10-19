@@ -886,6 +886,8 @@ export class TeamPresetsController {
     return {
       hooks: { teamPresets: this.store },
       createTeam: () => this.createTeam(),
+      addCategory: (name: string) => this.addCategory(name),
+      removeCategory: (id: string) => this.removeCategory(id),
       duplicateTeam: (index: number) => this.duplicateTeam(index),
       restoreDefaults: () => { this.restoreDefaults() },
       exportTeam: (index: number) => this.exportTeam(index),
@@ -1347,6 +1349,73 @@ export class TeamPresetsController {
     this.publish({ saving: false, failed: !landed })
   }
 
+  /**
+   * Write the reader's own category list.
+   *
+   * Categories are local view fields, not part of the Team draft, so they are
+   * written straight to their own path instead of riding the draft's save. The
+   * fence is the same one the draft uses: a Host that moved past it refuses the
+   * write and the page re-reads rather than overwriting.
+   * @param next - the complete category list to store.
+   * @returns whether the Host accepted the write.
+   */
+  private async writeCategories(next: readonly TeamCategory[], memberships: readonly TeamCategoryAssignment[]): Promise<boolean> {
+    const snapshot = this.form.getSnapshot()
+    if (snapshot.status !== 'ready' || !snapshot.writable) {
+      this.publish({ failed: true })
+      return false
+    }
+    const ops: SettingsPathOpView[] = [
+      { op: 'set', path: ['categories'], value: next.map(row => ({ ...row })) },
+      { op: 'set', path: ['teamCategories'], value: memberships.map(row => ({ ...row })) },
+    ]
+    const landed = await this.form.mutate(ops, snapshot.revision)
+    if (this.disposed) return false
+    this.publish({ failed: !landed })
+    return landed
+  }
+
+  /**
+   * Add one category.
+   * @param name - the display name the user typed.
+   * @returns whether the Host accepted the write.
+   */
+  async addCategory(name: string): Promise<boolean> {
+    const trimmed = name.trim()
+    if (trimmed === '') return false
+    const current = this.projection()
+    const existing = current.categories
+    const id = `cat-${Date.now().toString(36)}`
+    const order = existing.reduce((max, row) => Math.max(max, row.order), 0) + 1
+    return this.writeCategories([...existing, { id, name: trimmed, order }], current.teamCategories)
+  }
+
+  /**
+   * Remove one category and every membership that pointed at it.
+   * @param id - category identity.
+   * @returns whether the Host accepted the write.
+   */
+  async removeCategory(id: string): Promise<boolean> {
+    const current = this.projection()
+    return this.writeCategories(
+      current.categories.filter(row => row.id !== id),
+      current.teamCategories.filter(row => row.categoryId !== id),
+    )
+  }
+
+  /**
+   * Move one Team into one category, or out of every category.
+   * @param teamId - Team identity.
+   * @param categoryId - category identity, or an empty string for none.
+   * @returns whether the Host accepted the write.
+   */
+  async setCategory(teamId: string, categoryId: string): Promise<boolean> {
+    const current = this.projection()
+    const without = current.teamCategories.filter(row => row.teamId !== teamId)
+    const next = categoryId === '' ? without : [...without, { teamId, categoryId }]
+    return this.writeCategories(current.categories, next)
+  }
+
   /** Drop every staged edit. */
   discard(): void {
     if (this.draft === undefined) return
@@ -1491,6 +1560,10 @@ export interface TeamPresetsInjected {
     /** Page state bound by the renderer as `useTeamPresets`. */
     teamPresets: SnapshotStore<TeamPresetsState>
   }
+  /** Adds one local category by name. */
+  addCategory: (name: string) => Promise<boolean>
+  /** Removes one local category and the memberships that pointed at it. */
+  removeCategory: (id: string) => Promise<boolean>
   createTeam: () => string
   duplicateTeam: (index: number) => string | undefined
   /** Stage the shipped default presets at their document's content, reporting the outcome on the store. */

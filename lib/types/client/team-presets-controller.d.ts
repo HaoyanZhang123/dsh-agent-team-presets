@@ -588,6 +588,36 @@ export declare class TeamPresetsController {
     removeMember(teamIndex: number, memberIndex: number): void;
     /** Write the staged Teams. */
     save(): Promise<void>;
+    /**
+     * Write the reader's own category list.
+     *
+     * Categories are local view fields, not part of the Team draft, so they are
+     * written straight to their own path instead of riding the draft's save. The
+     * fence is the same one the draft uses: a Host that moved past it refuses the
+     * write and the page re-reads rather than overwriting.
+     * @param next - the complete category list to store.
+     * @returns whether the Host accepted the write.
+     */
+    private writeCategories;
+    /**
+     * Add one category.
+     * @param name - the display name the user typed.
+     * @returns whether the Host accepted the write.
+     */
+    addCategory(name: string): Promise<boolean>;
+    /**
+     * Remove one category and every membership that pointed at it.
+     * @param id - category identity.
+     * @returns whether the Host accepted the write.
+     */
+    removeCategory(id: string): Promise<boolean>;
+    /**
+     * Move one Team into one category, or out of every category.
+     * @param teamId - Team identity.
+     * @param categoryId - category identity, or an empty string for none.
+     * @returns whether the Host accepted the write.
+     */
+    setCategory(teamId: string, categoryId: string): Promise<boolean>;
     /** Drop every staged edit. */
     discard(): void;
     /**
@@ -643,6 +673,10 @@ export interface TeamPresetsInjected {
         /** Page state bound by the renderer as `useTeamPresets`. */
         teamPresets: SnapshotStore<TeamPresetsState>;
     };
+    /** Adds one local category by name. */
+    addCategory: (name: string) => Promise<boolean>;
+    /** Removes one local category and the memberships that pointed at it. */
+    removeCategory: (id: string) => Promise<boolean>;
     createTeam: () => string;
     duplicateTeam: (index: number) => string | undefined;
     /** Stage the shipped default presets at their document's content, reporting the outcome on the store. */
