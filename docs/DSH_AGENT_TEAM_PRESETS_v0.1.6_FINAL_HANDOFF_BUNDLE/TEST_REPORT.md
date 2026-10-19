@@ -109,6 +109,7 @@
 - 注册工具后真机启动正常（`boot ok: true`，控制台 0 异常）。
 - **未在真机会话中让模型实际调用这 4 个工具**：需要开一个会话发消息驱动，留作待补证据。
 - **接线已恢复**：上一轮记录的「注册工具导致 `run_code` 漏回严格策略面」经 round 8 的屏障修复后不再出现——那其实是 `settlePlugin()` 只等 3 个宏任务造成的读取过早，不是工具注册的副作用。`src/index.ts` 现已注册这 4 个工具；`boundary-regressions` 连续 3 次 20/20，全量连续 4 次 502/502。
+- **注册已用组合测试证明**：`tests/team-skills-tool-registration.spec.ts` 在 `mountAgentLoopTestDependencies` + `AgentLoop` 组合出的真实 Session 根上，断言 4 个工具名出现在 `systemPrompt.assemble()` 的 `tools` 名单里，`dispose()` 后消失。也就是说工具确实到达了模型可见的装配面，而不只是"代码里调了一次 register"。
 - **真机会话调用仍未能验证**：在 3081 里已能通过 contenteditable 输入并发送消息（「请调用 list_team_skills…」），但该验证 profile 的模型凭据无效，本轮运行直接失败：`处理失败 / 本轮运行失败 API 密钥无效 AUTH`。这是环境凭据问题，不是插件行为；要拿到端到端证据需给该 profile 配一把有效 key，或改用其它已配置凭据的 profile。
 
 ### 已修复的不稳定用例（round 8）
