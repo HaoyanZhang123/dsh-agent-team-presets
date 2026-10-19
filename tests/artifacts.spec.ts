@@ -53,8 +53,8 @@ describe('built deliverables', () => {
       result: { mode: 'strict' },
     })
   })
-  it('accepts the slim full-stack proposal as a shareable import', () => {
-    const json = readFileSync(new URL('../contrib/full-stack-team.slim.v1.json', import.meta.url), 'utf8')
+  it('accepts the shipped full-stack preset as a shareable import', () => {
+    const json = readFileSync(new URL('../contrib/default-presets/fullstack-team.json', import.meta.url), 'utf8')
     expect(parseTeamPresetText(json)).toMatchObject({ ok: true, transfer: { team: { name: '全栈软件研发团队' } } })
   })
 
