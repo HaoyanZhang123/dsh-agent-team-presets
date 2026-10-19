@@ -263,8 +263,9 @@ function scriptedContext(form: ConfigForm<TeamPresetsSection>, options: {
    */
   const describeSnapshot = () => {
     const formStatus = form.getSnapshot().status
-    if (document.value === null && formStatus === 'loading') return { status: 'loading' as const, view: undefined }
-    if (document.value === null && formStatus === 'unavailable') return { status: 'unavailable' as const, view: undefined }
+    if (document.value === null && formStatus === 'loading') return { status: 'loading' as const, view: undefined, error: null }
+    // Host 0.2.1 keeps the outcome in `error`; the union is idle/loading/ready.
+    if (document.value === null && formStatus === 'unavailable') return { status: 'idle' as const, view: undefined, error: 'transport failed' }
     const view = namespaceView()
     return {
       status: 'ready' as const,
@@ -276,10 +277,7 @@ function scriptedContext(form: ConfigForm<TeamPresetsSection>, options: {
     }
   }
 
-  const describeView = () => {
-    const snapshot = describeSnapshot()
-    return { status: snapshot.status, view: snapshot.view, error: null }
-  }
+  const describeView = () => describeSnapshot()
 
   const describeSettings = async () => {
     const snapshot = describeSnapshot()
@@ -803,8 +801,14 @@ describe('restoring the shipped default presets', () => {
     const { controller } = deployment([own, definitions[1]!])
     expect(controller.restoreDefaults()).toBe('restored')
     const teams = controller.store.getSnapshot().teams
-    expect(teams.map(entry => entry.id))
-      .toEqual(['team-9', PLANNING_TEAM_ID, DISCOVERY_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID])
+    // The stored preset keeps its position; every missing one is appended in
+    // catalog order, so the list reads: the user's Team, the surviving preset,
+    // then the missing ones.
+    expect(teams.map(entry => entry.id)).toEqual([
+      'team-9', 'builtin-standard', 'builtin-lightweight', 'builtin-fullstack',
+      'builtin-discovery', 'builtin-planning', 'builtin-workflow', 'builtin-engineering',
+      'builtin-audit', 'builtin-research',
+    ])
     // A Team the user created keeps its identity, content, and position.
     expect(teams[0]).toEqual(own)
     controller.dispose()
@@ -865,7 +869,7 @@ describe('restoring the shipped default presets', () => {
     const { controller } = deployment(stored)
     controller.inject().restoreDefaults()
     expect(controller.store.getSnapshot()).toMatchObject({ defaults: 'restored', dirty: true })
-    expect(controller.store.getSnapshot().teams[0]?.id).toBe(DISCOVERY_TEAM_ID)
+    expect(controller.store.getSnapshot().teams[0]?.id).toBe(BUILTIN_TEAM_IDS[0])
     controller.dispose()
   })
 })

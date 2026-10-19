@@ -37,6 +37,7 @@ import { isSessionRoot, TeamExecutionMonitor, teammatesBusy } from './execution.
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { registerPresetTools } from './preset-tools.ts'
+import { CAPTAIN_ROLE, TeamSkills, resolveSkillRoot, roleOfMember } from './team-skills/index.ts'
 import { installShippedSkills } from './skills.ts'
 import { definitionFingerprint, findTeam, selectedTeam, toolMode } from './presets.ts'
 import type { TeamPreset } from './types.ts'
@@ -82,6 +83,22 @@ export function apply(ctx: Context, config: Config): void {
   // snapshot cannot be read is never created, and one that IS identified with a
   // damaged snapshot vetoes its own creation instead of running on defaults.
   const members = new MemberRuntime(ctx)
+  // Team Skills are a private library of complete skill folders, assigned per
+  // role and registered only inside the exact Agent's Cordis scope. Nothing is
+  // registered globally: an unassigned Session, an unselected Team, and a member
+  // with no assignment all see nothing from this subsystem.
+  const teamSkills = new TeamSkills(
+    ctx,
+    resolveSkillRoot(config.skillRoot),
+    () => config.teams.get(),
+    message => { ctx.logger.warn(`${LOG}: %s`, message) },
+  )
+  /** The Team role each live Agent fills, so a binding change can re-sync it. */
+  const agentRoles = new Map<Agent, { teamId: string; roleId: string; captain: boolean }>()
+  void teamSkills.open(message => { ctx.logger.warn(`${LOG}: %s`, message) }).then((ready) => {
+    if (!ready || disposed) return
+    for (const [agent, role] of agentRoles) teamSkills.syncAgent(agent, role)
+  })
   // Every member is summoned through this plugin's own execution alias, so the
   // Host itself persists the fact that the child is preset-managed. The aliases
   // delegate the whole provider contract to the deployment's providers, and
@@ -174,6 +191,17 @@ export function apply(ctx: Context, config: Config): void {
           }
         }
         managedMembers.add(agent)
+        // A member's Team Skills are its own: the durable snapshot names the
+        // role, so the assignment is resolved from the record rather than from
+        // the current Settings, exactly as its route and policy are.
+        const claimedTeam = findTeam(config.teams.get(), claim.record.teamId)
+        const role = claim.record.roleId
+          ?? (claimedTeam === undefined ? claim.record.memberName : roleOfMember(claimedTeam, claim.record.memberName))
+        if (role !== undefined) {
+          const assignment = { teamId: claim.record.teamId, roleId: role, captain: false }
+          agentRoles.set(agent, assignment)
+          teamSkills.syncAgent(agent, assignment)
+        }
         // Ordinary descendants of this member must still see its strict policy,
         // so an escape through a provider path stays refused.
         childEnvelopes.set(agent, {
@@ -433,6 +461,11 @@ export function apply(ctx: Context, config: Config): void {
       )
       applications.set(agent, application)
       definitions.set(agent, team)
+      // The captain is a role slot too, addressed by its own identity so an
+      // assignment to the captain can never be read as a member's.
+      const captainRole = { teamId: team.id, roleId: CAPTAIN_ROLE, captain: true }
+      agentRoles.set(agent, captainRole)
+      teamSkills.syncAgent(agent, captainRole)
       if (toolMode(team.captain) === 'custom') {
         const after = await readWire(agent)
         if (after === undefined || after.tools.includes(RUN_CODE_NAME)) {
@@ -633,6 +666,7 @@ export function apply(ctx: Context, config: Config): void {
       pendingRoster.clear()
       jobs.clear()
       await members.close()
+      await teamSkills.close()
     })()
     return shutdown
   }
@@ -673,6 +707,10 @@ export function apply(ctx: Context, config: Config): void {
     }
   })
   ctx.on('agent/disposed', ({ agent }) => {
+    // Releasing the scope removes exactly this Agent's discovery; content the
+    // model already read stays in its transcript, which cannot be recalled.
+    teamSkills.releaseAgent(agent)
+    agentRoles.delete(agent)
     applications.get(agent)?.dispose()
     applications.delete(agent)
     definitions.delete(agent)
@@ -694,6 +732,7 @@ export function apply(ctx: Context, config: Config): void {
       if (isSessionRoot(agent)) reconcile(agent)
     }
     if (!disposed) void settingsReconcile.request()
+    for (const [agent, role] of agentRoles) teamSkills.syncAgent(agent, role)
     // A stored change moves the frame even when no Session is online to adopt it.
     monitor.invalidate()
   })

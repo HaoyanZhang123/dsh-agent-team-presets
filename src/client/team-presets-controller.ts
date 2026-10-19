@@ -25,13 +25,7 @@ import {
   uniqueName,
 } from '../preset-transfer.ts'
 import type { TeamPresetImportFailure, TeamPresetTransfer } from '../preset-transfer.ts'
-import {
-  liveAssignments,
-  orderedCategories,
-  withNewCategory,
-  withTeamCategory,
-  withoutCategory,
-} from '../team-search.ts'
+import { liveAssignments } from '../team-search.ts'
 import type {
   TeamAgentPreset, TeamCaptainPreset, TeamCategory, TeamCategoryAssignment, TeamExecutionRow, TeamExecutionState,
   TeamPreset, TeamPresetsSection, ToolChoice,
@@ -741,7 +735,13 @@ export class TeamPresetsController {
     const mirrored = this.mirror.getSnapshot()
     if (mirrored.view !== undefined) return sectionOf(this.namespaceView()?.value)
     const accepted = this.form.getSnapshot().value
-    return accepted === undefined ? undefined : { teams: accepted.teams, selections: accepted.selections }
+    // The form value carries only the two fields its own schema declares, so a
+    // document reached through the form alone has no categories: they are local
+    // UI data the Host schema stores beside the Teams, and the mirror is the
+    // only reader that can see them.
+    return accepted === undefined
+      ? undefined
+      : { teams: accepted.teams, selections: accepted.selections, categories: [], teamCategories: [] }
   }
 
   /**

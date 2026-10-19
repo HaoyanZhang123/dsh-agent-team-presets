@@ -144,6 +144,15 @@ export interface Config {
   categories: Volatile<TeamCategory[]>
   /** Local `teamId → categoryId` memberships, keyed by stable Team identity. */
   teamCategories: Volatile<TeamCategoryAssignment[]>
+  /**
+   * Absolute directory holding the private Team Skill store.
+   *
+   * Empty derives it from the Harness home (`$DSH_HOME`, else `~/.dsh`) under a
+   * plugin-owned directory. v0.2.1-rc.2 publishes no per-plugin data-directory
+   * API, so this knob exists to make the location explicit when a deployment
+   * wants one — it is never a user or project skill directory.
+   */
+  skillRoot: string
 }
 
 /** Runtime schema of {@link Config}. */
@@ -158,4 +167,5 @@ export const Config = z.object({
   forkProvider: z.string().default('fork'),
   categories: z.array(categorySchema).default([]).volatile(),
   teamCategories: z.array(categoryAssignmentSchema).default([]).volatile(),
+  skillRoot: z.string().default(''),
 })

@@ -43,7 +43,7 @@ export type TeamPresetsLocaleKey =
   | 'importCaptainConflict' | 'importCaptainReplace' | 'importCaptainRename'
   | 'importMemberConflict' | 'importMemberReplace' | 'importMemberRename'
   | 'importInvalidJson' | 'importInvalidFormat' | 'importUnsupportedVersion' | 'importUnsupportedFields'
-  | 'importDuplicateMembers' | 'importTooManyMembers' | 'importTooLarge'
+  | 'importDuplicateMembers' | 'importTooManyMembers' | 'importTooLarge' | 'importInvalidMetadata'
 
 /** Locale namespace owned by this plugin. */
 export const NS = 'settings.agentTeamPresets'
@@ -185,6 +185,7 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   importDuplicateMembers: 'That document names the same member twice.',
   importTooManyMembers: 'That document declares too many members.',
   importTooLarge: 'That file is too large to be a Team preset.',
+  importInvalidMetadata: 'That file carries display metadata this release cannot read.',
 }
 
 /** Simplified Chinese copy. */
@@ -324,6 +325,7 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   importDuplicateMembers: '该文档中有两个队员使用了相同名称。',
   importTooManyMembers: '该文档声明的队员数量过多。',
   importTooLarge: '该文件过大，不像是团队预设。',
+  importInvalidMetadata: '该文件包含本版本无法读取的展示信息。',
 }
 
 /**
@@ -359,6 +361,7 @@ export const IMPORT_FAILURE_KEYS: Record<TeamPresetImportFailure, TeamPresetsLoc
   'duplicate-members': 'importDuplicateMembers',
   'too-many-members': 'importTooManyMembers',
   'too-large': 'importTooLarge',
+  'invalid-metadata': 'importInvalidMetadata',
 }
 
 /**

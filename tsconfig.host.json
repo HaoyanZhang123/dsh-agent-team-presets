@@ -18,7 +18,13 @@
     "src/tool-catalog.ts",
     "src/team-catalog.ts",
     "src/team-search.ts",
-    "src/settings-reconcile.ts"
+    "src/settings-reconcile.ts",
+    "src/team-skills/index.ts",
+    "src/team-skills/paths.ts",
+    "src/team-skills/import.ts",
+    "src/team-skills/store.ts",
+    "src/team-skills/manager.ts",
+    "src/team-skills/provider.ts"
   ],
   "references": [
     {
