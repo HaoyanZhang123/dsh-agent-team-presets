@@ -370,3 +370,14 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 | 切到 插件内置 | 全部 · **研发规模*** · 工作模式（自定义分类整行隐藏） | 3 |
 
 看图确认：任一时刻分类行只有一个 chip 处于选中态。
+
+## 22. 所属分类的**弹出层**样式（此前只改了触发器）
+
+之前把 `select` 元素本身做了样式（32 高、8 圆角、自绘 chevron），但**点开后的选项列表由操作系统绘制**，CSS 到不了里面——所以看着仍是原生白底黑框。
+
+改法：新增 `CategorySelect.tsx` 自绘选择器——触发器沿用 `.select` 外观，弹出层 `.selectPop` 用插件自己的语法：
+`top:calc(100%+4px)`、`border-radius:10px`、`padding:4px`、`1px` 描边、`box-shadow:0 10px 28px`、`max-height:232px`；
+选项 `.selectOption` 为 `padding:7px 10px; border-radius:7px`，选中项 `#e9eef7` + 权重 550；支持 Esc 与点击外部关闭。
+
+真机实测（打开「所属分类」弹出层）：`opts:2（未分类 + 666）`、`radius:10px`、`padding:4px`、`border:1px`、
+`option padding:7px 10px`、`option radius:7px`。截图 `docs/shots/category-select-popup.png`。
