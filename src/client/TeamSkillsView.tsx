@@ -25,7 +25,8 @@ export type TeamSkillsLocaleKey =
   | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind'
   | 'skillsDeps' | 'skillsNoDeps' | 'skillsDelete' | 'skillsDeleteTitle' | 'skillsDeleteBody'
   | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle'
-  | 'skillsVersion' | 'skillsOverrideOn' | 'skillsBlockedAssign' | 'skillsMcpUnverified' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
+  | 'skillsVersion' | 'skillsOverrideOn' | 'skillsBlockedAssign' | 'skillsMcpUnverified'
+  | 'skillsNameClash' | 'skillsNameClashBody' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
 
 /** Props of {@link TeamSkillsView}. */
 export interface TeamSkillsViewProps {
@@ -121,7 +122,13 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
               <span className={css.tag}>{t('skillsVersion')} {detail.asset.version}</span>
               <span className={css.tag}>{detail.asset.fileCount} {t('skillsFiles')}</span>
               {detail.asset.updateAvailable === true ? <span className={`${css.tag} ${css.tagWarn}`}>{t('skillsOverrideOn')}</span> : null}
+              {(detail.asset.clashesWith?.length ?? 0) > 0 ? <span className={`${css.tag} ${css.tagWarn}`}>{t('skillsNameClash')}</span> : null}
             </div>
+            {(detail.asset.clashesWith?.length ?? 0) > 0 ? (
+              <div className={css.info}>
+                {t('skillsNameClashBody')}：{[detail.asset.id, ...(detail.asset.clashesWith ?? [])].join(' / ')}
+              </div>
+            ) : null}
 
             {(() => {
               const missing = (detail.dependencies?.executables ?? []).filter(row => !row.found)

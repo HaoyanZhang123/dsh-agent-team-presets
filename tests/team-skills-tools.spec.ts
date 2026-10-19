@@ -133,3 +133,30 @@ describe('assignment blockers', () => {
     expect(manager.assetsFor('t', 'dev')).toEqual([])
   })
 })
+
+describe('name clashes between origins', () => {
+  it('reports both assets and never merges them', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'team-skill-clash-'))
+    roots.push(root)
+    const store = new TeamSkillStore(root)
+    await store.open()
+    const md = (name: string): { path: string; bytes: Uint8Array }[] => [
+      { path: 'SKILL.md', bytes: TEXT(`---\nname: ${name}\ndescription: d\n---\n`) },
+    ]
+    const builtin = buildSkillPackage(md('git-release-hygiene'))
+    const custom = buildSkillPackage(md('git-release-hygiene'))
+    if (!builtin.ok || !custom.ok) throw new Error('fixture')
+    await store.install(builtin.skill, { id: 'builtin:git-release-hygiene', origin: 'builtin', version: '1' })
+    await store.install(custom.skill, { id: 'custom:git-release-hygiene', origin: 'custom', version: '1' })
+    const sameName = store.list().filter(asset => asset.skillId === 'git-release-hygiene')
+    expect(sameName.map(asset => asset.id).sort()).toEqual(['builtin:git-release-hygiene', 'custom:git-release-hygiene'])
+    // Deleting the user copy leaves the shipped one intact: no silent overwrite
+    // in either direction.
+    const manager = new TeamSkillManager(store, root, {
+      teams: () => [], activeAssetIds: () => new Set(), activeSessions: () => [],
+    })
+    await manager.open()
+    expect((await manager.remove('custom:git-release-hygiene')).ok).toBe(true)
+    expect(store.get('builtin:git-release-hygiene')).toBeDefined()
+  })
+})

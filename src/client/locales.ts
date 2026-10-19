@@ -63,6 +63,8 @@ export type TeamPresetsLocaleKey =
   | 'skillsReset'
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
   | 'skillsAssignTitle' | 'skillsAssignHint' | 'skillsAssignEmpty'
+  | 'skillsNameClash'
+  | 'skillsNameClashBody'
   | 'skillsBlockedAssign'
   | 'skillsMcpUnverified'
   | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
@@ -323,6 +325,8 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsNewTitle: 'New team skill',
   skillsVersion: 'version',
   skillsAssignTitle: 'Team Skill assignment',
+  skillsNameClash: 'same name, separate copies',
+  skillsNameClashBody: 'These assets reuse one skill name. They never overwrite each other, and this plugin never writes to a global skill',
   skillsBlockedAssign: 'Assignment is refused until these required dependencies exist',
   skillsMcpUnverified: 'These required MCP servers are declared; whether they are connected is decided by the host, not this page',
   skillsDeclared: 'declared',
@@ -558,6 +562,8 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsNewTitle: '新建 Team Skill',
   skillsVersion: '版本',
   skillsAssignTitle: 'Team Skill 分配',
+  skillsNameClash: '同名，各自独立',
+  skillsNameClashBody: '以下资产共用同一个技能名。它们互不覆盖，插件不会改写任何全局 Skill',
   skillsBlockedAssign: '缺少必需依赖，分配会被拒绝',
   skillsMcpUnverified: '以下 MCP 服务为必需项且已声明；是否已连接由宿主决定，本页无法判断',
   skillsDeclared: '已声明',

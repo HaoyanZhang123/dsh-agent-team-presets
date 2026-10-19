@@ -442,6 +442,8 @@ export interface TeamSkillAssetView {
   readonly totalBytes: number
   /** Declared dependencies (MCP servers, executables, other skills). */
   readonly mcpServers: readonly string[]
+  /** Other assets that reuse the same skill name under a different origin. */
+  readonly clashesWith?: readonly string[]
   /** Every role holding it. */
   readonly bindings: readonly TeamSkillBindingView[]
 }

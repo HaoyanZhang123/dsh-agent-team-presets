@@ -12,7 +12,7 @@
  */
 import type { TeamSkillsController } from './team-skills-controller.ts';
 /** Locale keys this panel reads. */
-export type TeamSkillsLocaleKey = 'skillsTitle' | 'skillsSub' | 'skillsNote' | 'skillsNew' | 'skillsImport' | 'skillsOpenFolder' | 'skillsSearch' | 'skillsAll' | 'skillsBuiltin' | 'skillsCustom' | 'skillsFiles' | 'skillsBound' | 'skillsEmpty' | 'skillsResources' | 'skillsSaveFile' | 'skillsEditable' | 'skillsReadonly' | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind' | 'skillsDeps' | 'skillsNoDeps' | 'skillsDelete' | 'skillsDeleteTitle' | 'skillsDeleteBody' | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle' | 'skillsVersion' | 'skillsOverrideOn' | 'skillsBlockedAssign' | 'skillsMcpUnverified' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing';
+export type TeamSkillsLocaleKey = 'skillsTitle' | 'skillsSub' | 'skillsNote' | 'skillsNew' | 'skillsImport' | 'skillsOpenFolder' | 'skillsSearch' | 'skillsAll' | 'skillsBuiltin' | 'skillsCustom' | 'skillsFiles' | 'skillsBound' | 'skillsEmpty' | 'skillsResources' | 'skillsSaveFile' | 'skillsEditable' | 'skillsReadonly' | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind' | 'skillsDeps' | 'skillsNoDeps' | 'skillsDelete' | 'skillsDeleteTitle' | 'skillsDeleteBody' | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle' | 'skillsVersion' | 'skillsOverrideOn' | 'skillsBlockedAssign' | 'skillsMcpUnverified' | 'skillsNameClash' | 'skillsNameClashBody' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing';
 /** Props of {@link TeamSkillsView}. */
 export interface TeamSkillsViewProps {
     /** Page state and actions. */

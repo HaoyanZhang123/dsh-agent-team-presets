@@ -126,7 +126,7 @@ log relative path: [path]
 | S02 | 只含 SKILL.md 的标准包安装正确，YAML 必填/命名验证正确 | `PASS` | `NOT_RUN` | import 用例 |
 | S03 | 完整资源包 scripts/*.py、*.sh、assets、references、任意合法目录保留 | `PASS` | `NOT_RUN` | RICH 夹具用例 |
 | S04 | 可选 frontmatter license/compatibility/metadata/allowed-tools 无损保留 | `PASS` | `NOT_RUN` |  真机：导入后磁盘出现在私有库目录下，2 个文件、路径未被拍平 |
-| S05 | 同名但不同来源冲突给出真实处理，不偷改原生 Skill | `PARTIAL` | `NOT_RUN` | provider 只列被分配资产、不覆盖原生；冲突提示 UI 未实现 |
+| S05 | 同名但不同来源冲突给出真实处理，不偷改原生 Skill | `PASS` | `NOT_RUN` |  真机：同一 skillId 下 builtin/override/custom 三个资产并存；详情页出现「同名，各自独立」标签与说明「互不覆盖，插件不会改写任何全局 Skill」；单测证明删除用户副本后官方副本仍在 |
 | S06 | 没选 Team 的普通 Agent 看不到本插件专属 Skill 元数据 | `PASS` | `NOT_RUN` | 无全局注册用例（构造后立即 list 为空） |
 | S07 | 选 Team 但未 spawn 对应成员，不全局注册它的专属 Skill | `PASS` | `NOT_RUN` | 注册仅发生在成员被 claim 后（`src/index.ts`） |
 | S08 | 成员 A 可发现/加载仅绑定 A 的 Skill，成员 B 与另一团队不可获取 | `PASS` | `NOT_RUN` | A/B 隔离用例（list 与 get 双路径） |

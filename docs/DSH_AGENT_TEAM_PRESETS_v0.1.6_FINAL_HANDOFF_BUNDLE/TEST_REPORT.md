@@ -169,3 +169,11 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 - 真机（3081，给 `custom:demo-imported` 造了缺失依赖）：详情页出现红色横幅「缺少必需依赖，分配会被拒绝」，
   依赖行分别显示「已声明」（MCP）与「PATH 中缺失」（可执行文件）。
 - 成员页勾选被拒（round 23 已补证）：勾选 `demo-imported` 后页面出现 `dependency-missing: the executable "…" is not on PATH`，且四个勾选框全部保持未选中——没有写入绑定。
+
+## 11. 同名不同来源（S05，round 24）
+
+- 库里同一 `skillId` 可以同时存在 `builtin` / `override` / `custom` 三个资产，id 各自独立。
+- `TeamSkillAssetView.clashesWith` 列出共用名字的其它资产；详情页显示「同名，各自独立」标签与说明
+  「互不覆盖，插件不会改写任何全局 Skill」。
+- 真机：导入一个与官方同名的自定义技能后，列表出现三行同名资产，打开自定义那条可见上述提示。
+- 单测：删除自定义副本后 `builtin:git-release-hygiene` 仍存在（不存在任何方向的静默覆盖）。

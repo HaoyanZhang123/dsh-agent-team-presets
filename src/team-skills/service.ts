@@ -94,6 +94,13 @@ export class TeamSkillService extends TypertRemoteService {
       fileCount: asset.files.length,
       totalBytes: asset.files.reduce((sum, file) => sum + file.size, 0),
       mcpServers: asset.dependencies.mcpServers.map(server => server.serverName),
+      // A name can legitimately exist under several origins (the official copy, a
+      // local override of it, and a user skill that happens to share the name).
+      // They never overwrite each other, so the page states the coexistence
+      // instead of pretending one won.
+      clashesWith: this.config.store.list()
+        .filter(other => other.id !== asset.id && other.skillId === asset.skillId)
+        .map(other => other.id),
       bindings: this.config.manager.bindingSummaries(assetId),
     }
   }
