@@ -22,6 +22,7 @@ import type { TeamSkillAssetView } from '../types.ts'
 
 /** Locale keys this panel reads. */
 export type TeamSkillsLocaleKey =
+  | 'originBuiltin' | 'originCustom' | 'originOverride'
   | 'skillsTitle' | 'skillsSub' | 'skillsNote' | 'skillsNew' | 'skillsImport' | 'skillsOpenFolder'
   | 'skillsOpenAssetFolder'
   | 'skillsSearch' | 'skillsAll' | 'skillsBuiltin' | 'skillsCustom' | 'skillsFiles' | 'skillsBound'
@@ -48,10 +49,10 @@ type Page = { kind: 'list' } | { kind: 'detail'; assetId: string }
  * @param asset - the row.
  * @returns a short label.
  */
-function originLabel(asset: TeamSkillAssetView): string {
-  if (asset.origin === 'builtin') return 'builtin'
-  if (asset.origin === 'override') return 'override'
-  return 'custom'
+function originLabel(asset: TeamSkillAssetView, t: (key: TeamSkillsLocaleKey) => string): string {
+  if (asset.origin === 'builtin') return t('originBuiltin')
+  if (asset.origin === 'override') return t('originOverride')
+  return t('originCustom')
 }
 
 /** The Team Skill settings pages. */
@@ -121,7 +122,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
             <p className={css.sub}>{detail.asset.description}</p>
             <div className={css.pills}>
               <span className={`${css.tag} ${detail.asset.origin === 'builtin' ? css.tagOrigin : ''}`}>
-                {originLabel(detail.asset)} · {detail.asset.editable ? t('skillsEditable') : t('skillsReadonly')}
+                {originLabel(detail.asset, t)} · {detail.asset.editable ? t('skillsEditable') : t('skillsReadonly')}
               </span>
               <span className={css.tag}>{t('skillsVersion')} {detail.asset.version}</span>
               <span className={css.tag}>{detail.asset.fileCount} {t('skillsFiles')}</span>
@@ -295,7 +296,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
             <span className={css.main}>
               <span className={css.rowTitle}>
                 {asset.skillId}
-                <span className={`${css.tag} ${asset.origin === 'builtin' ? css.tagOrigin : ''}`}>{originLabel(asset)}</span>
+                <span className={`${css.tag} ${asset.origin === 'builtin' ? css.tagOrigin : ''}`}>{originLabel(asset, t)}</span>
                 {asset.updateAvailable === true ? <span className={`${css.tag} ${css.tagWarn}`}>{t('skillsOverrideOn')}</span> : null}
               </span>
               <span className={css.rowSub}>

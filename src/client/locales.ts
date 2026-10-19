@@ -109,6 +109,7 @@ export type TeamPresetsLocaleKey =
   | 'composeSeriesDev'
   | 'composeSeriesModes'
   | 'composeEmpty'
+  | 'originBuiltin' | 'originCustom' | 'originOverride'
   | 'skillsTitle'
   | 'skillsSub'
   | 'skillsNote'
@@ -300,6 +301,9 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   tabSkills: 'Team skills',
   skillsBody: 'SKILL.md body',
   skillsHint: 'Select a skill on the left to see its files and assignments.',
+  originBuiltin: 'Built-in',
+  originCustom: 'Custom',
+  originOverride: 'Local copy',
   skillsTitle: 'Team skills',
   skillsSub: 'Manage the plugin Team Skill library. SKILL.md, scripts, references and assets are kept intact; members bind skills on their own edit pages.',
   skillsNote: 'Team Skills live in the plugin private directory and are not registered as user or project skills. Only an assigned team member discovers them through the plugin scope. Global DSH skills are not managed here.',
@@ -547,6 +551,9 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   tabSkills: '团队技能',
   skillsBody: 'SKILL.md 正文',
   skillsHint: '在左侧选择一个技能，查看它的文件与分配情况。',
+  originBuiltin: '插件内置',
+  originCustom: '自定义',
+  originOverride: '本地副本',
   skillsTitle: '团队技能配置',
   skillsSub: '独立管理插件 Team Skills 库。完整保留 SKILL.md、scripts、references 和 assets；成员绑定在各自编辑页配置。',
   skillsNote: 'Team Skills 位于插件私有目录，默认不注册为用户级或项目级 Skill。只有获分配的团队成员才能通过插件作用域发现。普通 DSH 全局 Skills 不在这里管理。',

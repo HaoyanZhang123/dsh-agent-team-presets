@@ -404,3 +404,10 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 |---|---|
 | 团队预设 | `bg transparent / color rgb(97,102,107) / border rgb(222,226,231) / padding 6×10 / radius 7` |
 | 团队技能 | `bg transparent / color rgb(97,102,107) / border rgb(222,226,231) / padding 6×10 / radius 7` |
+
+## 25. 技能来源标签的本地化
+
+列表行与详情页的标签此前直接打印内部字段值 `builtin / custom / override`。
+
+改为经本地化字典输出：**插件内置 / 自定义 / 本地副本**（英文 Built-in / Custom / Local copy）。
+`originLabel` 现在接收 `t`，列表行与详情 pills 共用同一实现。看图确认列表标签已全部为中文。
