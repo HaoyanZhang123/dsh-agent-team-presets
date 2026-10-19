@@ -1,6 +1,8 @@
 /* The composer tool row's Team chip, matching the sibling permission and
  * model triggers. Colors resolve through `--dsw-alias-*` tokens only. */
 
+.wrap { position: relative; display: inline-flex; }
+
 .trigger {
   display: inline-flex;
   align-items: center;
@@ -71,4 +73,126 @@
   color: var(--dsw-alias-state-warn-label);
   font-size: 11px;
   line-height: 17px;
+}
+
+/* The picker popover, following the v0.1.6 prototype: a pinned "no team"
+ * option, a search field, source chips, and one row per Team. */
+.popover {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  width: min(360px, calc(100vw - 76px));
+  background: var(--dsw-alias-bg-elevated, #fff);
+  border: 1px solid var(--dsw-alias-line-regular, #e2e5ea);
+  border-radius: 13px;
+  box-shadow: 0 15px 42px #171d2930;
+  padding: 12px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.popClose {
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.popSearch {
+  width: 100%;
+  border: 1px solid var(--dsw-alias-line-regular, #d8dce1);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: transparent;
+  color: inherit;
+  outline: none;
+}
+
+.popChips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.popChip {
+  border: 1px solid var(--dsw-alias-line-regular, #dee2e7);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+
+.popChipActive {
+  background: var(--dsw-alias-interactive-bg-hover, #e9edf3);
+  color: var(--dsw-alias-label-primary, #202935);
+}
+
+.popList {
+  max-height: 268px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.popGroup {
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  padding: 6px 8px 2px;
+}
+
+.popOption {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 9px;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.popOption:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #f0f3f8);
+}
+
+.popOptionActive {
+  background: var(--dsw-alias-interactive-bg-hover, #f0f3f8);
+  font-weight: 550;
+}
+
+.popOptionName {
+  font-size: 13px;
+  display: block;
+}
+
+.popOptionSub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popEmpty {
+  padding: 14px 8px;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
 }
