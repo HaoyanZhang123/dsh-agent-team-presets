@@ -171,6 +171,10 @@
 }
 
 .rows > .card {
+  /* Without border-box the 64px minimum is a content height and the 12px of
+   * vertical padding adds on top, which is why the row measured 77px against the
+   * prototype's 64. */
+  box-sizing: border-box;
   background: transparent;
   border: 0;
   border-radius: 0;
