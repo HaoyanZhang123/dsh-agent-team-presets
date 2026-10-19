@@ -21,9 +21,17 @@ import type {} from '@deepseek-ai/dsh-subagent'
  * @returns resolution once every queued step has had its turn.
  */
 export async function settlePlugin(): Promise<void> {
-  for (let round = 0; round < 3; round += 1) {
+  // A queued step may itself await a promise that needs more than one macrotask
+  // turn (the application awaits prompt assembly, which awaits tool schemas), and
+  // a bare three-turn drain produced intermittent failures in
+  // boundary-regressions. The drain therefore covers both queue positions
+  // several times and ends with a short real delay, so the barrier is about
+  // quiescence rather than about a lucky scheduling order.
+  for (let round = 0; round < 8; round += 1) {
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
     await new Promise<void>((resolve) => { setTimeout(resolve, 0) })
   }
+  await new Promise<void>((resolve) => { setTimeout(resolve, 5) })
 }
 
 /**

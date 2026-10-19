@@ -110,7 +110,15 @@
 - **未在真机会话中让模型实际调用这 4 个工具**：需要开一个会话发消息驱动，留作待补证据。
 - **接线已回退**：把这 4 个工具注册在 `preset tools` 同一位置后，`boundary-regressions` 的 PTC 影子测试开始把 `run_code` 重新暴露在严格策略面上，因此 `src/index.ts` **不调用** `registerTeamSkillTools`；模块与其单测保留，等交互原因查清再接。宁可少一个工具，也不能让工具悄悄放宽严格策略。
 
-### 已知不稳定用例（round 7 记录）
+### 已修复的不稳定用例（round 8）
+
+上一条记录的那个 flake 已定位并修复：`tests/fixtures/plugin-harness.ts` 的 `settlePlugin()` 原先只等 3 个宏任务，
+而 0.2.1 的应用会 await 提示词组装（又 await 工具 schema），3 个回合在负载波动时不够，于是 `boundary-regressions`
+里既出现过 `run_code` 未被遮蔽，也出现过完整 persona 的 briefing 读不到。
+改为 8 轮 `setImmediate` + `setTimeout(0)` 交替，末尾加 5ms 实延时，让「队列静默」成为屏障而不是靠调度运气。
+修复后：`boundary-regressions` 连续 3 次 20/20，全量连续 4 次 502/502。
+
+### 原始记录（round 7）
 
 `tests/boundary-regressions.spec.ts > strict policy presentation > shadows a PTC preset presentation with native calling and discloses it`
 在研究 Team Skill 工具接线时**间歇性失败**（`expected ['run_code'] not to include 'run_code'`）。
