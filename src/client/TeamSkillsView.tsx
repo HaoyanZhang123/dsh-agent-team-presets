@@ -21,7 +21,7 @@ export interface TeamSkillsViewProps {
   /** Page state and actions. */
   readonly controller: TeamSkillsController
   /** Translate one locale key. */
-  readonly t: (key: 'skillsEmpty' | 'skillsImport' | 'skillsNew' | 'skillsSave' | 'skillsDelete' | 'skillsAssign' | 'skillsUnassign' | 'skillsOfficial' | 'skillsFiles' | 'skillsBindings' | 'skillsNamePlaceholder' | 'skillsDescriptionPlaceholder' | 'skillsRoot' | 'skillsRefresh' | 'skillsOverride' | 'skillsReset' | 'skillsBody') => string
+  readonly t: (key: 'skillsEmpty' | 'skillsHint' | 'skillsImport' | 'skillsNew' | 'skillsSave' | 'skillsDelete' | 'skillsAssign' | 'skillsUnassign' | 'skillsOfficial' | 'skillsFiles' | 'skillsBindings' | 'skillsNamePlaceholder' | 'skillsDescriptionPlaceholder' | 'skillsRoot' | 'skillsRefresh' | 'skillsOverride' | 'skillsReset' | 'skillsBody') => string
 }
 
 /** One small label above a control. */
@@ -92,10 +92,10 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
 
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', padding: 12 }}>
-      <div style={{ flex: '0 0 34%', minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+      <div style={{ flex: '0 0 300px', minWidth: 0 }}>
+        <div style={{ marginBottom: 10 }}>
           <Label>{t('skillsRoot')}</Label>
-          <code style={{ fontSize: 11, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>{library?.root ?? ''}</code>
+          <code style={{ display: 'block', fontSize: 11, opacity: 0.7, wordBreak: 'break-all' }}>{library?.root ?? ''}</code>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
           <Button onClick={() => { void controller.refresh() }}>{t('skillsRefresh')}</Button>
@@ -135,7 +135,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
             </li>
           ))}
         </ul>
-        {library !== undefined && library.assets.length === 0 ? <div style={{ opacity: 0.7 }}>{t('skillsEmpty')}</div> : null}
+        {library !== undefined && library.assets.length === 0 ? <div style={{ opacity: 0.7, padding: 8 }}>{t('skillsEmpty')}</div> : null}
         <div style={{ marginTop: 12 }}>
           <Label>{t('skillsNew')}</Label>
           <input value={name} onChange={(event) => { setName(event.target.value) }} placeholder={t('skillsNamePlaceholder')} style={{ width: '100%', marginBottom: 4 }} />
@@ -148,8 +148,8 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
           <div style={{ marginTop: 12 }}>
             <Label>{t('skillsOfficial')}</Label>
             {(library?.official ?? []).map(skillId => (
-              <div key={skillId} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                <code style={{ fontSize: 11 }}>{skillId}</code>
+              <div key={skillId} style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <code style={{ fontSize: 11, wordBreak: 'break-all' }}>{skillId}</code>
                 <Button onClick={() => { void controller.createOverride(skillId) }}>{t('skillsOverride')}</Button>
               </div>
             ))}
@@ -158,7 +158,7 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
       </div>
 
       <div style={{ flex: '1 1 0', minWidth: 0 }}>
-        {detail === undefined ? <div style={{ opacity: 0.7 }}>{t('skillsEmpty')}</div> : (
+        {detail === undefined ? <div style={{ opacity: 0.6, paddingTop: 24 }}>{t('skillsHint')}</div> : (
           <>
             <h3 style={{ margin: '0 0 4px' }}>{detail.asset.skillId}</h3>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>

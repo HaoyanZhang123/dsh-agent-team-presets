@@ -24,6 +24,33 @@ import type { TeamPresetsLocaleKey } from './locales.ts'
 import type { TeamAgentPreset, TeamCaptainPreset } from '../types.ts'
 import css from './TeamPresetsSection.module.css'
 
+/**
+ * One tab in the section's own tab bar.
+ * @param props - active state, click handler, and label.
+ * @returns the tab button.
+ */
+function TabButton(props: { readonly active: boolean; readonly onClick: () => void; readonly children: string }): React.ReactElement {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={props.active}
+      onClick={props.onClick}
+      style={{
+        background: 'none',
+        border: 'none',
+        borderBottom: props.active ? '2px solid currentColor' : '2px solid transparent',
+        padding: '6px 10px',
+        marginBottom: -1,
+        fontWeight: props.active ? 600 : 400,
+        opacity: props.active ? 1 : 0.65,
+        color: 'inherit',
+        cursor: 'pointer',
+      }}
+    >{props.children}</button>
+  )
+}
+
 /** Complete props of the settings page. */
 export type TeamPresetsSectionProps =
   PropsRuntime<'settings.section'>
@@ -129,8 +156,9 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   if (tab === 'skills' && props.skills !== undefined) {
     return (
       <div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <Button onClick={() => { setTab('teams') }}>{t('tabTeams')}</Button>
+        <div role="tablist" style={{ display: 'flex', gap: 6, marginBottom: 10, borderBottom: '1px solid rgba(128,128,128,.25)' }}>
+          <TabButton active={false} onClick={() => { setTab('teams') }}>{t('tabTeams')}</TabButton>
+          <TabButton active onClick={() => { setTab('skills') }}>{t('tabSkills')}</TabButton>
         </div>
         <TeamSkillsView controller={props.skills} t={t as unknown as Parameters<typeof TeamSkillsView>[0]['t']} />
       </div>
@@ -213,9 +241,9 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
 
   return (
     <div className={css.section}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-        <Button onClick={() => { setTab('teams') }}>{t('tabTeams')}</Button>
-        {props.skills === undefined ? null : <Button onClick={() => { setTab('skills') }}>{t('tabSkills')}</Button>}
+      <div role="tablist" style={{ display: 'flex', gap: 6, marginBottom: 10, borderBottom: '1px solid rgba(128,128,128,.25)' }}>
+        <TabButton active={tab === 'teams'} onClick={() => { setTab('teams') }}>{t('tabTeams')}</TabButton>
+        {props.skills === undefined ? null : <TabButton active={tab === 'skills'} onClick={() => { setTab('skills') }}>{t('tabSkills')}</TabButton>}
       </div>
       <div className={css.page}>
         {active.kind === 'list' && (

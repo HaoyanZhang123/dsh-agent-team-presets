@@ -35,10 +35,15 @@ export interface TeamSkillServiceConfig {
   /** The Teams the page shows, read live from Settings. */
   readonly teams: () => readonly TeamPreset[]
   /** Shipped skill ids this deployment provides. */
-  readonly official: readonly string[]
+  readonly official: () => readonly string[]
+  /** Resolves once the store and its index are loaded, or `false` when they cannot be. */
+  readonly ready: Promise<boolean>
   /** Re-applies every live Agent after a binding changed. */
   readonly resync: () => void
 }
+
+/** Text the page shows when this deployment could not open its store. */
+const UNAVAILABLE = 'the Team Skill store could not be opened in this deployment'
 
 /** Blank instruction text a freshly created skill starts from. */
 const TEMPLATE = '---\nname: SKILL-ID\ndescription: Describe when this method applies.\n---\n\n# Method\n\nDescribe the steps to follow.\n'
@@ -53,6 +58,20 @@ export class TeamSkillService extends TypertRemoteService {
    */
   constructor(ctx: Context, private readonly config: TeamSkillServiceConfig) {
     super(ctx, 'teamSkills')
+  }
+
+  /**
+   * Wait for the store, reporting why it is unusable.
+   * @returns undefined when ready, or the reason the page must show.
+   */
+  private async settle(): Promise<string | undefined> {
+    let opened = false
+    try {
+      opened = await this.config.ready
+    } catch (error: unknown) {
+      return `${UNAVAILABLE}: ${String(error)}`
+    }
+    return opened ? undefined : UNAVAILABLE
   }
 
   /**
@@ -101,7 +120,11 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns one page load.
    */
   @Remote
-  library(): TeamSkillLibraryView {
+  async library(): Promise<TeamSkillLibraryView> {
+    const issue = await this.settle()
+    if (issue !== undefined) {
+      return { root: this.config.store.root, assets: [], teams: [], official: [], issue }
+    }
     return {
       root: this.config.store.root,
       assets: this.config.store.list().flatMap((asset) => {
@@ -109,7 +132,7 @@ export class TeamSkillService extends TypertRemoteService {
         return row === undefined ? [] : [row]
       }),
       teams: this.roster(),
-      official: [...this.config.official],
+      official: [...this.config.official()],
     }
   }
 
@@ -120,6 +143,8 @@ export class TeamSkillService extends TypertRemoteService {
    */
   @Remote
   async detail(assetId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     const asset = this.config.store.get(assetId)
     const row = this.row(assetId)
     if (asset === undefined || row === undefined) {
@@ -146,6 +171,8 @@ export class TeamSkillService extends TypertRemoteService {
    */
   @Remote
   async readFile(assetId: string, path: string): Promise<{ ok: true; path: string; text: string } | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     try {
       return { ok: true, path, text: await this.config.store.readText(assetId, path) }
     } catch (error: unknown) {
@@ -162,6 +189,8 @@ export class TeamSkillService extends TypertRemoteService {
    */
   @Remote
   async writeFile(assetId: string, path: string, text: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     try {
       await this.config.store.writeFile(assetId, path, text)
     } catch (error: unknown) {
@@ -178,7 +207,9 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns the new detail, or a refusal when the folder is not a legal skill.
    */
   @Remote
-  async create(skillId: string, description: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+  async createSkill(skillId: string, description: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     const text = TEMPLATE.replace('SKILL-ID', skillId).replace('Describe when this method applies.', description)
     const result = buildSkillPackage([{ path: 'SKILL.md', bytes: new TextEncoder().encode(text) }])
     if (!result.ok) return { ok: false, reason: result.reason, detail: `"${skillId}" is not a legal skill id.` }
@@ -193,7 +224,9 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns the new detail, or a refusal naming the exact rule that failed.
    */
   @Remote
-  async importFiles(files: readonly TeamSkillImportFile[]): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+  async importSkill(files: readonly TeamSkillImportFile[]): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     const decoded = decodeImportFiles(files.map(file => ({ path: file.path, base64: file.base64 })))
     const result = buildSkillPackage(decoded)
     if (!result.ok) {
@@ -213,7 +246,9 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns the new detail, or a refusal.
    */
   @Remote
-  async createOverride(skillId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+  async overrideSkill(skillId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     const id = `override:${skillId}`
     try {
       await this.config.store.createOverride(skillId, id)
@@ -229,7 +264,9 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns the refreshed detail, or a refusal.
    */
   @Remote
-  async resetOverride(assetId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+  async resetSkill(assetId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
     try {
       await this.config.store.resetOverride(assetId)
     } catch (error: unknown) {
@@ -245,7 +282,9 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns the outcome.
    */
   @Remote
-  async remove(assetId: string): Promise<TeamSkillDeleteView> {
+  async deleteAsset(assetId: string): Promise<TeamSkillDeleteView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, blockers: [{ kind: 'unavailable', detail: issue }], warnings: [] }
     const outcome = await this.config.manager.remove(assetId)
     if (outcome.ok) this.config.resync()
     return {
@@ -270,13 +309,15 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns whether the assignment landed, and the refreshed library.
    */
   @Remote
-  async assign(teamId: string, roleId: string, assetId: string): Promise<{ ok: boolean; detail: string; library: TeamSkillLibraryView }> {
+  async assignRole(teamId: string, roleId: string, assetId: string): Promise<{ ok: boolean; detail: string; library: TeamSkillLibraryView }> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, detail: issue, library: await this.library() }
     const result = await this.config.manager.assign({ teamId, roleId, assetId, captain: roleId === CAPTAIN_ROLE })
     if (result.ok) this.config.resync()
     return {
       ok: result.ok,
       detail: result.ok ? '' : result.reason,
-      library: this.library(),
+      library: await this.library(),
     }
   }
 
@@ -287,7 +328,8 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns the refreshed library.
    */
   @Remote
-  async unassign(teamId: string, roleId: string): Promise<TeamSkillLibraryView> {
+  async unassignRole(teamId: string, roleId: string): Promise<TeamSkillLibraryView> {
+    if (await this.settle() !== undefined) return await this.library()
     await this.config.manager.unassign(teamId, roleId)
     this.config.resync()
     return this.library()

@@ -32,12 +32,21 @@ export interface TeamSkillsState {
 }
 /** The Team Skill page state. */
 export declare class TeamSkillsController {
-    private readonly ctx;
     private state;
     private readonly listeners;
     private disposed;
     /**
-     * @param ctx - the browser context, with the Team Skill Remote mounted.
+     * The Remote namespace, once the gateway announces it.
+     *
+     * It is resolved through its own `inject` instead of the plugin's required
+     * inject list: a namespace the Host fails to announce must cost this panel and
+     * nothing else. Waiting for it in the plugin's own inject list took the whole
+     * web UI down (one entry "did not activate"), which is exactly the failure a
+     * settings panel is never worth.
+     */
+    private service;
+    /**
+     * @param ctx - the browser context this panel reads its Remote through.
      */
     constructor(ctx: Context);
     /** Current snapshot, stable between changes. */
@@ -114,7 +123,7 @@ export declare class TeamSkillsController {
      * The generated Client face for this plugin's services.
      * @returns the mounted Remote namespace.
      */
-    private service;
+    private api;
     /**
      * Run one write with a busy flag and a single message.
      * @param work - the call, returning the message key or a refusal text.

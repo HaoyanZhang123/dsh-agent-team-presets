@@ -16,7 +16,7 @@ export interface TeamSkillsViewProps {
     /** Page state and actions. */
     readonly controller: TeamSkillsController;
     /** Translate one locale key. */
-    readonly t: (key: 'skillsEmpty' | 'skillsImport' | 'skillsNew' | 'skillsSave' | 'skillsDelete' | 'skillsAssign' | 'skillsUnassign' | 'skillsOfficial' | 'skillsFiles' | 'skillsBindings' | 'skillsNamePlaceholder' | 'skillsDescriptionPlaceholder' | 'skillsRoot' | 'skillsRefresh' | 'skillsOverride' | 'skillsReset' | 'skillsBody') => string;
+    readonly t: (key: 'skillsEmpty' | 'skillsHint' | 'skillsImport' | 'skillsNew' | 'skillsSave' | 'skillsDelete' | 'skillsAssign' | 'skillsUnassign' | 'skillsOfficial' | 'skillsFiles' | 'skillsBindings' | 'skillsNamePlaceholder' | 'skillsDescriptionPlaceholder' | 'skillsRoot' | 'skillsRefresh' | 'skillsOverride' | 'skillsReset' | 'skillsBody') => string;
 }
 /** The Team Skills panel. */
 export declare function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement;

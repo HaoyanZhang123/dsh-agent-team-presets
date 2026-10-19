@@ -74,9 +74,33 @@ export class TeamSkillsController {
   private disposed = false
 
   /**
-   * @param ctx - the browser context, with the Team Skill Remote mounted.
+   * The Remote namespace, once the gateway announces it.
+   *
+   * It is resolved through its own `inject` instead of the plugin's required
+   * inject list: a namespace the Host fails to announce must cost this panel and
+   * nothing else. Waiting for it in the plugin's own inject list took the whole
+   * web UI down (one entry "did not activate"), which is exactly the failure a
+   * settings panel is never worth.
    */
-  constructor(private readonly ctx: Context) {}
+  private service: NonNullable<Context['remote']['teamSkills']> | undefined
+
+  /**
+   * @param ctx - the browser context this panel reads its Remote through.
+   */
+  constructor(ctx: Context) {
+    // A namespace this build cannot inject must degrade this panel only. The
+    // registration itself is guarded because a client-side inject that cannot be
+    // satisfied would otherwise fail the whole browser entry.
+    try {
+      ctx.inject(['remote.teamSkills'], (scope) => {
+        this.service = scope.remote.teamSkills
+        void this.refresh()
+        return () => { this.service = undefined }
+      })
+    } catch (error: unknown) {
+      this.state = { ...this.state, status: 'unavailable', issue: String(error) }
+    }
+  }
 
   /** Current snapshot, stable between changes. */
   getSnapshot = (): TeamSkillsState => this.state
@@ -111,7 +135,16 @@ export class TeamSkillsController {
   async refresh(): Promise<void> {
     this.publish({ status: this.state.library === undefined ? 'loading' : 'ready' })
     try {
-      const library = unwrap(await this.service().library())
+      const library = unwrap(await this.api().library())
+      // The Host answers with an issue when its store could not open; that is a
+      // degraded page, not an empty library the user is expected to fill.
+      // Read through the declared shape: the generated wire type is replaced by
+      // the next build, and this branch must stay correct in the meantime.
+      const issue = (library as { readonly issue?: string }).issue
+      if (issue !== undefined) {
+        this.publish({ status: 'unavailable', library: undefined, issue })
+        return
+      }
       this.publish({ status: 'ready', library, issue: undefined })
       // A selected asset that no longer exists must not keep a stale detail.
       if (this.state.selectedId !== undefined && !library.assets.some(asset => asset.id === this.state.selectedId)) {
@@ -130,7 +163,7 @@ export class TeamSkillsController {
    */
   async select(assetId: string): Promise<void> {
     this.publish({ selectedId: assetId, detail: undefined })
-    const answer = unwrap(await this.service().detail(assetId))
+    const answer = unwrap(await this.api().detail(assetId))
     if (this.disposed || this.state.selectedId !== assetId) return
     if (!isDetail(answer)) {
       this.publish({ message: answer.detail, failed: true })
@@ -148,7 +181,7 @@ export class TeamSkillsController {
     const assetId = this.state.selectedId
     if (assetId === undefined) return
     await this.run(async () => {
-      const answer = unwrap(await this.service().writeFile(assetId, path, text))
+      const answer = unwrap(await this.api().writeFile(assetId, path, text))
       if (!isDetail(answer)) return answer.detail
       this.publish({ detail: answer })
       await this.refresh()
@@ -163,7 +196,7 @@ export class TeamSkillsController {
    */
   async create(skillId: string, description: string): Promise<void> {
     await this.run(async () => {
-      const answer = unwrap(await this.service().create(skillId, description))
+      const answer = unwrap(await this.api().createSkill(skillId, description))
       if (!isDetail(answer)) return answer.detail
       this.publish({ detail: answer, selectedId: answer.asset.id })
       await this.refresh()
@@ -182,7 +215,7 @@ export class TeamSkillsController {
       base64: encodeBase64(file.content),
     }))
     await this.run(async () => {
-      const answer = unwrap(await this.service().importFiles(payload))
+      const answer = unwrap(await this.api().importSkill(payload))
       if (!isDetail(answer)) return answer.detail
       this.publish({ detail: answer, selectedId: answer.asset.id })
       await this.refresh()
@@ -196,7 +229,7 @@ export class TeamSkillsController {
    */
   async createOverride(skillId: string): Promise<void> {
     await this.run(async () => {
-      const answer = unwrap(await this.service().createOverride(skillId))
+      const answer = unwrap(await this.api().overrideSkill(skillId))
       if (!isDetail(answer)) return answer.detail
       this.publish({ detail: answer, selectedId: answer.asset.id })
       await this.refresh()
@@ -210,7 +243,7 @@ export class TeamSkillsController {
    */
   async resetOverride(assetId: string): Promise<void> {
     await this.run(async () => {
-      const answer = unwrap(await this.service().resetOverride(assetId))
+      const answer = unwrap(await this.api().resetSkill(assetId))
       if (!isDetail(answer)) return answer.detail
       this.publish({ detail: answer })
       await this.refresh()
@@ -226,7 +259,7 @@ export class TeamSkillsController {
   async remove(assetId: string): Promise<TeamSkillDeleteView | undefined> {
     let outcome: TeamSkillDeleteView | undefined
     await this.run(async () => {
-      outcome = unwrap(await this.service().remove(assetId))
+      outcome = unwrap(await this.api().deleteAsset(assetId))
       await this.refresh()
       if (!outcome.ok) return outcome.blockers.map(blocker => `${blocker.kind}: ${blocker.detail}`).join('; ')
       this.publish({ selectedId: undefined, detail: undefined })
@@ -244,7 +277,7 @@ export class TeamSkillsController {
     const assetId = this.state.selectedId
     if (assetId === undefined) return
     await this.run(async () => {
-      const answer = unwrap(await this.service().assign(teamId, roleId, assetId))
+      const answer = unwrap(await this.api().assignRole(teamId, roleId, assetId))
       this.publish({ library: answer.library })
       if (this.state.selectedId !== undefined) await this.select(this.state.selectedId)
       return answer.ok ? 'assigned' : answer.detail
@@ -258,7 +291,7 @@ export class TeamSkillsController {
    */
   async unassign(teamId: string, roleId: string): Promise<void> {
     await this.run(async () => {
-      const library = unwrap(await this.service().unassign(teamId, roleId))
+      const library = unwrap(await this.api().unassignRole(teamId, roleId))
       this.publish({ library })
       if (this.state.selectedId !== undefined) await this.select(this.state.selectedId)
       return 'unassigned'
@@ -269,8 +302,9 @@ export class TeamSkillsController {
    * The generated Client face for this plugin's services.
    * @returns the mounted Remote namespace.
    */
-  private service(): NonNullable<Context['remote']['teamSkills']> {
-    return this.ctx.remote.teamSkills
+  private api(): NonNullable<Context['remote']['teamSkills']> {
+    if (this.service === undefined) throw new Error('the Team Skill service is not available in this deployment')
+    return this.service
   }
 
   /**
@@ -281,8 +315,10 @@ export class TeamSkillsController {
     this.publish({ busy: true, message: undefined, failed: false })
     try {
       const message = await work()
-      const failed = /:|already exists|read-only|refus/u.test(message) && !/^(saved|created|imported|deleted|assigned|unassigned|override-)/u.test(message)
-      this.publish({ busy: false, message, failed })
+      // A success is shown by the refreshed panel itself; only a refusal needs
+      // words, so a machine key never reaches the user as raw text.
+      const succeeded = /^(saved|created|imported|deleted|assigned|unassigned|override-)/u.test(message)
+      this.publish({ busy: false, message: succeeded ? undefined : message, failed: !succeeded })
     } catch (error: unknown) {
       this.publish({ busy: false, message: String(error), failed: true })
     }

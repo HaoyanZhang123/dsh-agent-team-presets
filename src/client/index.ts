@@ -49,7 +49,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * `cannot get property "remote.settings" without inject`, which is exactly the
  * failure mode this plugin's own scope must never reproduce.
  */
-export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.session', 'remote.settings', 'remote.teamSkills']
+export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.session', 'remote.settings']
 
 /**
  * Host notifications that change which provider routes exist.
@@ -72,10 +72,31 @@ const CATALOGUE_INVALIDATIONS = [
  * @returns disposer withdrawing the UI and the Remote contribution.
  */
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
+  try {
+    return await applyUi(ctx)
+  } catch (error: unknown) {
+    // A browser entry that fails activation is replaced by one summary line, so
+    // the cause has to be reported here or it is unrecoverable for the user and
+    // for whoever has to fix it.
+    console.error('[team-presets] the browser half failed to activate:', error)
+    throw error
+  }
+}
+
+/**
+ * Mount the Remote contribution and register the UI.
+ * @param ctx - the browser plugin context.
+ * @returns disposer withdrawing the UI and the Remote contribution.
+ */
+async function applyUi(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(teamPresetsRemote)
+  // The Team Skill panel is built on the plugin's own context, not inside the
+  // injected UI scope: a scope created for a fixed dependency set may not spawn a
+  // further injection, and failing that way takes the whole browser entry down.
+  const skills = new TeamSkillsController(ctx)
   const ui = ctx.inject(
-    ['remote.teamPresets', 'remote.teamSkills', 'slots', 'locale', 'configForms', 'remote.session', 'remote.settings'],
-    registerUi,
+    ['remote.teamPresets', 'slots', 'locale', 'configForms', 'remote.session', 'remote.settings'],
+    scope => registerUi(scope, skills),
   )
   try {
     await ui
@@ -93,14 +114,13 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
  * disagree about the settings document.
  * @param ctx - the browser plugin context, with the Team Remote mounted.
  */
-function registerUi(ctx: ClientContext): void {
+function registerUi(ctx: ClientContext, skills: TeamSkillsController): void {
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'agent-team-presets: dictionaries')
 
   const controller = new TeamPresetsController(ctx)
   // The management panel drives the Host service; if the deployment ships no
   // store the controller reports that instead of pretending the library is empty.
-  const skills = new TeamSkillsController(ctx)
   ctx.effect(() => () => { skills.dispose() }, 'agent-team-presets: skills controller')
   ctx.effect(() => () => { controller.dispose() }, 'agent-team-presets: form subscription')
   controller.loadCatalogue()

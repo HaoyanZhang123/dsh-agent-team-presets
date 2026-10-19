@@ -61,7 +61,7 @@ export type TeamPresetsLocaleKey =
   | 'skillsRefresh'
   | 'skillsOverride'
   | 'skillsReset'
-  | 'skillsBody' | 'tabTeams' | 'tabSkills'
+  | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
 
 /** Locale namespace owned by this plugin. */
 export const NS = 'settings.agentTeamPresets'
@@ -223,6 +223,7 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   tabTeams: 'Team presets',
   tabSkills: 'Team skills',
   skillsBody: 'SKILL.md body',
+  skillsHint: 'Select a skill on the left to see its files and assignments.',
 }
 
 /** Simplified Chinese copy. */
@@ -382,6 +383,7 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   tabTeams: '团队预设',
   tabSkills: '团队技能',
   skillsBody: 'SKILL.md 正文',
+  skillsHint: '在左侧选择一个技能，查看它的文件与分配情况。',
 }
 
 /**

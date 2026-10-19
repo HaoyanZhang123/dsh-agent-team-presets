@@ -436,6 +436,8 @@ export interface TeamSkillLibraryView {
     readonly teams: readonly TeamSkillTeamView[];
     /** Shipped skill ids this deployment provides. */
     readonly official: readonly string[];
+    /** Why the store is unusable, when this deployment could not open it. */
+    readonly issue?: string;
 }
 /** One file of an asset. */
 export interface TeamSkillFileView {
