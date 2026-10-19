@@ -46,6 +46,13 @@ DeepSeek Harness already ships Agent Teams with multi-agent collaboration. In th
 - **Built-in work modes:** six ready Teams, one per kind of work — discovery, architecture, an established workflow, engineering, an independent audit, and research.
 - **Live settings feedback:** see whether a Team is idle, busy, or awaiting an update in an online Session.
 
+- **Display metadata:** authors can attach a summary, tags, use cases, suggested tasks, and notes. This part is never injected into the runtime context; it exists for search, grouping, and the Team intro.
+- **Local categories and search:** find a Team by name, tags, or use cases; group Teams under categories you create yourself. Categories are local only and are never exported with a preset.
+- **Private Team Skills:** import a skill folder or ZIP into a plugin-owned library, keep an editable local override of a shipped skill, and reset it to the official copy. A skill is discovered only by the Agent it is assigned to — never registered globally.
+- **Per-member skill assignment:** a member page carries a grid of installed skills; a role may hold several, and every assignment is scoped to that Agent.
+- **Guarded deletion:** a skill that is still bound to a role, in use by a running member, or required by another skill is refused, and the reason names each holder.
+- **Dependency reporting:** a skill's declared executables are resolved against the current PATH and shown as found or missing next to each dependency.
+
 ## Contents
 
 - [Overview](#project-introduction)
