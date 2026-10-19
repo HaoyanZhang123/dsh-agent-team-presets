@@ -8,6 +8,7 @@ import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProviderChoice } from './team-presets-controller.ts'
 import type { TeamAgentPreset, TeamPreset } from '../types.ts'
 import type { TeamPresetsLocaleKey } from './locales.ts'
+import { CategorySelect } from './CategorySelect.tsx'
 import css from './TeamPresetsSection.module.css'
 
 /** The agent page one row opens. */
@@ -212,17 +213,13 @@ export function TeamEditorView(props: TeamEditorViewProps) {
         <section className={css.card}>
           <span className={css.cardTitle}>{props.t('categoryOf')}</span>
           <div className={css.field}>
-            <select
-              className={css.select}
-              disabled={props.disabled}
+            <CategorySelect
               value={props.categoryId ?? ''}
-              onChange={(event) => { props.onSetCategory?.(event.target.value) }}
-            >
-              <option value="">{props.t('categoryNone')}</option>
-              {(props.categories ?? []).map(entry => (
-                <option key={entry.id} value={entry.id}>{entry.name}</option>
-              ))}
-            </select>
+              categories={props.categories ?? []}
+              noneLabel={props.t('categoryNone')}
+              disabled={props.disabled}
+              onChange={(id) => { props.onSetCategory?.(id) }}
+            />
             <span className={css.hint}>{props.t('categoryNote')}</span>
           </div>
         </section>

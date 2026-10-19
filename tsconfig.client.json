@@ -57,6 +57,7 @@
     "src/client/TeamListView.tsx",
     "src/client/TeamEditorView.tsx",
     "src/client/TeamCategoryManager.tsx",
+    "src/client/CategorySelect.tsx",
     "src/client/TeamAgentView.tsx",
     "src/client/TeamImportDialog.tsx",
     "src/client/TeamPresetsSection.tsx",

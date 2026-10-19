@@ -12,5 +12,6 @@ through CDP. The Desktop environment is not covered here.
 | `skill-delete-dialog.png` | Team Skill delete confirmation: 510px dialog, 15px radius, 20px padding, capped at 85vh, with the blockers the host reported |
 | `category-manager.png` | Team preset categories page: add field, one row per category with its team count, and rename / move / delete per row |
 | `teams-custom-source.png` | Team list with 团队来源 = 自定义: the category row switches to the reader's own categories (or the hint when none exist) |
+| `category-select-popup.png` | Team editor: the custom category picker with its option list open (未分类 / the reader's categories) |
 | `team-editor.png` | Team editor: display-metadata card, the styled category select, and the status notices as bordered blocks above the save bar |
 | `composer-picker.png` | Composer Team picker: the pinned `不使用团队` entry, search field, source chips, and Team rows grouped by series |
