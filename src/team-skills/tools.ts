@@ -6,12 +6,6 @@
  * delete is refused while anything still holds it, and a shipped skill is
  * read-only. Tools are registered on the root Agent only — a teammate must not
  * be able to grant itself skills, which is the whole point of the isolation.
- * NOT WIRED YET: registering these beside the preset tools changed the prompt
- * assembly that the PTC-presentation shadowing relies on — `run_code` reappeared
- * in the strict-policy surface of tests/boundary-regressions.spec.ts. The module
- * and its tests ship, but `src/index.ts` does not call it until that interaction
- * is understood; a tool that silently widens a strict policy is worse than a
- * missing tool.
  * @module dsh-agent-team-presets/team-skills/tools
  */
 

@@ -108,7 +108,8 @@
 - 单测覆盖分配/解除与「被绑定后删除被拒并报出持有者」两条路径（`tests/team-skills-tools.spec.ts`）。
 - 注册工具后真机启动正常（`boot ok: true`，控制台 0 异常）。
 - **未在真机会话中让模型实际调用这 4 个工具**：需要开一个会话发消息驱动，留作待补证据。
-- **接线已回退**：把这 4 个工具注册在 `preset tools` 同一位置后，`boundary-regressions` 的 PTC 影子测试开始把 `run_code` 重新暴露在严格策略面上，因此 `src/index.ts` **不调用** `registerTeamSkillTools`；模块与其单测保留，等交互原因查清再接。宁可少一个工具，也不能让工具悄悄放宽严格策略。
+- **接线已恢复**：上一轮记录的「注册工具导致 `run_code` 漏回严格策略面」经 round 8 的屏障修复后不再出现——那其实是 `settlePlugin()` 只等 3 个宏任务造成的读取过早，不是工具注册的副作用。`src/index.ts` 现已注册这 4 个工具；`boundary-regressions` 连续 3 次 20/20，全量连续 4 次 502/502。
+- **真机会话调用仍未能验证**：在 3081 里已能通过 contenteditable 输入并发送消息（「请调用 list_team_skills…」），但该验证 profile 的模型凭据无效，本轮运行直接失败：`处理失败 / 本轮运行失败 API 密钥无效 AUTH`。这是环境凭据问题，不是插件行为；要拿到端到端证据需给该 profile 配一把有效 key，或改用其它已配置凭据的 profile。
 
 ### 已修复的不稳定用例（round 8）
 

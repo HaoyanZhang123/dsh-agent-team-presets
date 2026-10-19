@@ -39,6 +39,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { registerPresetTools } from './preset-tools.ts'
 import { CAPTAIN_ROLE, TeamSkills, resolveSkillRoot, roleOfMember } from './team-skills/index.ts'
 import { TeamSkillService } from './team-skills/service.ts'
+import { registerTeamSkillTools } from './team-skills/tools.ts'
 import { installShippedSkills } from './skills.ts'
 import { definitionFingerprint, findTeam, selectedTeam, toolMode } from './presets.ts'
 import type { TeamPreset } from './types.ts'
@@ -269,6 +270,14 @@ export function apply(ctx: Context, config: Config): void {
   // Editing tools belong only to selected/applied Team roots by default.
   // Pre-selection editing is an explicit legacy compatibility opt-in.
   const presetTools = new Map<Agent, () => void>()
+  /** Team Skill tools, registered on the same Session roots as the preset tools. */
+  const skillTools = new Map<Agent, () => void>()
+  const skillToolDeps = {
+    store: teamSkills.store,
+    manager: teamSkills.manager,
+    teams: () => config.teams.get(),
+    resync: () => { for (const [live, role] of agentRoles) teamSkills.syncAgent(live, role) },
+  }
   /** Session roots whose durable roster settlement waits for the next microtask. */
   const pendingRoster = new Set<Agent>()
   let rosterScheduled = false
@@ -571,6 +580,12 @@ export function apply(ctx: Context, config: Config): void {
     if (!presetTools.has(agent)) {
       presetTools.set(agent, registerPresetTools(ctx, agent, config, NAMESPACE, root => applications.get(root)?.teamId))
     }
+    // The library is managed by the user through the captain, on the Session root
+    // only: a teammate able to grant itself a skill would defeat the per-Agent
+    // isolation the subsystem exists for.
+    if (!skillTools.has(agent)) {
+      skillTools.set(agent, registerTeamSkillTools(ctx, agent, skillToolDeps))
+    }
     // The Team Skill library is managed by the user through the captain, on the
     // Session root only: a teammate able to grant itself a skill would defeat the
     // per-Agent isolation the whole subsystem exists for.
@@ -685,6 +700,8 @@ export function apply(ctx: Context, config: Config): void {
       managedMembers.clear()
       for (const dispose of presetTools.values()) dispose()
       presetTools.clear()
+      for (const dispose of skillTools.values()) dispose()
+      skillTools.clear()
       pendingRoster.clear()
       jobs.clear()
       await members.close()
@@ -745,6 +762,8 @@ export function apply(ctx: Context, config: Config): void {
     members.release(agent)
     presetTools.get(agent)?.()
     presetTools.delete(agent)
+    skillTools.get(agent)?.()
+    skillTools.delete(agent)
     pendingRoster.delete(agent)
     jobs.delete(agent)
     monitor.invalidate()
