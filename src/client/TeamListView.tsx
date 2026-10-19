@@ -123,28 +123,36 @@ export function TeamListView(props: TeamListViewProps) {
           onChange={(event) => { setQuery(event.target.value) }}
         />
       </div>
-      <div className={css.chipRow}>
-        <button type="button" className={`${css.chip} ${source === 'all' && series === 'all' ? css.chipActive : ''}`} onClick={() => { setSource('all'); setSeries('all') }}>{t('listAll')}</button>
-        <button type="button" className={`${css.chip} ${source === 'builtin' ? css.chipActive : ''}`} onClick={() => { setSource('builtin'); setSeries('all') }}>{t('listBuiltin')}</button>
-        <button type="button" className={`${css.chip} ${source === 'custom' ? css.chipActive : ''}`} onClick={() => { setSource('custom'); setSeries('all') }}>{t('listCustom')}</button>
-        {(props.categories ?? []).map(entry => (
-          <button
-            key={entry.id}
-            type="button"
-            className={`${css.chip} ${category === entry.id ? css.chipActive : ''}`}
-            onClick={() => { setCategory(entry.id) }}
-          >{entry.name}</button>
-        ))}
+      {/* Two questions, two rows: where the preset comes from, and how the reader
+          grouped it. One flat row read like a single three-level tree. */}
+      <div className={css.filterRow}>
+        <span className={css.filterLabel}>{t('filterSource')}</span>
+        <button type="button" className={`${css.chip} ${source === 'all' ? css.chipActive : ''}`} onClick={() => { setSource('all') }}>{t('listAll')}</button>
+        <button type="button" className={`${css.chip} ${source === 'builtin' ? css.chipActive : ''}`} onClick={() => { setSource('builtin') }}>{t('listBuiltin')}</button>
+        <button type="button" className={`${css.chip} ${source === 'custom' ? css.chipActive : ''}`} onClick={() => { setSource('custom') }}>{t('listCustom')}</button>
         {TEAM_SERIES.map(entry => (
           <button
             key={entry.id}
             type="button"
             className={`${css.chip} ${series === entry.id ? css.chipActive : ''}`}
-            onClick={() => { setSeries(entry.id); setSource('all') }}
+            onClick={() => { setSeries(series === entry.id ? 'all' : entry.id) }}
           >{entry.id === 'classic-development' ? t('seriesDevelopment') : t('seriesWorkModes')}</button>
         ))}
       </div>
-
+      {(props.categories ?? []).length === 0 ? null : (
+        <div className={css.filterRow}>
+          <span className={css.filterLabel}>{t('filterCategory')}</span>
+          <button type="button" className={`${css.chip} ${category === '' ? css.chipActive : ''}`} onClick={() => { setCategory('') }}>{t('listAll')}</button>
+          {[...(props.categories ?? [])].sort((left, right) => left.order - right.order).map(entry => (
+            <button
+              key={entry.id}
+              type="button"
+              className={`${css.chip} ${category === entry.id ? css.chipActive : ''}`}
+              onClick={() => { setCategory(entry.id) }}
+            >{entry.name}</button>
+          ))}
+        </div>
+      )}
 
       <p className={css.hint}>
         {t('listMatched')} {visible.length} · {t('listNoInject')}
