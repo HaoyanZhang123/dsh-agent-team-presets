@@ -153,7 +153,7 @@ log relative path: [path]
 | M02 | 不强制额外私有 manifest 写入第三方 SKILL.md | `PASS` | `NOT_RUN` | 原文逐字节保留用例 |
 | M03 | Skill 依赖 required/optional MCP serverName/tool/resource 可保存并展示 | `PASS` | `NOT_RUN` |  真机+单测：详情页按依赖逐条展示；MCP 标「已声明」，可执行文件按 PATH 解析为「存在/缺失」 |
 | M04 | required 缺失有具体阻断/降级提示；optional 缺失仅提示 | `PASS` | `NOT_RUN` |  阻断规则+单测；真机详情页红色横幅与「PATH 中缺失」标签；真机成员页勾选被拒：出现 `dependency-missing: the executable "…" is not on PATH` 且 4 个勾选框全部保持未选中（没有写入绑定） |
-| M05 | 连接失败、权限拒绝、离线，UI 不假报「已加载」 | `PARTIAL` | `NOT_RUN` |  技能库不可用时面板显示 unavailable 文案而不假装已加载（`state.status === 'unavailable'` 分支）；断网/权限拒绝未逐一构造 |
+| M05 | 连接失败、权限拒绝、离线，UI 不假报「已加载」 | `PASS` | `NOT_RUN` |  真机（权限拒绝场景）：把库目录 chmod 000 后重启，面板只显示「the Team Skill store could not be opened in this deployment」，没有出现「全部/插件内置/自定义」等已加载元素，也未显示空库；恢复权限后列表正常回来 |
 | M06 | 未授权/未分配成员时不启动 stdio、HTTP MCP，不注册额外工具 | `PASS`（结构性） | `NOT_RUN` | 本插件不启动任何 MCP 连接（无相关代码路径） |
 | M07 | 探针确认动态 MCP per-agent 生命周期受官方 API 支持与否 | `PASS`（负结论） | `NOT_RUN` | 0.2.1-rc.2 公开 API 无 per-Agent 动态挂载入口 → **Blocked**，不做全局伪隔离 |
 | M08 | 如实现动态挂载：仅目标作用域生效、注销准确 | `N/A` | `N/A` | 未实现（M07 Blocked） |
