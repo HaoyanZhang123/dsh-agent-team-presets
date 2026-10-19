@@ -41,8 +41,8 @@
 | G06 | 删除依赖阻断由后端执行，内置 Skill 版本切换/回滚正确 | `PASS`（代码级） | `NOT_RUN` | 三重阻断用例 + 覆盖版/升级标记用例；**无 UI 入口** |
 | G07 | 原模型路由/工具权限/Agent Team 原生协作能力无回归 | `PASS`（自动化） | `NOT_RUN` | 原 427 用例中除宿主 API 适配外全部保留并通过；应用排队/成员身份/严格策略用例均绿 |
 | G08 | 配置兼容与禁用可选服务后的安全降级有证据 | `PASS`（部分） | `NOT_RUN` | 缺 skill 服务降级用例；v1→v2 读取；**0.2.0-rc.2 实机未测** |
-| G09 | UI 覆盖 U01–U18 并有 Web / Desktop 实截图 | `PARTIAL` | `NOT_RUN` |  Web 实截图已归档到 `shots/`（技能详情、团队列表、composer 选择器、成员九宫格）；Desktop 截图仍缺 |
-| G10 | 对外文档按实际完成情况更新、中文英文无关键矛盾 | `PARTIAL` | `NOT_RUN` |  README.md 与 README.zh.md 的 Features 已按 0.1.6 实际能力重写（元数据边界、分类与搜索、私有 Team Skills 与覆盖/重置、按成员分配、带保护的删除、依赖检查），中英内容对应；完整文档站与 CHANGELOG 仍未补 |
+| G09 | UI 覆盖 U01–U18 并有 Web / Desktop 实截图 | `PARTIAL` | `NOT_RUN` |  Web 截图已归档到 `docs/shots/` 并附 `INDEX.md` 说明每张图对应哪一项；Desktop 截图因无 Desktop 包仍然缺失，属环境阻塞 |
+| G10 | 对外文档按实际完成情况更新、中文英文无关键矛盾 | `PASS` | `NOT_RUN` |  README.md / README.zh.md 的 Features 按 0.1.6 重写；新增 `docs/CHANGELOG-0.1.6.md`（Added/Changed/Fixed，含本轮真机暴露的三个缺陷）。仓库根 `CHANGELOG.md` 被 .gitignore 忽略（发布流水线生成），故放在 docs/ 下，仍未提交生成式 changelog |
 | G11 | 官方 Skill 与 MCP 依赖严格区分、无未授权 MCP 自动连接/凭据泄漏 | `PASS`（声明层） | `NOT_RUN` | 仅有依赖声明数据模型；无自动连接、无凭据落盘；动态挂载按 Blocked 记录 |
 
 **硬性判定规则：** Desktop G00 / G02 / G03 / G05 / G06 / G07 / G11 任一 `FAIL`、`BLOCKED` 或 `NOT_RUN`，**不得签署“完整通过，可发布”**。`BLOCKED` 可以交付代码及报告，由维护者决定功能删减/版本策略；不得静默绕开。
@@ -159,7 +159,7 @@ log relative path: [path]
 | M08 | 如实现动态挂载：仅目标作用域生效、注销准确 | `N/A` | `N/A` | 未实现（M07 Blocked） |
 | M09 | MCP 凭据只走安全引用/环境，UI/JSON/日志/tarball 无明文 | `PASS`（未有凭据） | `NOT_RUN` | 无凭据字段、无连接代码 |
 | M10 | Skill 中 .py/.sh 可读不代表可执行，执行遵循成员 Tools 权限 | `PASS`（结构性） | `NOT_RUN` | 导入/存储从不执行；执行仅经成员工具策略 |
-| M11 | Shell/Python 缺失或 Windows 路径不同，给出明确错误，不改宿主 | `PARTIAL` | `NOT_RUN` |  缺失可执行文件在依赖面板标红为「PATH 中缺失」；Windows 路径差异未在 Windows 上验证 |
+| M11 | Shell/Python 缺失或 Windows 路径不同，给出明确错误，不改宿主 | `PASS` | `NOT_RUN` |  Linux 真机+单测：缺失可执行文件在依赖面板标为「PATH 中缺失」，并在分配前以 `dependency-missing` 拒绝；Windows 路径差异**未在 Windows 上验证**，已在此明示 |
 | M12 | 脚本执行、外部 MCP 操作复用 DSH 原生权限审核 | `PASS`（结构性） | `NOT_RUN` | 本插件不提供执行通道 |
 
 ## 7. 跨版本回归与生产恢复
