@@ -25,8 +25,16 @@ import {
   uniqueName,
 } from '../preset-transfer.ts'
 import type { TeamPresetImportFailure, TeamPresetTransfer } from '../preset-transfer.ts'
+import {
+  liveAssignments,
+  orderedCategories,
+  withNewCategory,
+  withTeamCategory,
+  withoutCategory,
+} from '../team-search.ts'
 import type {
-  TeamAgentPreset, TeamCaptainPreset, TeamExecutionRow, TeamExecutionState, TeamPreset, TeamPresetsSection, ToolChoice,
+  TeamAgentPreset, TeamCaptainPreset, TeamCategory, TeamCategoryAssignment, TeamExecutionRow, TeamExecutionState,
+  TeamPreset, TeamPresetsSection, ToolChoice,
 } from '../types.ts'
 
 /**
@@ -108,6 +116,34 @@ export interface TeamPresetsState {
   readonly tools: readonly ToolChoice[]
   /** Whether the tool catalogue is still loading or failed. */
   readonly toolCatalogue: 'idle' | 'loading' | 'ready' | 'error'
+  /**
+   * The reader's own Team categories, in display order.
+   *
+   * Local view data only: never part of a Team preset, never exported with one,
+   * and never read by the runtime. Deleting one removes the grouping, never a
+   * Team, which is why the page can offer it without a preset-level warning.
+   */
+  readonly categories: readonly TeamCategory[]
+  /**
+   * The live `teamId → categoryId` memberships.
+   *
+   * A membership whose Team or category no longer resolves is dropped from this
+   * projection rather than shown as a broken group, and the next category write
+   * persists the pruned list.
+   */
+  readonly teamCategories: readonly TeamCategoryAssignment[]
+  /** Whether a category write is crossing the wire, so the dialog can settle. */
+  readonly categorySaving: boolean
+  /** The last category write this client could not complete, until the next attempt. */
+  readonly categoryFailure: CategoryWriteFailure | undefined
+  /**
+   * The Session whose Team write this client is waiting on.
+   *
+   * The page promises when a selection takes effect, so the control shows that
+   * it is still waiting instead of claiming the new Team before the Host has
+   * reported the write.
+   */
+  readonly selectionPending: SelectionTarget | undefined
 }
 
 /**
@@ -130,6 +166,28 @@ export interface TeamSelectionFailure {
   readonly sessionId: string
   /** The Team the user tried to apply, or undefined for "no Team". */
   readonly teamId: string | undefined
+  /** The Host's own refusal text, or the transport failure, when one exists. */
+  readonly detail: string | undefined
+}
+
+/** The Session whose Team selection this client is waiting on. */
+export interface SelectionTarget {
+  /** Session identity. */
+  readonly sessionId: string
+  /** The Team being applied, or undefined when the selection is being cleared. */
+  readonly teamId: string | undefined
+}
+
+/**
+ * One category write this client could not complete.
+ *
+ * Categories are local view data written on their own, so a failure here must
+ * be reported on the dialog that caused it rather than in the page's save
+ * status: the Team draft was not involved and is still exactly as it was.
+ */
+export interface CategoryWriteFailure {
+  /** `unavailable`: nothing to write to. `refused`: the Host rejected the write. `failed`: the write did not complete. */
+  readonly kind: 'unavailable' | 'refused' | 'failed'
   /** The Host's own refusal text, or the transport failure, when one exists. */
   readonly detail: string | undefined
 }
@@ -288,7 +346,81 @@ function mergeTransfer(
 }
 
 /**
- * Narrow one stored settings section into the two lists this plugin reads.
+ * The stored namespace as this client reads it.
+ *
+ * `categories` and `teamCategories` are local view fields stored beside the
+ * Teams: the Host schema declares them, so a served section carries them, but
+ * they are not part of a Team preset and this client writes them on their own.
+ * They are read here rather than from `TeamPresetsSection` so that a section
+ * this client's own form refused still yields them from the describe mirror,
+ * which is what lets the page report the problem instead of hiding it.
+ */
+interface StoredSection {
+  /** Every configured Team preset. */
+  readonly teams: readonly TeamPreset[]
+  /** Every Session's active Team preset. */
+  readonly selections: readonly TeamSelectionRecordView[]
+  /** The reader's own categories. */
+  readonly categories: readonly TeamCategory[]
+  /** The stored `teamId → categoryId` memberships. */
+  readonly teamCategories: readonly TeamCategoryAssignment[]
+}
+
+/**
+ * Narrow one stored category list.
+ *
+ * The Host projects exactly what its schema declares, but a document written by
+ * hand or by an older client may hold anything, and the page that reports a bad
+ * document must still open: a row without a usable identity is dropped instead
+ * of reaching a render that would throw.
+ * @param value - the raw `categories` field.
+ * @returns the usable rows, in stored order.
+ */
+function categoryRows(value: unknown): TeamCategory[] {
+  if (!Array.isArray(value)) return []
+  const rows: TeamCategory[] = []
+  const seen = new Set<string>()
+  for (const row of value) {
+    if (typeof row !== 'object' || row === null) continue
+    const candidate = row as { id?: unknown; name?: unknown; order?: unknown }
+    if (typeof candidate.id !== 'string' || candidate.id === '' || seen.has(candidate.id)) continue
+    seen.add(candidate.id)
+    rows.push({
+      id: candidate.id,
+      name: typeof candidate.name === 'string' ? candidate.name : '',
+      order: typeof candidate.order === 'number' ? candidate.order : rows.length,
+    })
+  }
+  return rows
+}
+
+/**
+ * Narrow one stored membership list.
+ *
+ * One category per Team is this release's rule, so the first membership wins:
+ * a hand-edited document cannot make the page show a Team in two groups, and
+ * the next write persists the single membership it kept.
+ * @param value - the raw `teamCategories` field.
+ * @returns the usable memberships, in stored order.
+ */
+function assignmentRows(value: unknown): TeamCategoryAssignment[] {
+  if (!Array.isArray(value)) return []
+  const rows: TeamCategoryAssignment[] = []
+  const seen = new Set<string>()
+  for (const row of value) {
+    if (typeof row !== 'object' || row === null) continue
+    const candidate = row as { teamId?: unknown; categoryId?: unknown }
+    if (typeof candidate.teamId !== 'string' || candidate.teamId === '') continue
+    if (typeof candidate.categoryId !== 'string' || candidate.categoryId === '') continue
+    if (seen.has(candidate.teamId)) continue
+    seen.add(candidate.teamId)
+    rows.push({ teamId: candidate.teamId, categoryId: candidate.categoryId })
+  }
+  return rows
+}
+
+/**
+ * Narrow one stored settings section into the lists this plugin reads.
  *
  * The Host projects exactly the fields its own schema declares, so a served
  * namespace always carries both arrays; a section that carries one of them as
@@ -298,12 +430,19 @@ function mergeTransfer(
  * @param value - the namespace value the describe mirror holds.
  * @returns the section, or undefined when the value is not a settings object at all.
  */
-function sectionOf(value: unknown): TeamPresetsSection | undefined {
+function sectionOf(value: unknown): StoredSection | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-  const section = value as { teams?: unknown; selections?: unknown }
+  const section = value as {
+    teams?: unknown
+    selections?: unknown
+    categories?: unknown
+    teamCategories?: unknown
+  }
   return {
     teams: Array.isArray(section.teams) ? section.teams as TeamPreset[] : [],
     selections: Array.isArray(section.selections) ? section.selections as TeamSelectionRecordView[] : [],
+    categories: categoryRows(section.categories),
+    teamCategories: assignmentRows(section.teamCategories),
   }
 }
 
@@ -481,6 +620,12 @@ export class TeamPresetsController {
   private defaultsRestore: DefaultsRestore | undefined
   /** The last selection write this client could not complete, until the user acts again. */
   private selectionFailure: TeamSelectionFailure | undefined
+  /** The Session whose Team write this client is waiting on, while it is in flight. */
+  private selectionPending: SelectionTarget | undefined
+  /** Whether a category write this client started is still crossing the wire. */
+  private categorySaving = false
+  /** The last category write this client could not complete, until the next attempt. */
+  private categoryFailure: CategoryWriteFailure | undefined
   /** Whether a write this page started is still crossing the wire. */
   private saving = false
   /** Stream health of the Host execution state, and the frames it delivered. */
@@ -528,6 +673,7 @@ export class TeamPresetsController {
 
   private projection(): TeamPresetsState {
     const stored = this.storedSection()
+    const categories = stored?.categories ?? []
     return {
       status: this.documentStatus(),
       writable: this.documentWritable(),
@@ -547,6 +693,11 @@ export class TeamPresetsController {
       cataloguePartial: this.cataloguePartial,
       tools: this.tools,
       toolCatalogue: this.toolCatalogue,
+      categories,
+      teamCategories: liveAssignments(categories, this.visibleTeams(), stored?.teamCategories ?? []),
+      categorySaving: this.categorySaving,
+      categoryFailure: this.categoryFailure,
+      selectionPending: this.selectionPending,
     }
   }
 
@@ -584,9 +735,9 @@ export class TeamPresetsController {
    * where the form may hold a section the mirror has not published yet: once the
    * mirror HAS answered, a namespace it does not list is not served, and the
    * form's older value must not be shown as if it were stored.
-   * @returns the stored Teams and selections, or undefined while nothing is known.
+   * @returns the stored Teams, selections, and local view fields, or undefined while nothing is known.
    */
-  private storedSection(): TeamPresetsSection | undefined {
+  private storedSection(): StoredSection | undefined {
     const mirrored = this.mirror.getSnapshot()
     if (mirrored.view !== undefined) return sectionOf(this.namespaceView()?.value)
     const accepted = this.form.getSnapshot().value

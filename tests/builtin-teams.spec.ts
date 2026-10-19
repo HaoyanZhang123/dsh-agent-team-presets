@@ -1,6 +1,7 @@
 /**
- * The six Team presets this plugin ships: their documents, the one-time
- * install, and the restore Settings offers.
+ * The nine Team presets this plugin ships: their documents, the one-time
+ * install, the restore Settings offers, and the display data that belongs to
+ * the template rather than to any runtime field.
  *
  * The documents are checked against the copies a reader of this repository can
  * read, so the shipped content cannot drift from what `contrib/default-presets`
@@ -8,25 +9,39 @@
  * which is what both the Host pass and the page call.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   AUDIT_TEAM_ID,
   BUILTIN_TEAMS,
+  BUILTIN_TEAM_IDS,
   DISCOVERY_TEAM_ID,
   ENGINEERING_TEAM_ID,
+  FULLSTACK_TEAM_ID,
+  LIGHTWEIGHT_TEAM_ID,
   PLANNING_TEAM_ID,
   RESEARCH_TEAM_ID,
+  STANDARD_TEAM_ID,
   WORKFLOW_TEAM_ID,
   builtinTeamDefinition,
   restoreBuiltinTeams,
   seedBuiltinTeams,
 } from '../src/builtin-teams.ts'
+import { BUILTIN_TEAM_CATALOG, OFFICIAL_REPOSITORY_SKILLS, builtinEntry, teamSeriesOf } from '../src/team-catalog.ts'
 import { exportTeamPreset, parseTeamPresetText } from '../src/preset-transfer.ts'
 import type { TeamPreset } from '../src/types.ts'
 
-/** Every shipped identity, in shipped order. */
-const IDS = [DISCOVERY_TEAM_ID, PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID]
+/** Every shipped identity, in shipped order: development scale, then work modes. */
+const IDS = [
+  LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID,
+  DISCOVERY_TEAM_ID, PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID,
+]
+
+/** The two fixed official series and their membership. */
+const SERIES = {
+  'classic-development': [LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID],
+  'work-modes': [DISCOVERY_TEAM_ID, PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID],
+} as const
 
 /** One user-created Team the shipped presets must never touch. */
 function userTeam(): TeamPreset {
@@ -53,6 +68,7 @@ function editedShipped(): TeamPreset {
     ...definition,
     name: 'Renamed by me',
     description: 'Rewritten purpose',
+    metadata: { summary: 'my own summary', tags: ['mine'] },
     captain: { ...definition.captain, description: 'my captain', systemPrompt: 'my captain prompt', toolMode: 'custom', tools: ['read'] },
     members: [
       // The shipped first member, keeping the route and policy the user set.
@@ -71,50 +87,78 @@ function contrib(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`../contrib/default-presets/${name}`, import.meta.url), 'utf8')) as unknown
 }
 
-describe('shipped default Team presets', () => {
-  it('ships the six documents exactly as contrib publishes them', () => {
-    const files = [
-      'discovery-team.json',
-      'planning-team.json',
-      'workflow-team.json',
-      'engineering-team.json',
-      'audit-team.json',
-      'research-team.json',
-    ]
-    expect(BUILTIN_TEAMS).toHaveLength(6)
-    BUILTIN_TEAMS.forEach((entry, index) => {
-      expect(exportTeamPreset(builtinTeamDefinition(entry)), entry.id).toEqual(contrib(files[index]!))
-    })
+/** The contrib file that publishes one shipped Team. */
+function contribFile(id: string): string {
+  return `${id.replace('builtin-', '')}-team.json`
+}
+
+describe('the official Team catalog', () => {
+  it('ships exactly nine official Teams, in two fixed series', () => {
+    expect(BUILTIN_TEAMS).toHaveLength(9)
+    expect(BUILTIN_TEAM_IDS).toEqual(IDS)
+    expect(new Set(BUILTIN_TEAM_IDS).size).toBe(9)
+    expect(BUILTIN_TEAM_CATALOG).toHaveLength(9)
+    for (const [series, ids] of Object.entries(SERIES)) {
+      expect(BUILTIN_TEAM_CATALOG.filter(entry => entry.series === series).map(entry => entry.id), series).toEqual(ids)
+    }
+    // A custom Team has no series and no catalog entry.
+    expect(teamSeriesOf('team-1')).toBeUndefined()
+    expect(builtinEntry('team-1')).toBeUndefined()
+  })
+
+  it('ships the nine documents exactly as contrib publishes them', () => {
+    expect(readdirSync(new URL('../contrib/default-presets', import.meta.url)).filter(name => name.endsWith('.json')).sort())
+      .toEqual(IDS.map(contribFile).sort())
+    for (const entry of BUILTIN_TEAMS) {
+      const document = exportTeamPreset(builtinTeamDefinition(entry), { officialSkills: entry.officialSkillBindings })
+      expect(document, entry.id).toEqual(contrib(contribFile(entry.id)))
+    }
   })
 
   it('publishes each contrib copy as a document this plugin imports', () => {
     // The README tells a reader they can import these by hand, so the copies
     // must be readable by the same reader an Import preset click uses.
-    for (const file of [
-      'discovery-team.json',
-      'planning-team.json',
-      'workflow-team.json',
-      'engineering-team.json',
-      'audit-team.json',
-      'research-team.json',
-    ]) {
+    for (const entry of BUILTIN_TEAMS) {
+      const file = contribFile(entry.id)
       const text = readFileSync(new URL(`../contrib/default-presets/${file}`, import.meta.url), 'utf8')
-      expect(parseTeamPresetText(text), file).toMatchObject({ ok: true })
+      const parsed = parseTeamPresetText(text)
+      expect(parsed.ok, file).toBe(true)
+      if (!parsed.ok) continue
+      expect(parsed.transfer.version).toBe(2)
+      expect(parsed.transfer.team.metadata).toBeDefined()
     }
   })
 
-  it('orders them the way a working session moves through the work modes', () => {
-    expect(BUILTIN_TEAMS.map(entry => entry.id)).toEqual(IDS)
-    expect(BUILTIN_TEAMS.map(entry => entry.document.team.name)).toEqual([
-      '需求探索',
-      '架构规划',
-      '既定工作流执行',
-      '工程研发协作',
-      '独立代码与安全审计',
-      '科研协作',
-    ])
+  it('carries one distinct display summary and tag set per official Team', () => {
+    const summaries = new Set<string>()
+    for (const entry of BUILTIN_TEAMS) {
+      const metadata = entry.metadata
+      expect(metadata.summary, entry.id).toBeTruthy()
+      expect(metadata.tags?.length, entry.id).toBeGreaterThan(0)
+      expect(metadata.useCases?.length, entry.id).toBeGreaterThan(0)
+      expect(metadata.quickPrompts?.length, entry.id).toBeGreaterThan(0)
+      expect(summaries.has(metadata.summary!), entry.id).toBe(false)
+      summaries.add(metadata.summary!)
+    }
   })
 
+  it('declares the two shipped skills only for the two repository-owning Teams', () => {
+    const owners = BUILTIN_TEAMS.filter(entry => entry.officialSkillBindings.length > 0).map(entry => entry.id)
+    expect(owners).toEqual([WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID])
+    for (const id of owners) {
+      const entry = builtinEntry(id)!
+      const roleNames = new Set(entry.document.team.members.map(member => member.name))
+      for (const binding of entry.officialSkillBindings) {
+        // A declaration that names no real role could never resolve locally.
+        expect(roleNames.has(binding.roleName), `${id}:${binding.roleName}`).toBe(true)
+      }
+      expect(entry.officialSkillBindings.map(binding => binding.skillId).sort())
+        .toEqual(OFFICIAL_REPOSITORY_SKILLS.map(binding => binding.skillId).sort())
+    }
+  })
+})
+
+describe('the stored shape of a shipped Team', () => {
   it('gives every shipped member a stable, unique role identity', () => {
     for (const entry of BUILTIN_TEAMS) {
       const definition = builtinTeamDefinition(entry)
@@ -143,6 +187,16 @@ describe('shipped default Team presets', () => {
       expect(definition.members.length).toBeGreaterThan(0)
     }
   })
+
+  it('detaches the copied display metadata from the catalog literal', () => {
+    const first = builtinTeamDefinition(BUILTIN_TEAMS[0]!)
+    const second = builtinTeamDefinition(BUILTIN_TEAMS[0]!)
+    expect(first.metadata).toEqual(second.metadata)
+    expect(first.metadata).not.toBe(second.metadata)
+    // Mutating one stored Team must not reach the catalog or another copy.
+    ;(first.metadata!.tags as string[]).push('mutated')
+    expect(builtinTeamDefinition(BUILTIN_TEAMS[0]!).metadata!.tags).not.toContain('mutated')
+  })
 })
 
 describe('installing the shipped presets once', () => {
@@ -169,6 +223,18 @@ describe('installing the shipped presets once', () => {
     expect(seeded.teams.map(team => team.id)).toEqual(IDS.filter(id => id !== PLANNING_TEAM_ID))
   })
 
+  it('upgrades a 0.1.5 deployment by appending only the six it never had', () => {
+    // A 0.1.5 deployment holds the three development Teams and was offered
+    // exactly those; the six work modes have never been offered there.
+    const legacy = [LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID].map(id => builtinTeamDefinition(builtinEntry(id)!))
+    const seeded = seedBuiltinTeams(legacy, [LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID])
+    expect(seeded.changed).toBe(true)
+    expect(seeded.teams.map(team => team.id)).toEqual(IDS)
+    // The three the user already held were not touched.
+    expect(seeded.teams.slice(0, 3)).toEqual(legacy)
+    expect(seeded.seeded).toEqual(IDS)
+  })
+
   it('never overwrites a shipped preset the user edited', () => {
     const edited = editedShipped()
     const seeded = seedBuiltinTeams([edited], [])
@@ -182,15 +248,12 @@ describe('installing the shipped presets once', () => {
 
   it('marks a preset the deployment already holds, without touching it or duplicating it', () => {
     const held = builtinTeamDefinition(BUILTIN_TEAMS[0]!)
-    const seeded = seedBuiltinTeams([held], [
-      PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID,
-    ])
+    const alreadyMarked = IDS.filter(id => id !== LIGHTWEIGHT_TEAM_ID)
+    const seeded = seedBuiltinTeams([held], alreadyMarked)
     expect(seeded.changed).toBe(true)
     expect(seeded.teams).toEqual([held])
     // The marker is append-only: the newly marked preset joins at the end.
-    expect(seeded.seeded).toEqual([
-      PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID, DISCOVERY_TEAM_ID,
-    ])
+    expect(seeded.seeded).toEqual([...alreadyMarked, LIGHTWEIGHT_TEAM_ID])
     // One write is enough: the marker grew once, so the next pass is silent.
     expect(seedBuiltinTeams(seeded.teams, seeded.seeded).changed).toBe(false)
   })
@@ -210,16 +273,19 @@ describe('restoring the shipped presets', () => {
     // one is reported as changed.
     const others = BUILTIN_TEAMS.slice(1).map(builtinTeamDefinition)
     const restored = restoreBuiltinTeams([edited, ...others])
-    expect(restored.changed).toEqual([DISCOVERY_TEAM_ID])
+    expect(restored.changed).toEqual([LIGHTWEIGHT_TEAM_ID])
     const team = restored.teams[0]!
-    expect(team.id).toBe(DISCOVERY_TEAM_ID)
-    expect(team.name).toBe('需求探索')
+    expect(team.id).toBe(LIGHTWEIGHT_TEAM_ID)
+    expect(team.name).toBe(BUILTIN_TEAMS[0]!.document.team.name)
     expect(team.description).toBe(BUILTIN_TEAMS[0]!.document.team.description)
     expect(team.captain.description).toBe(BUILTIN_TEAMS[0]!.document.team.captain.description)
     expect(team.captain.systemPrompt).toBe(BUILTIN_TEAMS[0]!.document.team.captain.systemPrompt)
+    // The display metadata is template content, so a restore brings the shipped
+    // copy back as well.
+    expect(team.metadata).toEqual(BUILTIN_TEAMS[0]!.metadata)
     // The route and the tool policy are local, so the shipped name and prompts
     // come back while the configured model and allow-list stay.
-    const member = team.members.find(entry => entry.name === 'technical-scout')!
+    const member = team.members.find(entry => entry.name === BUILTIN_TEAMS[0]!.document.team.members[0]!.name)!
     expect(member.provider).toBe('deepseek')
     expect(member.model).toBe('deepseek-chat')
     expect(member.reasoningEffort).toBe('high')
@@ -237,6 +303,15 @@ describe('restoring the shipped presets', () => {
     // The user's Team is untouched, in content and in position.
     expect(restored.teams[0]).toEqual(own)
     expect(restored.teams[1]).toEqual(builtinTeamDefinition(BUILTIN_TEAMS[0]!))
+  })
+
+  it('restores exactly nine official Teams even when the user deleted several', () => {
+    // "Restore all defaults" is the only path that resurrects a deleted shipped
+    // preset, and it must resurrect precisely the official set.
+    const survivors = [LIGHTWEIGHT_TEAM_ID, RESEARCH_TEAM_ID].map(id => builtinTeamDefinition(builtinEntry(id)!))
+    const restored = restoreBuiltinTeams(survivors)
+    expect(restored.teams.filter(team => BUILTIN_TEAM_IDS.includes(team.id))).toHaveLength(9)
+    expect(restored.changed.sort()).toEqual(IDS.filter(id => id !== LIGHTWEIGHT_TEAM_ID && id !== RESEARCH_TEAM_ID).sort())
   })
 
   it('reports nothing when every shipped preset already matches', () => {

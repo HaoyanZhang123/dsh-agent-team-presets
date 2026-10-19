@@ -2,32 +2,76 @@
  * Fixed JSON transfer format for one Team preset.
  *
  * A shared document carries the parts of a Team that keep working after the
- * document moves to another deployment: the Team's own name and purpose, and
- * each agent's name, description, standing system prompt, and accent color.
- * Model routes and tool permissions stay local, because a route names a
- * provider this deployment may not run and an allow-list names tools it may not
- * expose. A document that carries them is refused rather than silently reduced,
- * so a reader never believes it imported something it did not.
+ * document moves to another deployment: the Team's own name and purpose, each
+ * agent's name, description, standing system prompt, and accent color, the
+ * display-only discovery metadata, and — for an official template — the
+ * shipped skill ids it assigns to its role slots. Model routes and tool
+ * permissions stay local, because a route names a provider this deployment may
+ * not run and an allow-list names tools it may not expose. A document that
+ * carries them is refused rather than silently reduced, so a reader never
+ * believes it imported something it did not.
  *
- * The format is deliberately not the stored record: the Host document keeps
- * `toolMode`, `tools`, `provider`, `model`, and `reasoningEffort` beside the
- * shared fields, and an import writes only the fields a document carries.
+ * Version 2 adds `metadata` and `officialSkills` to version 1 without changing
+ * any version 1 meaning. The writer emits version 2; the reader accepts both,
+ * so a document written before this release still imports. A version 1 reader
+ * meeting a version 2 document refuses it as `unsupported-version` instead of
+ * guessing — that is why the version is bumped rather than the fields being
+ * silently added to version 1.
+ *
+ * Personal Team Skill assets, member bindings, category membership, and local
+ * paths are never part of this document.
  * @module dsh-agent-team-presets/preset-transfer
  */
 
-import type { TeamAgentPreset, TeamCaptainPreset, TeamPreset, TeamSlotPreset } from './types.ts'
+import type { TeamAgentPreset, TeamCaptainPreset, TeamDisplayMetadata, TeamPreset, TeamSlotPreset } from './types.ts'
 
 /** Format marker every shareable Team document carries. */
 export const TEAM_PRESET_FORMAT = 'dsh-agent-team-preset'
 
-/** Format revision this plugin writes and the only one it reads. */
-export const TEAM_PRESET_FORMAT_VERSION = 1
+/** Format revision this plugin writes. */
+export const TEAM_PRESET_FORMAT_VERSION = 2
+
+/** The older revision this plugin still reads. */
+export const TEAM_PRESET_FORMAT_VERSION_V1 = 1
 
 /** Members one shared document may declare. */
 export const MAX_TRANSFER_MEMBERS = 64
 
 /** Characters one shared document may hold, so one paste cannot exhaust the page. */
 export const MAX_TRANSFER_CHARS = 512 * 1024
+
+/** Mutable shape used while one metadata object is assembled. */
+type MutableMetadata = {
+  summary?: string
+  tags?: string[]
+  useCases?: string[]
+  quickPrompts?: string[]
+  notes?: string
+}
+
+/** Upper bounds of the display metadata fields. */
+export const METADATA_LIMITS = {
+  /** Characters in `summary`. */
+  summary: 500,
+  /** Characters in one tag. */
+  tag: 64,
+  /** Tags in `tags`. */
+  tags: 30,
+  /** Characters in one use case. */
+  useCase: 200,
+  /** Entries in `useCases`. */
+  useCases: 20,
+  /** Characters in one quick prompt. */
+  quickPrompt: 500,
+  /** Entries in `quickPrompts`. */
+  quickPrompts: 20,
+  /** Characters in `notes`. */
+  notes: 2000,
+  /** Characters across the whole metadata object, JSON-encoded. */
+  total: 16 * 1024,
+  /** Official skill declarations one document may carry. */
+  officialSkills: 16,
+} as const
 
 /** The shareable fields of one captain or member slot. */
 export type TeamSlotTransfer = {
@@ -39,6 +83,14 @@ export type TeamSlotTransfer = {
   readonly systemPrompt: string
   /** Accent color as `#rrggbb`; empty keeps the theme default. */
   readonly color: string
+}
+
+/** One official default Team Skill declaration carried by an official template. */
+export type OfficialSkillTransfer = {
+  /** Shipped skill id; resolvable on another deployment of this plugin version. */
+  readonly skillId: string
+  /** Role name inside the document, matched case-insensitively on import. */
+  readonly roleName: string
 }
 
 /** One Team as a shareable document. */
@@ -53,10 +105,17 @@ export type TeamPresetTransfer = {
     readonly name: string
     /** What this Team is for. */
     readonly description: string
+    /** Display-only discovery metadata, absent in version 1 documents. */
+    readonly metadata?: TeamDisplayMetadata
     /** The captain's shareable role. */
     readonly captain: TeamSlotTransfer
     /** Every member's shareable role, in declared order. */
     readonly members: readonly TeamSlotTransfer[]
+    /**
+     * Official default skill assignments declared by the shipped template.
+     * Never carries skill bodies, local bindings, or paths.
+     */
+    readonly officialSkills?: readonly OfficialSkillTransfer[]
   }
 }
 
@@ -69,20 +128,35 @@ export type TeamPresetImportFailure =
   | 'duplicate-members'
   | 'too-many-members'
   | 'too-large'
+  | 'invalid-metadata'
 
 /** Result of reading one shared document. */
 export type TeamPresetImportResult =
   | { readonly ok: true; readonly transfer: TeamPresetTransfer }
   | { readonly ok: false; readonly reason: TeamPresetImportFailure }
 
-/** Keys a document root may carry. */
+/**
+ * Keys a document root may carry.
+ *
+ * Both revisions share this root shape: version 2 only adds fields inside
+ * `team`, so one constant serves the reader and no revision can drift.
+ */
 const ROOT_KEYS = ['format', 'version', 'team'] as const
 
-/** Keys a shared Team may carry. */
-const TEAM_KEYS = ['name', 'description', 'captain', 'members'] as const
+/** Keys a version 1 shared Team may carry. */
+const TEAM_KEYS_V1 = ['name', 'description', 'captain', 'members'] as const
+
+/** Keys a version 2 shared Team may carry. */
+const TEAM_KEYS_V2 = ['name', 'description', 'metadata', 'captain', 'members', 'officialSkills'] as const
 
 /** Keys a shared slot may carry. */
 const SLOT_KEYS = ['name', 'description', 'systemPrompt', 'color'] as const
+
+/** Keys a metadata object may carry. */
+const METADATA_KEYS = ['summary', 'tags', 'useCases', 'quickPrompts', 'notes'] as const
+
+/** Keys an official skill declaration may carry. */
+const OFFICIAL_SKILL_KEYS = ['skillId', 'roleName'] as const
 
 /** Internal refusal carrying the reason the document was rejected. */
 class Refused extends Error {
@@ -123,6 +197,85 @@ function hasUnknownKey(value: Record<string, unknown>, allowed: readonly string[
 function readText(value: Record<string, unknown>, key: string): string | undefined {
   const field = value[key]
   return typeof field === 'string' ? field : undefined
+}
+
+/**
+ * Read an optional string list with a per-entry and per-list bound.
+ * @param value - candidate list.
+ * @param maxEntries - most entries allowed.
+ * @param maxLength - most characters allowed in one entry.
+ * @returns the list, or undefined when the field is absent.
+ * @throws {Refused} when the field is present but malformed or too large.
+ */
+function readTextList(value: unknown, maxEntries: number, maxLength: number): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) throw new Refused('invalid-metadata')
+  if (value.length > maxEntries) throw new Refused('invalid-metadata')
+  return value.map((entry) => {
+    if (typeof entry !== 'string' || entry.length > maxLength) throw new Refused('invalid-metadata')
+    return entry
+  })
+}
+
+/**
+ * Read the optional display metadata of one shared Team.
+ *
+ * Unknown metadata keys are refused rather than dropped, so a document that
+ * carries a field this release does not understand cannot look imported while
+ * silently losing it.
+ * @param value - candidate metadata object.
+ * @returns the metadata, or undefined when absent.
+ * @throws {Refused} when the value is malformed, too large, or has unknown keys.
+ */
+function readMetadata(value: unknown): TeamDisplayMetadata | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) throw new Refused('invalid-metadata')
+  if (hasUnknownKey(value, METADATA_KEYS)) throw new Refused('unsupported-fields')
+  const summary = value['summary']
+  const notes = value['notes']
+  if (summary !== undefined && (typeof summary !== 'string' || summary.length > METADATA_LIMITS.summary)) throw new Refused('invalid-metadata')
+  if (notes !== undefined && (typeof notes !== 'string' || notes.length > METADATA_LIMITS.notes)) throw new Refused('invalid-metadata')
+  // Built field by field: `exactOptionalPropertyTypes` forbids assigning an
+  // explicit `undefined`, and an absent field must stay absent so the export
+  // never writes an empty key back.
+  const metadata: MutableMetadata = {}
+  if (summary !== undefined) metadata.summary = summary
+  if (notes !== undefined) metadata.notes = notes
+  const tags = readTextList(value['tags'], METADATA_LIMITS.tags, METADATA_LIMITS.tag)
+  if (tags !== undefined) metadata.tags = tags
+  const useCases = readTextList(value['useCases'], METADATA_LIMITS.useCases, METADATA_LIMITS.useCase)
+  if (useCases !== undefined) metadata.useCases = useCases
+  const quickPrompts = readTextList(value['quickPrompts'], METADATA_LIMITS.quickPrompts, METADATA_LIMITS.quickPrompt)
+  if (quickPrompts !== undefined) metadata.quickPrompts = quickPrompts
+  if (metadataChars(metadata) > METADATA_LIMITS.total) throw new Refused('invalid-metadata')
+  return metadata
+}
+
+/**
+ * Count the characters one metadata object adds to a document.
+ * @param metadata - the metadata to measure.
+ * @returns its JSON-encoded length.
+ */
+export function metadataChars(metadata: TeamDisplayMetadata): number {
+  return JSON.stringify(metadata).length
+}
+
+/**
+ * Read the optional official skill declarations of one shared Team.
+ * @param value - candidate declaration list.
+ * @returns the declarations, or undefined when absent.
+ * @throws {Refused} when the list is malformed.
+ */
+function readOfficialSkills(value: unknown): OfficialSkillTransfer[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > METADATA_LIMITS.officialSkills) throw new Refused('invalid-format')
+  return value.map((entry) => {
+    if (!isRecord(entry) || hasUnknownKey(entry, OFFICIAL_SKILL_KEYS)) throw new Refused('unsupported-fields')
+    const skillId = readText(entry, 'skillId')
+    const roleName = readText(entry, 'roleName')
+    if (skillId === undefined || roleName === undefined || skillId === '' || roleName === '') throw new Refused('invalid-format')
+    return { skillId, roleName }
+  })
 }
 
 /**
@@ -171,21 +324,32 @@ function readMembers(value: unknown): TeamSlotTransfer[] {
 /**
  * Read one shared Team.
  * @param value - candidate Team.
+ * @param version - the document revision being read.
  * @returns the Team's shareable content.
  * @throws {Refused} when the value is not a Team of this format.
  */
-function readTeam(value: unknown): TeamPresetTransfer['team'] {
+function readTeam(value: unknown, version: number): TeamPresetTransfer['team'] {
   if (!isRecord(value)) throw new Refused('invalid-format')
-  if (hasUnknownKey(value, TEAM_KEYS)) throw new Refused('unsupported-fields')
+  if (hasUnknownKey(value, version >= 2 ? TEAM_KEYS_V2 : TEAM_KEYS_V1)) throw new Refused('unsupported-fields')
   const name = readText(value, 'name')
   const description = readText(value, 'description')
   if (name === undefined || description === undefined) throw new Refused('invalid-format')
-  return {
+  const body: MutableTeamDocument = {
     name,
     description,
     captain: readSlot(value['captain']),
     members: readMembers(value['members']),
   }
+  // A version 1 document declares neither field, so neither is read for it:
+  // the reader cannot synthesise a value the writer of that revision never
+  // agreed to carry.
+  if (version >= 2) {
+    const metadata = readMetadata(value['metadata'])
+    if (metadata !== undefined) body.metadata = metadata
+    const officialSkills = readOfficialSkills(value['officialSkills'])
+    if (officialSkills !== undefined) body.officialSkills = officialSkills
+  }
+  return body
 }
 
 /**
@@ -200,8 +364,10 @@ function readTransfer(value: unknown): TeamPresetTransfer {
   if (value['format'] !== TEAM_PRESET_FORMAT) throw new Refused('invalid-format')
   const version = value['version']
   if (typeof version !== 'number' || !Number.isInteger(version)) throw new Refused('invalid-format')
-  if (version !== TEAM_PRESET_FORMAT_VERSION) throw new Refused('unsupported-version')
-  return { format: TEAM_PRESET_FORMAT, version: TEAM_PRESET_FORMAT_VERSION, team: readTeam(value['team']) }
+  if (version !== TEAM_PRESET_FORMAT_VERSION && version !== TEAM_PRESET_FORMAT_VERSION_V1) {
+    throw new Refused('unsupported-version')
+  }
+  return { format: TEAM_PRESET_FORMAT, version, team: readTeam(value['team'], version) }
 }
 
 /**
@@ -277,30 +443,71 @@ function shareSlot(slot: TeamSlotPreset): TeamSlotTransfer {
 }
 
 /**
+ * Project one metadata object onto the document, dropping empty fields.
+ * @param metadata - the stored metadata.
+ * @returns a detached copy with only the fields a document carries.
+ */
+function shareMetadata(metadata: TeamDisplayMetadata): MutableMetadata {
+  const shared: MutableMetadata = {}
+  if (metadata.summary !== undefined && metadata.summary !== '') shared.summary = metadata.summary
+  if (metadata.tags !== undefined && metadata.tags.length > 0) shared.tags = [...metadata.tags]
+  if (metadata.useCases !== undefined && metadata.useCases.length > 0) shared.useCases = [...metadata.useCases]
+  if (metadata.quickPrompts !== undefined && metadata.quickPrompts.length > 0) shared.quickPrompts = [...metadata.quickPrompts]
+  if (metadata.notes !== undefined && metadata.notes !== '') shared.notes = metadata.notes
+  return shared
+}
+
+/** Mutable shape of one Team document while it is assembled. */
+type MutableTeamDocument = {
+  name: string
+  description: string
+  metadata?: TeamDisplayMetadata
+  captain: TeamSlotTransfer
+  members: TeamSlotTransfer[]
+  officialSkills?: OfficialSkillTransfer[]
+}
+
+/** Options accepted when exporting one Team. */
+export interface TeamPresetExportOptions {
+  /**
+   * Official default skill declarations of the shipped template this Team came
+   * from. Local assignments are never accepted here.
+   */
+  readonly officialSkills?: readonly OfficialSkillTransfer[]
+}
+
+/**
  * Project one Team onto the document that shares it.
  * @param team - the Team preset to share.
+ * @param options - official template declarations, when exporting a builtin Team.
  * @returns the shareable document.
  */
-export function exportTeamPreset(team: TeamPreset): TeamPresetTransfer {
-  return {
-    format: TEAM_PRESET_FORMAT,
-    version: TEAM_PRESET_FORMAT_VERSION,
-    team: {
-      name: team.name,
-      description: team.description,
-      captain: shareSlot(team.captain),
-      members: team.members.map(member => shareSlot(member)),
-    },
+export function exportTeamPreset(team: TeamPreset, options: TeamPresetExportOptions = {}): TeamPresetTransfer {
+  const body: MutableTeamDocument = {
+    name: team.name,
+    description: team.description,
+    captain: shareSlot(team.captain),
+    members: team.members.map(member => shareSlot(member)),
   }
+  const metadata = team.metadata === undefined ? {} : shareMetadata(team.metadata)
+  // An all-empty metadata object is omitted rather than written as blanks, so a
+  // user Team with no discovery data exports exactly the version 1 shape.
+  if (Object.keys(metadata).length > 0) body.metadata = metadata
+  const officialSkills = options.officialSkills
+  if (officialSkills !== undefined && officialSkills.length > 0) {
+    body.officialSkills = officialSkills.map(entry => ({ skillId: entry.skillId, roleName: entry.roleName }))
+  }
+  return { format: TEAM_PRESET_FORMAT, version: TEAM_PRESET_FORMAT_VERSION, team: body }
 }
 
 /**
  * Serialize one Team as the fixed document this plugin imports.
  * @param team - the Team preset to share.
+ * @param options - official template declarations, when exporting a builtin Team.
  * @returns the document text, newline-terminated.
  */
-export function serializeTeamPreset(team: TeamPreset): string {
-  return `${JSON.stringify(exportTeamPreset(team), null, 2)}\n`
+export function serializeTeamPreset(team: TeamPreset, options: TeamPresetExportOptions = {}): string {
+  return `${JSON.stringify(exportTeamPreset(team, options), null, 2)}\n`
 }
 
 /**
@@ -365,12 +572,22 @@ export function applySharedFields<T extends TeamSlotPreset>(slot: T, shared: Tea
  * @returns a new Team preset carrying the document's shareable content.
  */
 export function teamFromTransfer(transfer: TeamPresetTransfer, id: string): TeamPreset {
+  const metadata = transfer.team.metadata
   return {
     id,
     name: transfer.team.name,
     description: transfer.team.description,
     captain: captainFromTransfer(transfer.team.captain),
     members: transfer.team.members.map(member => memberFromTransfer(member)),
+    ...metadata === undefined ? {} : {
+      metadata: {
+        ...metadata.summary === undefined ? {} : { summary: metadata.summary },
+        ...metadata.tags === undefined ? {} : { tags: [...metadata.tags] },
+        ...metadata.useCases === undefined ? {} : { useCases: [...metadata.useCases] },
+        ...metadata.quickPrompts === undefined ? {} : { quickPrompts: [...metadata.quickPrompts] },
+        ...metadata.notes === undefined ? {} : { notes: metadata.notes },
+      },
+    },
   }
 }
 

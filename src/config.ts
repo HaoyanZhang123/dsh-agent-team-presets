@@ -10,7 +10,9 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { toolMode } from './presets.ts'
-import type { TeamCaptainPreset, TeamPreset, TeamSelectionRecord } from './types.ts'
+import type {
+  TeamCaptainPreset, TeamCategory, TeamCategoryAssignment, TeamPreset, TeamSelectionRecord,
+} from './types.ts'
 
 /** Fields every Team slot stores, whether it is the captain or one member. */
 const teamSlotFields = {
@@ -34,12 +36,41 @@ const memberSchema = z.object({
   reasoningEffort: z.string().default(''),
 })
 
+/**
+ * Display-only discovery metadata.
+ *
+ * Stored beside the runtime fields but never read by the composition path. The
+ * empty defaults keep an old document loading unchanged; the exporter drops
+ * empty fields so a document only carries what the user actually filled in.
+ */
+const metadataSchema = z.object({
+  summary: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+  useCases: z.array(z.string()).default([]),
+  quickPrompts: z.array(z.string()).default([]),
+  notes: z.string().default(''),
+})
+
 const teamSchema = z.object({
   id: z.string().required(),
   name: z.string().default(''),
   description: z.string().default(''),
+  metadata: metadataSchema,
   captain: captainSchema,
   members: z.array(memberSchema).default([]),
+})
+
+/** One user-created local grouping of Teams; UI data only. */
+const categorySchema = z.object({
+  id: z.string().required(),
+  name: z.string().default(''),
+  order: z.number().default(0),
+})
+
+/** One local `teamId → categoryId` membership. */
+const categoryAssignmentSchema = z.object({
+  teamId: z.string().required(),
+  categoryId: z.string().required(),
 })
 
 const selectionSchema = z.object({
@@ -103,6 +134,16 @@ export interface Config {
   freshProvider: string
   /** Continuable-subagent provider used for a member forked from the captain's turns. */
   forkProvider: string
+  /**
+   * User-created local Team categories.
+   *
+   * Local UI organisation only: never exported with a Team preset, never read by
+   * the runtime, and never used to identify a Team. Deleting a category removes
+   * the grouping, never the Teams inside it.
+   */
+  categories: Volatile<TeamCategory[]>
+  /** Local `teamId → categoryId` memberships, keyed by stable Team identity. */
+  teamCategories: Volatile<TeamCategoryAssignment[]>
 }
 
 /** Runtime schema of {@link Config}. */
@@ -115,4 +156,6 @@ export const Config = z.object({
   seededDefaults: z.array(z.string()).default([]).volatile(),
   freshProvider: z.string().default('spawn'),
   forkProvider: z.string().default('fork'),
+  categories: z.array(categorySchema).default([]).volatile(),
+  teamCategories: z.array(categoryAssignmentSchema).default([]).volatile(),
 })

@@ -59,6 +59,14 @@ export type TeamPreset = {
   captain: TeamCaptainPreset
   /** Role templates the captain summons by name. */
   members: readonly TeamAgentPreset[]
+  /**
+   * Display-only discovery metadata.
+   *
+   * Never read by the runtime composition path: no prompt, briefing, roster,
+   * spawn description, or model message is built from it. It exists for the
+   * Settings page and the composer, and it travels with the shareable preset.
+   */
+  metadata?: TeamDisplayMetadata
 }
 
 /** One Session's active Team preset. */
@@ -162,4 +170,216 @@ export type TeamExecutionRow = {
 export type TeamExecutionSnapshot = {
   /** One row per Team the Host reports, ordered by Team identity. */
   teams: readonly TeamExecutionRow[]
+}
+
+/** The fixed official series a shipped Team belongs to. */
+export type TeamSeries =
+  /** The original research-and-development scale series (three Teams). */
+  | 'classic-development'
+  /** The work-mode series contributed by PR #1 (six Teams). */
+  | 'work-modes'
+
+/**
+ * Where a Team came from, as a read-only fact the UI may filter on.
+ *
+ * This is derived from the stable builtin catalog, never from a user-editable
+ * field, so an imported document cannot claim to be a shipped preset.
+ */
+export type TeamSource = 'builtin' | 'custom'
+
+/**
+ * Display-only Team metadata.
+ *
+ * Every field is optional and none of it reaches a System Prompt, a captain or
+ * member briefing, the member roster, the spawn tool description, or any model
+ * message. It exists for the Settings page and the composer to help a human
+ * find a Team, and it travels with the shareable preset document.
+ */
+export type TeamDisplayMetadata = {
+  /** One-sentence purpose, shorter than the runtime `description`. */
+  summary?: string
+  /** Free-form discovery tags. */
+  tags?: readonly string[]
+  /** Situations this Team is meant for. */
+  useCases?: readonly string[]
+  /** Example tasks the user can copy into the composer. */
+  quickPrompts?: readonly string[]
+  /** Extra caveats for a human reader. */
+  notes?: string
+}
+
+/** One user-created logical grouping of Teams; local UI data only. */
+export type TeamCategory = {
+  /** Stable identity; renaming never changes it. */
+  id: string
+  /** Display name. */
+  name: string
+  /** Sort order among categories; ascending. */
+  order: number
+}
+
+/** Assignment of one Team to one user category, by stable Team identity. */
+export type TeamCategoryAssignment = {
+  /** Team identity the assignment points at. */
+  teamId: string
+  /** Category identity; an assignment to a missing category is ignored. */
+  categoryId: string
+}
+
+/** Origin bucket of one Team Skill asset. */
+export type TeamSkillOrigin =
+  /** Shipped with the plugin package, read-only. */
+  | 'builtin'
+  /** Created or imported by the user. */
+  | 'custom'
+  /** A user-owned editable copy derived from a shipped skill. */
+  | 'override'
+
+/** One file of a Team Skill folder. */
+export type TeamSkillFile = {
+  /** POSIX-relative path inside the skill folder. */
+  path: string
+  /** Byte length. */
+  size: number
+  /** SHA-256 of the bytes, lowercase hex. */
+  sha256: string
+  /** Whether the bytes are UTF-8 text this UI may edit. */
+  text: boolean
+}
+
+/** Dependency declaration of one Team Skill (plugin-side registry data). */
+export type TeamSkillDependencies = {
+  /** MCP servers the skill's method expects; never auto-connected. */
+  mcpServers: readonly {
+    serverName: string
+    required: boolean
+    capabilities?: readonly ('tools' | 'resources')[]
+    toolNames?: readonly string[]
+  }[]
+  /** Executables the scripts expect, such as `python3`. */
+  executables: readonly string[]
+  /** Other Team Skill ids this asset explicitly depends on. */
+  otherSkills: readonly string[]
+}
+
+/** One version-pinned Team Skill asset. */
+export type TeamSkillAsset = {
+  /** Stable asset identity: `builtin:<skillId>`, `custom:<uuid>`, or `override:<uuid>`. */
+  id: string
+  /** Skill name used by the model, kebab-case. */
+  skillId: string
+  /** Frontmatter description. */
+  description: string
+  origin: TeamSkillOrigin
+  /** Asset version string. */
+  version: string
+  /** Official skill id this asset is, or is an override of. */
+  officialSkillId?: string
+  /** For an override: the official version it was derived from. */
+  baseVersion?: string
+  /** Whole-folder SHA-256 digest. */
+  digest: string
+  /** Every file of the folder, relative-path ordered. */
+  files: readonly TeamSkillFile[]
+  /** Declared dependencies. */
+  dependencies: TeamSkillDependencies
+  /** Whether the shipped official asset this overrides has a newer version. */
+  updateAvailable?: boolean
+  /** Epoch milliseconds of the last local write. */
+  updatedAt: number
+}
+
+/** One `(teamId, roleId)` assignment of a Team Skill asset. */
+export type TeamSkillBinding = {
+  /** Team identity. */
+  teamId: string
+  /** Stable member role identity; `captain` for the captain slot. */
+  roleId: string
+  /** Whether this binding targets the captain rather than a member. */
+  captain?: boolean
+  /** Asset identity the role receives. */
+  assetId: string
+}
+
+/** One role's binding summary for the settings UI. */
+export type TeamSkillBindingSummary = {
+  /** Team identity. */
+  teamId: string
+  /** Display name of the Team, for dependency dialogs. */
+  teamName: string
+  /** Role identity. */
+  roleId: string
+  /** Display name of the role. */
+  roleName: string
+  /** Whether this is the captain slot. */
+  captain: boolean
+}
+
+/** One Team Skill row as the settings page lists it. */
+export type TeamSkillSummary = {
+  /** Asset identity. */
+  id: string
+  /** Skill name. */
+  skillId: string
+  /** Description. */
+  description: string
+  /** Origin bucket. */
+  origin: TeamSkillOrigin
+  /** Asset version. */
+  version: string
+  /** Number of role bindings. */
+  bindingCount: number
+  /** Whether a newer official version exists for an override. */
+  updateAvailable: boolean
+  /** Whether the folder passed its stored digest check. */
+  intact: boolean
+}
+
+/** Full Team Skill detail for the settings page. */
+export type TeamSkillDetail = TeamSkillSummary & {
+  /** Every file, relative-path ordered. */
+  files: readonly TeamSkillFile[]
+  /** Declared dependencies. */
+  dependencies: TeamSkillDependencies
+  /** Roles currently bound to this asset. */
+  bindings: readonly TeamSkillBindingSummary[]
+  /** For an override: the official asset it shadows. */
+  officialAssetId?: string
+  /** For an override: the official version currently shipped. */
+  officialVersion?: string
+}
+
+/** One file payload sent from the browser to import a skill folder. */
+export type TeamSkillImportFile = {
+  /** POSIX-relative path inside the imported folder. */
+  path: string
+  /** Base64 of the bytes. */
+  base64: string
+}
+
+/** Result of one import or create operation. */
+export type TeamSkillMutationResult =
+  | { readonly ok: true; readonly asset: TeamSkillDetail }
+  | { readonly ok: false; readonly reason: string; readonly detail?: string }
+
+/** Why a Team Skill delete was refused. */
+export type TeamSkillDeleteBlocker =
+  | { readonly kind: 'binding'; readonly bindings: readonly TeamSkillBindingSummary[] }
+  | { readonly kind: 'active'; readonly sessions: readonly string[] }
+  | { readonly kind: 'dependency'; readonly dependents: readonly string[] }
+  | { readonly kind: 'official' }
+
+/** Result of one delete attempt. */
+export type TeamSkillDeleteResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly blockers: readonly TeamSkillDeleteBlocker[] }
+
+/** Search hit produced by the deterministic local search model. */
+export type TeamSearchHit = {
+  /** Team identity. */
+  teamId: string
+  /** Match score; higher is better. Stable and explainable. */
+  score: number
+  /** Which fields matched, in a fixed order. */
+  fields: readonly ('name' | 'tags' | 'summary' | 'useCases' | 'quickPrompts' | 'notes')[]
 }
