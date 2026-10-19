@@ -1,22 +1,24 @@
 /**
- * The Team Skills settings panel: the library on the left, one skill on the
- * right, and the assignment dialog that makes it take effect.
+ * The Team Skill settings pages: a library list and one skill's detail, exactly
+ * as the v0.1.6 native prototype defines them (new views only — the 0.1.5 Team
+ * pages around them are unchanged).
  *
- * Everything the panel reports about safety comes from the Host answer — a
- * blocked delete lists the roles, the running members, or the dependency the
- * Host named — so this file never re-derives a rule and cannot drift from the
- * Agent-facing path. The panel exists because the Host alone is not testable by
- * a user: importing a folder, editing `SKILL.md`, and binding a role have to be
- * clickable before any of the isolation work is observable.
+ * The library page owns discovery: search, the built-in/custom segment, and the
+ * three actions the prototype puts in the title row. The detail page owns one
+ * skill: its file tree and editor, its member references, and the deletion the
+ * Host refuses while a member still holds it. Assignment itself belongs to the
+ * member page, so this file never invents a second place to bind a skill.
  * @module dsh-agent-team-presets/client/TeamSkillsView
  */
 import type { TeamSkillsController } from './team-skills-controller.ts';
+/** Locale keys this panel reads. */
+export type TeamSkillsLocaleKey = 'skillsTitle' | 'skillsSub' | 'skillsNote' | 'skillsNew' | 'skillsImport' | 'skillsOpenFolder' | 'skillsSearch' | 'skillsAll' | 'skillsBuiltin' | 'skillsCustom' | 'skillsFiles' | 'skillsBound' | 'skillsEmpty' | 'skillsResources' | 'skillsSaveFile' | 'skillsEditable' | 'skillsReadonly' | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind' | 'skillsDeps' | 'skillsNoDeps' | 'skillsDelete' | 'skillsDeleteTitle' | 'skillsDeleteBody' | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle' | 'skillsVersion' | 'skillsOverrideOn';
 /** Props of {@link TeamSkillsView}. */
 export interface TeamSkillsViewProps {
     /** Page state and actions. */
     readonly controller: TeamSkillsController;
     /** Translate one locale key. */
-    readonly t: (key: 'skillsEmpty' | 'skillsHint' | 'skillsImport' | 'skillsNew' | 'skillsSave' | 'skillsDelete' | 'skillsAssign' | 'skillsUnassign' | 'skillsOfficial' | 'skillsFiles' | 'skillsBindings' | 'skillsNamePlaceholder' | 'skillsDescriptionPlaceholder' | 'skillsRoot' | 'skillsRefresh' | 'skillsOverride' | 'skillsReset' | 'skillsBody') => string;
+    readonly t: (key: TeamSkillsLocaleKey) => string;
 }
-/** The Team Skills panel. */
+/** The Team Skill settings pages. */
 export declare function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement;

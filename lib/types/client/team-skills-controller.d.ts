@@ -29,6 +29,10 @@ export interface TeamSkillsState {
     readonly failed: boolean;
     /** Why the library is unavailable, when the Host has no store. */
     readonly issue: string | undefined;
+    /** The file whose text the editor shows. */
+    readonly file: string | undefined;
+    /** That file's text, once read. */
+    readonly fileText: string | undefined;
 }
 /** The Team Skill page state. */
 export declare class TeamSkillsController {
@@ -71,6 +75,11 @@ export declare class TeamSkillsController {
      * @param assetId - asset identity.
      */
     select(assetId: string): Promise<void>;
+    /**
+     * Load one file's text into the editor.
+     * @param path - relative path inside the asset.
+     */
+    openFile(path: string): Promise<void>;
     /**
      * Save one file of the selected asset.
      * @param path - relative path.

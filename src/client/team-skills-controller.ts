@@ -46,6 +46,10 @@ export interface TeamSkillsState {
   readonly failed: boolean
   /** Why the library is unavailable, when the Host has no store. */
   readonly issue: string | undefined
+  /** The file whose text the editor shows. */
+  readonly file: string | undefined
+  /** That file's text, once read. */
+  readonly fileText: string | undefined
 }
 
 /**
@@ -68,6 +72,8 @@ export class TeamSkillsController {
     message: undefined,
     failed: false,
     issue: undefined,
+    file: undefined,
+    fileText: undefined,
   }
 
   private readonly listeners = new Set<() => void>()
@@ -169,7 +175,28 @@ export class TeamSkillsController {
       this.publish({ message: answer.detail, failed: true })
       return
     }
+    // The instruction file is what the page opens first; the file tree takes
+    // over from there.
     this.publish({ detail: answer })
+    await this.openFile('SKILL.md')
+  }
+
+  /**
+   * Load one file's text into the editor.
+   * @param path - relative path inside the asset.
+   */
+  async openFile(path: string): Promise<void> {
+    const assetId = this.state.selectedId
+    if (assetId === undefined) return
+    this.publish({ file: path, fileText: undefined })
+    try {
+      const answer = unwrap(await this.api().readFile(assetId, path))
+      if (this.state.file !== path) return
+      if ('text' in answer) this.publish({ fileText: answer.text })
+      else this.publish({ message: answer.detail, failed: true })
+    } catch (error: unknown) {
+      this.publish({ message: String(error), failed: true })
+    }
   }
 
   /**
@@ -185,6 +212,7 @@ export class TeamSkillsController {
       if (!isDetail(answer)) return answer.detail
       this.publish({ detail: answer })
       await this.refresh()
+      await this.openFile(path)
       return 'saved'
     })
   }
