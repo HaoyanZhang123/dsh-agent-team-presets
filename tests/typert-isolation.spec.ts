@@ -101,7 +101,18 @@ function createIsolatedDirectory(): string {
 function probeInNode(specifier: string): { ok: boolean; code?: string; exports?: Record<string, unknown> } {
   const script = `
     const target = process.env.PROBE_TARGET
-    const drop = (key, value) => typeof value === 'function' ? '[function]' : value
+    // 0.2.1 descriptors carry their zod schemas inline, and a schema graph is
+    // cyclic, so stringifying it directly would fail the probe. Both the schema
+    // objects and the runtime factory are summarized to a marker: this test
+    // compares descriptor identity, not the schema implementation.
+    const drop = (key, value) => {
+      if (typeof value === 'function') return '[function]'
+      // The bundled zod namespace is dropped whole: it is a runtime object, not
+      // part of the descriptor identity this test compares.
+      if (key === 'zod') return '[schema-runtime]'
+      if (value && typeof value === 'object' && '_zod' in value) return '[schema]'
+      return value
+    }
     try {
       const loaded = await import(target)
       console.log(JSON.stringify({ ok: true, exports: JSON.parse(JSON.stringify(loaded, drop)) }))
@@ -192,13 +203,19 @@ describe('Typert faces load without a schema dependency', () => {
   })
 
   it('keeps the Host and Remote descriptor identities in agreement', () => {
-    const host = probeInNode(faces.host).exports!.TYPERT as { package: string; invocations: unknown[] }
-    const remote = probeInNode(faces.remote).exports!.TYPERT_REMOTE as { package: string; descriptors: unknown[] }
-    expect(remote.package).toBe(host.package)
-    // The Remote face republishes the same descriptors the Host declared. The
-    // `create` hooks were normalized to a marker by the probe, because each face
+    // Host 0.2.1's Remote face is `{ spec, zod, index }` and the descriptors live
+    // under `spec`, so the identity comparison reads that contract rather than
+    // the pre-0.2.1 flat shape.
+    const host = probeInNode(faces.host).exports!.TYPERT as { package: string; invocations: { id: string; service: string }[] }
+    const remote = probeInNode(faces.remote).exports!.TYPERT_REMOTE as {
+      spec: { package: string; methods: Record<string, { service: string }> }
+    }
+    expect(remote.spec.package).toBe(host.package)
+    // Every Host invocation is republished under `namespace/method` against the
+    // same service. `create` hooks are normalized by the probe because each face
     // bundles its own schema runtime and function identity is not shared.
-    expect(remote.descriptors).toEqual(host.invocations)
+    const expected = Object.fromEntries(host.invocations.map(row => [row.id.slice(row.id.indexOf('#') + 1), row.service]))
+    expect(Object.fromEntries(Object.entries(remote.spec.methods).map(([key, value]) => [key, value.service]))).toEqual(expected)
   })
 
   it('keeps the direct catalog and the cancellable execution stream', () => {
@@ -212,7 +229,7 @@ describe('Typert faces load without a schema dependency', () => {
       namespace: 'teamPresets',
       invocation: { kind: 'direct' },
       parameters: [],
-      result: { mode: 'strict', typeSymbol: 'dsh-agent-team-presets/types#ToolCatalogValue' },
+      result: { spec: { mode: 'strict', typeSymbol: 'dsh-agent-team-presets/types#ToolCatalogValue' } },
     })
     // A direct invocation must not claim a stream mode.
     expect(catalog!.mode).toBeUndefined()
@@ -222,7 +239,7 @@ describe('Typert faces load without a schema dependency', () => {
       mode: 'stream',
       invocation: { kind: 'direct' },
       cancellation: { parameter: 'signal' },
-      result: { mode: 'strict', typeSymbol: 'dsh-agent-team-presets/types#TeamExecutionSnapshot' },
+      result: { spec: { mode: 'strict', typeSymbol: 'dsh-agent-team-presets/types#TeamExecutionSnapshot' } },
     })
   })
 })

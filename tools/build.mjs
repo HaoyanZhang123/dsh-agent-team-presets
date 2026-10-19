@@ -80,6 +80,18 @@ try {
   cpSync(join(root, 'src'), join(pkg, 'src'), { recursive: true })
   mkdirSync(join(pkg, 'lib'), { recursive: true })
   cpSync(join(root, 'lib/typert.remote-client.d.ts'), join(pkg, 'lib/typert.remote-client.d.ts'))
+  // 0.2.1's generated remote factory imports the protocol's runtime helper. It is
+  // inlined from source in every face: a wire face must load in a process that
+  // resolves no peers (tests/typert-isolation.spec.ts), and the browser factory
+  // may not add an import the shell does not provide.
+  const protocolRuntime = {
+    name: 'team-presets-protocol-runtime',
+    resolveId(id) {
+      if (id === '@deepseek-ai/dsh-typert-protocol/remote-info') {
+        return join(stage, 'packages/typert/protocol/src/remote-info.ts')
+      }
+    },
+  }
   // Only the exports that resolve to real sources are staged: a host-face pass
   // cannot resolve `./client` (it is `src/client/index.ts`, not `src/client.ts`),
   // and the Client artifact is generated from the same Host contract anyway.
@@ -152,18 +164,22 @@ try {
   // their strict schemas to work around a missing runtime dependency.
   for (const face of ['host', 'remote-client']) {
     const entry = `typert.${face}`
-    await build({ ...common, entry: { [entry]: join(pkg, 'lib', entry + '.js') }, format: 'esm', platform: 'neutral', deps: { neverBundle: id => isBuiltin(id), alwaysBundle: id => !isBuiltin(id) }, plugins: [schemaDependency] })
+    await build({ ...common, entry: { [entry]: join(pkg, 'lib', entry + '.js') }, format: 'esm', platform: 'neutral', deps: { neverBundle: id => isBuiltin(id), alwaysBundle: id => !isBuiltin(id) }, plugins: [schemaDependency, protocolRuntime] })
   }
   writeFileSync(join(pkg, 'lib/THIRD-PARTY-NOTICES.txt'), `Bundled dependency: zod\n\n${readFileSync(join(zodDir, 'LICENSE'), 'utf8')}`)
-  // 0.2.1's generated remote factory imports the protocol's runtime helper, so
-  // that subpath is external too: it ships with the Host's own protocol package.
-  const external = new Set(['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-typert-protocol/remote-info'])
+  const external = new Set(['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'])
+  // 0.2.1's generated remote factory imports the protocol's runtime helper. It is
+  // bundled from source rather than left external: a wire face must load in a
+  // process that resolves no peers (see tests/typert-isolation.spec.ts), and the
+  // browser factory may not add an import the shell does not provide.
+  const protocolSource = join(stage, 'packages/typert/protocol/src/remote-info.ts')
   const clientPlugin = {
     name: 'team-presets-client-surface',
     resolveId(id, importer) {
       if (external.has(id)) return { id, external: true }
       if (id === manifest.name + '/remote') return join(pkg, 'lib/typert.remote-client.js')
       if (id === 'zod') return join(zodDir, 'index.js')
+      if (id === '@deepseek-ai/dsh-typert-protocol/remote-info') return protocolSource
       if (id.endsWith('.module.css') && importer) return '\0team-css:' + resolve(dirname(importer).replace(join(pkg, 'lib/types'), join(pkg, 'src')), id) + '.mjs'
       if (id.startsWith('@deepseek-ai/')) throw new Error(`Undeclared Client value import: ${id}`)
     },
