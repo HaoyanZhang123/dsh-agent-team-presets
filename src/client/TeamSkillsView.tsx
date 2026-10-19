@@ -25,7 +25,7 @@ export type TeamSkillsLocaleKey =
   | 'skillsMakeCopy' | 'skillsResetCopy' | 'skillsBindings' | 'skillsNoBinding' | 'skillsUnbind'
   | 'skillsDeps' | 'skillsNoDeps' | 'skillsDelete' | 'skillsDeleteTitle' | 'skillsDeleteBody'
   | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle'
-  | 'skillsVersion' | 'skillsOverrideOn'
+  | 'skillsVersion' | 'skillsOverrideOn' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
 
 /** Props of {@link TeamSkillsView}. */
 export interface TeamSkillsViewProps {
@@ -180,9 +180,20 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
 
             <div className={css.panel}>
               <div className={css.panelTitle}>{t('skillsDeps')}</div>
-              {detail.asset.mcpServers.length === 0
+              {(detail.asset.mcpServers.length === 0 && (detail.dependencies?.executables.length ?? 0) === 0)
                 ? <div className={css.muted}>{t('skillsNoDeps')}</div>
-                : detail.asset.mcpServers.map(server => <div key={server} className={css.muted}>MCP · {server}</div>)}
+                : (
+                  <>
+                    {detail.asset.mcpServers.map(server => (
+                      <div key={server} className={css.muted}>MCP · {server} <span className={css.tag}>{t('skillsDeclared')}</span></div>
+                    ))}
+                    {(detail.dependencies?.executables ?? []).map(row => (
+                      <div key={row.name} className={css.muted}>
+                        {row.name} <span className={`${css.tag} ${row.found ? css.tagOk : css.tagWarn}`}>{row.found ? t('skillsFound') : t('skillsMissing')}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
             </div>
 
             {state.message === undefined ? null : (

@@ -18,8 +18,9 @@
  * @module dsh-agent-team-presets/team-skills/manager
  */
 
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { delimiter, join } from 'node:path'
+import { constants } from 'node:fs'
 import type {
   TeamSkillAsset, TeamSkillBinding, TeamSkillBindingSummary, TeamSkillDeleteBlocker,
 } from '../types.ts'
@@ -266,6 +267,37 @@ export class TeamSkillManager {
       }
     }
     return hits
+  }
+
+  /**
+   * Resolve one asset's declared executables against the current PATH.
+   *
+   * Only executables can be checked truthfully from here: an MCP server is a
+   * composition-level plugin, so this reports it as *declared* rather than
+   * pretending it is connected. A missing executable is a real fact, and the
+   * page shows it beside the dependency that asked for it.
+   * @param assetId - asset identity.
+   * @returns one row per declared executable, plus the declared MCP servers.
+   */
+  async dependencyReport(assetId: string): Promise<{ executables: { name: string; found: boolean }[]; mcpServers: string[] }> {
+    const asset = this.store.get(assetId)
+    if (asset === undefined) return { executables: [], mcpServers: [] }
+    const directories = (process.env['PATH'] ?? '').split(delimiter).filter(entry => entry !== '')
+    const executables: { name: string; found: boolean }[] = []
+    for (const name of asset.dependencies.executables) {
+      let found = false
+      for (const directory of directories) {
+        try {
+          await access(join(directory, name), constants.X_OK)
+          found = true
+          break
+        } catch {
+          // Not in this directory; keep looking.
+        }
+      }
+      executables.push({ name, found })
+    }
+    return { executables, mcpServers: [...asset.dependencies.mcpServers.map(server => server.serverName)] }
   }
 
   /**

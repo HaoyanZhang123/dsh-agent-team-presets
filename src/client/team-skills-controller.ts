@@ -172,7 +172,7 @@ export class TeamSkillsController {
     const answer = unwrap(await this.api().detail(assetId))
     if (this.disposed || this.state.selectedId !== assetId) return
     if (!isDetail(answer)) {
-      this.publish({ message: answer.detail, failed: true })
+      this.publish({ message: (answer as TeamSkillRefusalView).detail, failed: true })
       return
     }
     // The instruction file is what the page opens first; the file tree takes
@@ -193,7 +193,7 @@ export class TeamSkillsController {
       const answer = unwrap(await this.api().readFile(assetId, path))
       if (this.state.file !== path) return
       if ('text' in answer) this.publish({ fileText: answer.text })
-      else this.publish({ message: answer.detail, failed: true })
+      else this.publish({ message: (answer as TeamSkillRefusalView).detail, failed: true })
     } catch (error: unknown) {
       this.publish({ message: String(error), failed: true })
     }

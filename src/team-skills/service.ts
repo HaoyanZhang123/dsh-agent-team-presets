@@ -156,10 +156,12 @@ export class TeamSkillService extends TypertRemoteService {
     } catch {
       body = ''
     }
+    const report = await this.config.manager.dependencyReport(assetId)
     return {
       asset: row,
       files: asset.files.map(file => ({ path: file.path, size: file.size, text: file.text })),
       body,
+      dependencies: report,
     }
   }
 

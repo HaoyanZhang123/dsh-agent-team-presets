@@ -69,3 +69,32 @@ describe('the Team Skill tools', () => {
     expect((await manager.remove(assetId)).ok).toBe(true)
   })
 })
+
+describe('dependency reporting', () => {
+  it('resolves declared executables against PATH and keeps MCP as declared only', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'team-skill-deps-'))
+    roots.push(root)
+    const store = new TeamSkillStore(root)
+    await store.open()
+    const built = buildSkillPackage([{ path: 'SKILL.md', bytes: TEXT('---\nname: dep-skill\ndescription: d\n---\n') }])
+    if (!built.ok) throw new Error('fixture')
+    await store.install(built.skill, {
+      id: 'custom:dep-skill', origin: 'custom', version: '1',
+      dependencies: {
+        mcpServers: [{ serverName: 'browser-mcp', required: true }],
+        executables: ['sh', 'definitely-not-a-real-binary-xyz'],
+        otherSkills: [],
+      },
+    })
+    const manager = new TeamSkillManager(store, root, {
+      teams: () => [], activeAssetIds: () => new Set(), activeSessions: () => [],
+    })
+    await manager.open()
+    const report = await manager.dependencyReport('custom:dep-skill')
+    expect(report.mcpServers).toEqual(['browser-mcp'])
+    expect(report.executables).toEqual([
+      { name: 'sh', found: true },
+      { name: 'definitely-not-a-real-binary-xyz', found: false },
+    ])
+  })
+})

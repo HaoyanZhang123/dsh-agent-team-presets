@@ -128,6 +128,23 @@ export declare class TeamSkillManager {
      */
     private mentionsAsset;
     /**
+     * Resolve one asset's declared executables against the current PATH.
+     *
+     * Only executables can be checked truthfully from here: an MCP server is a
+     * composition-level plugin, so this reports it as *declared* rather than
+     * pretending it is connected. A missing executable is a real fact, and the
+     * page shows it beside the dependency that asked for it.
+     * @param assetId - asset identity.
+     * @returns one row per declared executable, plus the declared MCP servers.
+     */
+    dependencyReport(assetId: string): Promise<{
+        executables: {
+            name: string;
+            found: boolean;
+        }[];
+        mcpServers: string[];
+    }>;
+    /**
      * Whether an asset is currently referenced by any role.
      * @param assetId - asset identity.
      * @returns whether at least one binding points at it.

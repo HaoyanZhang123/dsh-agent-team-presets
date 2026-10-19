@@ -63,6 +63,7 @@ export type TeamPresetsLocaleKey =
   | 'skillsReset'
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
   | 'skillsAssignTitle' | 'skillsAssignHint' | 'skillsAssignEmpty'
+  | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
   | 'metadataTitle'
   | 'metadataOnlyDisplay'
   | 'metadataNote'
@@ -309,6 +310,9 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsNewTitle: 'New team skill',
   skillsVersion: 'version',
   skillsAssignTitle: 'Team Skill assignment',
+  skillsDeclared: 'declared',
+  skillsFound: 'found on PATH',
+  skillsMissing: 'missing from PATH',
   composeTitle: 'Choose a team',
   metadataTitle: 'Team display metadata',
   metadataOnlyDisplay: 'display only',
@@ -528,6 +532,9 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsNewTitle: '新建 Team Skill',
   skillsVersion: '版本',
   skillsAssignTitle: 'Team Skill 分配',
+  skillsDeclared: '已声明',
+  skillsFound: 'PATH 中存在',
+  skillsMissing: 'PATH 中缺失',
   composeTitle: '选择团队',
   metadataTitle: '团队展示信息',
   metadataOnlyDisplay: '仅用于展示',
