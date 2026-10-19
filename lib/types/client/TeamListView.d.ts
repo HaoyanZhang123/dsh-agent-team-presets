@@ -24,6 +24,16 @@ export interface TeamListViewProps {
     readonly onImport: (file: File) => void;
     /** Writes the chosen Team out as a shareable document. */
     readonly onExport: (teamId: string) => void;
+    /** The reader's own categories, in display order. */
+    readonly categories?: readonly {
+        readonly id: string;
+        readonly name: string;
+    }[];
+    /** Which Team owns which category. */
+    readonly teamCategories?: readonly {
+        readonly teamId: string;
+        readonly categoryId: string;
+    }[];
 }
 /**
  * Render the Team list.

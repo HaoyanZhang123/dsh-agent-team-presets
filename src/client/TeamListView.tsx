@@ -32,6 +32,10 @@ export interface TeamListViewProps {
   readonly onImport: (file: File) => void
   /** Writes the chosen Team out as a shareable document. */
   readonly onExport: (teamId: string) => void
+  /** The reader's own categories, in display order. */
+  readonly categories?: readonly { readonly id: string; readonly name: string }[]
+  /** Which Team owns which category. */
+  readonly teamCategories?: readonly { readonly teamId: string; readonly categoryId: string }[]
 }
 
 /**
@@ -45,16 +49,20 @@ export function TeamListView(props: TeamListViewProps) {
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<'all' | 'builtin' | 'custom'>('all')
   const [series, setSeries] = useState<'all' | TeamSeries>('all')
+  const [category, setCategory] = useState('')
 
   const tokens = queryTokens(query)
   const visible = useMemo(() => props.teams.filter((team) => {
     const matchesSource = source === 'all' || teamOrigin(team.id).source === source
     const matchesSeries = series === 'all' || teamSeriesOf(team.id) === series
+    // An assigned category narrows the list exactly as a chip reads; a Team with
+    // no category is simply not in any chip's filter.
+    const matchesCategory = category === '' || (props.teamCategories ?? []).some(row => row.teamId === team.id && row.categoryId === category)
     // The shared matcher decides what a token matches, so the list and the
     // composer picker can never disagree about which Teams a query finds.
     const matchesQuery = tokens.length === 0 || matchTeam(team, tokens) !== undefined
-    return matchesSource && matchesSeries && matchesQuery
-  }), [props.teams, source, series, tokens])
+    return matchesSource && matchesSeries && matchesCategory && matchesQuery
+  }), [props.teams, props.teamCategories, source, series, category, tokens])
 
   return (
     <>
@@ -114,6 +122,14 @@ export function TeamListView(props: TeamListViewProps) {
         <button type="button" className={`${css.chip} ${source === 'all' && series === 'all' ? css.chipActive : ''}`} onClick={() => { setSource('all'); setSeries('all') }}>{t('listAll')}</button>
         <button type="button" className={`${css.chip} ${source === 'builtin' ? css.chipActive : ''}`} onClick={() => { setSource('builtin'); setSeries('all') }}>{t('listBuiltin')}</button>
         <button type="button" className={`${css.chip} ${source === 'custom' ? css.chipActive : ''}`} onClick={() => { setSource('custom'); setSeries('all') }}>{t('listCustom')}</button>
+        {(props.categories ?? []).map(entry => (
+          <button
+            key={entry.id}
+            type="button"
+            className={`${css.chip} ${category === entry.id ? css.chipActive : ''}`}
+            onClick={() => { setCategory(entry.id) }}
+          >{entry.name}</button>
+        ))}
         {TEAM_SERIES.map(entry => (
           <button
             key={entry.id}

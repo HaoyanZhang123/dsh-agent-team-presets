@@ -234,6 +234,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   // its id, so do the composer and this page's own breadcrumb. The save is
   // withheld and the offender is named rather than letting an id leak into the UI.
   const unnamedTeams = unnamedTeamsOf(teamList)
+  const categoriesForList = state.categories
   const memberSlot = active.kind === 'agent' && active.slot !== 'captain' ? active.slot : undefined
   const agent = team === undefined || active.kind !== 'agent'
     ? undefined
@@ -252,6 +253,8 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             t={t}
             disabled={disabled}
             importError={importError}
+            categories={categoriesForList}
+            teamCategories={state.teamCategories}
             onOpen={openTeam}
             onCreate={() => { openTeam(props.createTeam()) }}
             onImport={(file) => { void importDocument(file) }}
