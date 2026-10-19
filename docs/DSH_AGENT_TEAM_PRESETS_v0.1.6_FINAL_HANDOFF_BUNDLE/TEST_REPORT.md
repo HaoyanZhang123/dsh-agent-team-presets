@@ -434,3 +434,19 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 
 首次尝试时技能库仍是旧的灰色——因为原来那一行同时套了 `.tag`，后者的背景/文字把配色盖掉了；
 去掉 `.tag` 后两处实测**完全一致**（上表即两页读取到的值）。截图：`docs/shots/skills-library.png`。
+
+## 28. 术语统一：官方 → 内置
+
+界面文案里的「官方」全部清掉，统一为「内置」：
+
+| 键 | 旧 | 新 |
+|---|---|---|
+| `skillsBuiltinList`（原 `skillsOfficial`） | 官方技能 / Official skills | **插件内置技能** / Built-in skills |
+| `skillsReset` | 恢复为官方版本 / Reset to official | **恢复为插件内置版本** / Reset to the built-in version |
+| `skillsResetCopy` | 恢复为官方版本 / Reset to the official copy | **恢复为插件内置版本** / Reset to the built-in copy |
+
+验证：打包产物 `lib/client.js` 中 `恢复为官方版本` **0 处**、`恢复为插件内置版本` **2 处**、`插件内置技能` 存在；
+技能页实际渲染文本匹配 `/官方/` 为空。
+
+说明：产物里仍有 5 处 `官方`，位于**内置团队的系统提示词正文**（如「必要时查阅官方技术资料」），
+那是给 Agent 的调研指令、不是插件 UI 的来源标签，保持原样；UI 字典 `locales.ts` 中已无 `官方`。
