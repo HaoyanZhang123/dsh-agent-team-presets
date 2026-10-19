@@ -108,6 +108,14 @@
 - 单测覆盖分配/解除与「被绑定后删除被拒并报出持有者」两条路径（`tests/team-skills-tools.spec.ts`）。
 - 注册工具后真机启动正常（`boot ok: true`，控制台 0 异常）。
 - **未在真机会话中让模型实际调用这 4 个工具**：需要开一个会话发消息驱动，留作待补证据。
+- **接线已回退**：把这 4 个工具注册在 `preset tools` 同一位置后，`boundary-regressions` 的 PTC 影子测试开始把 `run_code` 重新暴露在严格策略面上，因此 `src/index.ts` **不调用** `registerTeamSkillTools`；模块与其单测保留，等交互原因查清再接。宁可少一个工具，也不能让工具悄悄放宽严格策略。
+
+### 已知不稳定用例（round 7 记录）
+
+`tests/boundary-regressions.spec.ts > strict policy presentation > shadows a PTC preset presentation with native calling and discloses it`
+在研究 Team Skill 工具接线时**间歇性失败**（`expected ['run_code'] not to include 'run_code'`）。
+观察到：连续 3 次全量运行均通过，但在多次「改代码后首次运行」时失败过 3 次；单文件重跑则通过。
+这不是本轮引入的（工具接线已回退后仍偶现），判定为**与模块加载/时序相关的既有 flake**，已记录待查，不视为通过证据。
 
 ### 仍然记录为通过之外的项
 
