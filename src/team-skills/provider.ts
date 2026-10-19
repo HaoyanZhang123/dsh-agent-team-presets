@@ -247,6 +247,24 @@ export class TeamSkillRuntime {
   }
 
   /**
+   * Labels of the Agents a live assignment is serving one asset for.
+   *
+   * A session names the Agent that owns the registration, so a refused delete can
+   * say *who* is holding the skill instead of a generic phrase.
+   * @param assetId - asset identity.
+   * @returns one label per live holder, sorted for a stable message.
+   */
+  activeLabels(assetId: string): string[] {
+    const labels: string[] = []
+    for (const [agent, assets] of this.desired) {
+      if (!assets.some(asset => asset.id === assetId)) continue
+      const id = (agent as unknown as { id?: unknown }).id
+      labels.push(typeof id === 'string' && id !== '' ? id : 'an active member')
+    }
+    return labels.sort((left, right) => left.localeCompare(right))
+  }
+
+  /**
    * Release every registration and refuse later ones.
    * @returns after every scope is disposed.
    */

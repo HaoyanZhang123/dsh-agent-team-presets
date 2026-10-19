@@ -35,7 +35,7 @@
 | G00 | 从开始到结束没有修改宿主源码、已装宿主包或 profile 实现文件 | `PASS` | `N/A` | 全程仅改本仓库；`DSH_CHECKOUT` 为独立 clone，只读消费。已装宿主 `@deepseek-ai/dsh@0.2.1-rc.2` 未被改动 |
 | G01 | PR #1 真实集成，贡献者署名/commit 保留，版本设为 0.1.6 | `PASS`（本地） | `N/A` | merge `70f91c5` 保留 `9505a70`/`15e0b3c`/`34f8a68`（作者 HaoyanZhang123）；`package.json` = `0.1.6`。**远端未合并** |
 | G02 | 目标宿主 `0.2.1-rc.2` 插件正常加载，不影响普通会话 | `PASS`（自动化） | `NOT_RUN` | 498 用例在 0.2.1-rc.2 宿主栈上通过，含 `apply()` 真实挂载与普通会话路径；未见 GUI 实机加载 |
-| G03 | Web 构建与 **Desktop 正式包 GUI 安装**都通过且使用相同可追溯产物 | `FAIL` | `NOT_RUN` | `npm run bundle` 退出码 1（R-01：typert 合并接口跨 workspace），`lib/` 未重建 |
+| G03 | Web 构建与 **Desktop 正式包 GUI 安装**都通过且使用相同可追溯产物 | `PASS`（构建） | `NOT_RUN` |  `npm run bundle` 现退出码 0：93 个产物，host/client 零本地诊断，`lib/` 已按当前源码重建。Desktop 正式包安装仍为 NOT_RUN |
 | G04 | 九个官方预设、旧用户迁移、恢复默认/删除保护全部通过 | `PASS`（自动化） | `NOT_RUN` | `builtin-teams.spec.ts`、`settings-reconcile.spec.ts`；无 GUI 证据 |
 | G05 | Team Skill 在真实目标成员 Scope 隔离；绝无全局静默注册 | `PASS`（代码级，真实 SkillRegistry） | `NOT_RUN` | `team-skills.spec.ts`：A 可见 / B 与全局不可见 / 释放后撤销 / 构造时无全局注册 |
 | G06 | 删除依赖阻断由后端执行，内置 Skill 版本切换/回滚正确 | `PASS`（代码级） | `NOT_RUN` | 三重阻断用例 + 覆盖版/升级标记用例；**无 UI 入口** |
@@ -55,7 +55,7 @@
 | E02 | 宿主公开 API / Scope 能力探针（含原始 log、能力表） | `PASS` | `NOT_RUN` | 以编译+运行期用例代替独立探针：`start` 可选、`drainChildren`、`startActivation`、`SkillProvider.get(candidate, options)`、`SkillRegistry` 分层、`createScope`/`scopeOf`、mirror 形状 |
 | E03 | `npm test`（记录数字、跳过/失败原因） | `PASS` | `N/A` | 31 文件 / 498 用例全绿，0 skipped；命令见 TEST_REPORT §2 |
 | E04 | `npm run typecheck` | `PASS` | `N/A` | host 0 / client 0 local diagnostics |
-| E05 | `npm run bundle` & lib 与源码一致 | `FAIL` | `N/A` | `npm run bundle` 退出码 1（R-01），`lib/` 与源码不一致 |
+| E05 | `npm run bundle` & lib 与源码一致 | `PASS` | `N/A` |  `npm run bundle` exit 0（93 artifacts）；构建改为宿主 workspace 形态 stage + aggregate 引用 `tsconfig.host.json` 文件 |
 | E06 | `npm pack --dry-run` + `npm pack`；所有 assets/skills、源码 map/声明按预期 | `PASS` | `N/A` | `npm pack --dry-run`：80 文件，两份 `assets/skills/**/SKILL.md` 与 `lib/*`、`locale/*` 均在包内 |
 | E07 | 缺 `@deepseek-ai/dsh-skill` optional 包也可启动旧功能 | `PASS` | `NOT_RUN` | `src/skills.ts` 已移除 optional 包顶层值导入；缺 skill 服务时 provider 报 unavailable 且 Team 功能不受影响（用例） |
 | E08 | Windows 构建 npm.cmd spawn、TS 声明 machine path 未泄漏 | `NOT_RUN` | `NOT_RUN` | 无 Windows 环境 |
@@ -105,14 +105,14 @@ log relative path: [path]
 | ID | 视图与主要交互 | Web | Desktop | UI 证据 / 问题 |
 |---|---|---|---|---|
 | U01 | 设置 → 配置：团队预设、团队技能入口均在 | `NOT_RUN` | `NOT_RUN` | 「团队技能」入口未实现 |
-| U02 | 团队列表：来源筛选、两系列、分类、搜索、九团队与空态 | `NOT_RUN` | `NOT_RUN` | 分组/筛选纯函数已就绪，页面未接线 |
+| U02 | 团队列表：来源筛选、两系列、分类、搜索、九团队与空态 | `PASS` | `NOT_RUN` |  真机：列表页搜索框 + 全部/插件内置/自定义/研发规模/工作模式 五个 chips；「审计」查询把列表收窄到 1 行；计数行「匹配 N · 展示信息不会注入运行时上下文」 |
 | U03 | 分类 CRUD、团队移动、分组删除安全语义 | `NOT_RUN` | `NOT_RUN` | 数据层完成，交互未实现 |
 | U04 | 团队详情：运行时标签、提示块、元数据分组展示 | `NOT_RUN` | `NOT_RUN` | 未实现 |
 | U05 | 队长/成员 Prompt、模型、工具原有编辑能力没有缩水 | `PASS`（回归） | `NOT_RUN` | 原有编辑用例保持通过（未改页面） |
-| U06 | 元数据编辑标注不进入运行时上下文；标签半角逗号 | `PARTIAL` | `NOT_RUN` | 解析/校验/上限工具 `src/client/team-metadata.ts` 已完成；编辑器未接入视图 |
-| U07 | 每成员 Skill 三列九宫格勾选分配 | `NOT_RUN` | `NOT_RUN` | 未实现 |
+| U06 | 元数据编辑标注不进入运行时上下文；标签半角逗号 | `PASS` | `NOT_RUN` |  真机：团队编辑页出现「团队展示信息 仅用于展示」折叠面板（简介/标签/适用场景/推荐任务/备注），写入单个 metadata patch |
+| U07 | 每成员 Skill 三列九宫格勾选分配 | `PASS` | `NOT_RUN` |  真机：成员编辑页出现 Team Skill 九宫格；勾选即分配（checked false→true），绑定落在 (teamId, roleId, assetId) |
 | U08–U16 | Skills 库/详情/导入/覆盖/删除阻断/升级/MCP/无 Agent 按钮/导入导出说明 | `NOT_RUN` | `NOT_RUN` | 后端能力已有，页面与 Remote 服务未实现 |
-| U17 | Composer：默认「未选择团队」固定顶部、统一搜索/分类 | `PARTIAL` | `NOT_RUN` | 文案与固定项未接线；选择/延迟应用原有语义保持通过 |
+| U17 | Composer：默认「未选择团队」固定顶部、统一搜索/分类 | `PARTIAL` | `NOT_RUN` |  真机：composer 触发器显示「不使用团队」，「选择团队」弹层含搜索/来源 chips/固定置顶项/9 个选项；分类 chips 待分类数据进客户端后接入 |
 | U18 | 错误、权限、资源缺失、平台限制空态/边界 | `NOT_RUN` | `NOT_RUN` | 未实现 |
 | U19–U22 | 窄窗口/主题/双语/键盘；Composer 忙碌与多会话 | `NOT_RUN` | `NOT_RUN` | 未验证 |
 
@@ -135,9 +135,9 @@ log relative path: [path]
 | S11 | fresh/fork/恢复/退出/热重载/卸载/切 Team 后无残留 Provider | `PASS`（部分） | `NOT_RUN` | release 同步撤销发现用例；宿主侧 fresh/fork 未逐一实测 |
 | S12 | 无/禁用 Skill 服务，旧团队功能仍能加载并有提示 | `PASS` | `NOT_RUN` | unavailable 降级用例；顶层值导入已移除 |
 | S13 | 通过文件/ZIP 导入恶意路径、symlink、ZIP bomb 均拒绝且不污染库 | `PASS` | `NOT_RUN` | 穿越/加密/炸弹/重复/超大用例；symlink 在 store 读取时拒绝 |
-| S14 | UI 与 Agent 双入口共享后端权限、revision/事务和验证 | `NOT_RUN` | `NOT_RUN` | 无 UI 入口、无 Agent 管理工具 |
-| S15 | Skill 有成员绑定 → 删除强阻断，展示所有角色依赖 | `PASS`（后端） | `NOT_RUN` | binding 阻断用例；弹窗未实现 |
-| S16 | Skill 被活动 Agent 使用 → 删除阻断、资源不消失 | `PASS` | `NOT_RUN` | active 阻断用例 |
+| S14 | UI 与 Agent 双入口共享后端权限、revision/事务和验证 | `PARTIAL` | `NOT_RUN` |  技能页的创建/覆盖/重置/删除阻断已可在页面操作；Agent 侧管理工具仍缺 |
+| S15 | Skill 有成员绑定 → 删除强阻断，展示所有角色依赖 | `PASS` | `NOT_RUN` |  真机：已绑定的技能点删除并确认，宿主一次性列出 `binding: 轻量研发团队 → team-lead` 等全部阻断理由 |
+| S16 | Skill 被活动 Agent 使用 → 删除阻断、资源不消失 | `PASS` | `NOT_RUN` |  真机：阻断理由含 `active: <持有者>`（本轮改为真实 Agent 标识，新增单测覆盖） |
 | S17 | 显式依赖阻断、疑似文本依赖警告；解除依赖后可以事务删除 | `PASS` | `NOT_RUN` | dependency 阻断 + 文本告警用例 |
 | S18 | 原版官方内置 Skill 只读；编辑创建本地覆盖，不更改资产包 | `PASS` | `NOT_RUN` | 只读拒绝 + `createOverride` 用例 |
 | S19 | 内置 Skill 整目录 SHA 校验、版本比对、更新、原版恢复、回滚 | `PASS`（部分） | `NOT_RUN` | digest/updateAvailable/`resetOverride` 用例；UI 未实现 |

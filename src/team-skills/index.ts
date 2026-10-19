@@ -112,13 +112,9 @@ export class TeamSkills {
     this.manager = new TeamSkillManager(this.store, root, {
       teams,
       activeAssetIds: () => this.runtime.activeAssetIds(),
-      activeSessions: (assetId) => {
-        // Sessions are named by the Agent that owns the registration, which is
-        // the most useful label the delete dialog can show.
-        const ids: string[] = []
-        if (this.runtime.activeAssetIds().has(assetId)) ids.push('an active member')
-        return ids
-      },
+      // The Agent that owns the registration is the only identity this layer can
+      // name truthfully; it is what the delete refusal lists.
+      activeSessions: assetId => this.runtime.activeLabels(assetId),
     })
   }
 

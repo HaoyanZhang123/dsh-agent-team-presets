@@ -502,3 +502,22 @@ describe('root resolution and role identity', () => {
     expect(roleOfMember(definition, 'no-such-role')).toBeUndefined()
   })
 })
+
+describe('delete refusals name their holders', () => {
+  it('reports the Agent identities a live assignment is serving', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'team-skills-holders-'))
+    roots.push(root)
+    const store = new TeamSkillStore(root)
+    await store.open()
+    const asset = await install(store, MINIMAL, 'custom:held', 'frontend-design')
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(SkillRegistry)
+    const runtime = new TeamSkillRuntime(ctx, store, () => {})
+    await runtime.sync({ agent: { id: 'agent-7' } as never, assets: [asset] })
+    // The refusal must name the holder rather than a generic phrase.
+    expect(runtime.activeLabels(asset.id)).toEqual(['agent-7'])
+    await runtime.dispose()
+    expect(runtime.activeLabels(asset.id)).toEqual([])
+  })
+})
