@@ -94,6 +94,9 @@ export class TeamSkills {
   /** Shipped skill ids this deployment actually provides. */
   official: readonly string[] = []
   private opened = false
+  private readonly syncGeneration = new WeakMap<Agent, number>()
+  private closed = false
+  private readonly log: (message: string) => void
 
   /**
    * @param ctx - the plugin context.
@@ -107,6 +110,7 @@ export class TeamSkills {
     teams: () => readonly TeamPreset[],
     log: (message: string) => void,
   ) {
+    this.log = log
     this.store = new TeamSkillStore(root)
     this.runtime = new TeamSkillRuntime(ctx, this.store, log)
     this.manager = new TeamSkillManager(this.store, root, {
@@ -144,8 +148,11 @@ export class TeamSkills {
         }
       }
       this.official = entries.map(entry => entry.skillId)
-      const changed = await this.store.ensureOfficial(entries)
+      const warnings: string[] = []
+      const changed = await this.store.ensureOfficial(entries, warnings)
+      for (const warning of warnings) log(warning)
       if (changed.length > 0) log(`Team Skill store updated: ${changed.join(', ')}`)
+      await this.manager.reconcile()
       this.opened = true
       return true
     } catch (error: unknown) {
@@ -171,7 +178,13 @@ export class TeamSkills {
    */
   syncAgent(agent: Agent, role: TeamSkillRole | undefined): void {
     if (!this.opened) return
+    const generation = (this.syncGeneration.get(agent) ?? 0) + 1
+    this.syncGeneration.set(agent, generation)
     this.runtime.sync({ agent, assets: role === undefined ? [] : this.assetsForRole(role) })
+    void this.manager.reconcile().then(() => {
+      if (this.closed || this.syncGeneration.get(agent) !== generation) return
+      this.runtime.sync({ agent, assets: role === undefined || !this.manager.hasRole(role.teamId, role.roleId) ? [] : this.assetsForRole(role) })
+    }).catch(error => this.log(`Team Skill reconciliation failed: ${String(error)}`))
   }
 
   /**
@@ -179,6 +192,7 @@ export class TeamSkills {
    * @param agent - the disposed Agent.
    */
   releaseAgent(agent: Agent): void {
+    this.syncGeneration.set(agent, (this.syncGeneration.get(agent) ?? 0) + 1)
     this.runtime.release(agent)
   }
 
@@ -192,6 +206,7 @@ export class TeamSkills {
 
   /** Release the whole subsystem. */
   async close(): Promise<void> {
+    this.closed = true
     await this.runtime.dispose()
   }
 }

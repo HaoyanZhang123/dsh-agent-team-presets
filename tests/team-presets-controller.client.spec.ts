@@ -1821,9 +1821,26 @@ describe('sharing one Team as a document', () => {
     controller.dispose()
   })
 
-  it('renames the imported captain and member when the user asks for new names', () => {
+  it('overwrites v2 metadata and preserves it for a legacy v1 import', () => {
+    const { controller } = controllerFor([{ ...shareable(), metadata: { summary: 'local' } }])
+    const plan = planOf(controller, serializeTeamPreset({ ...incoming(), metadata: { summary: 'imported', tags: ['new'] } }))
+    controller.applyImport(plan, { team: 'replace', teamName: '', captain: 'replace', members: {} })
+    expect(controller.store.getSnapshot().teams[0]?.metadata).toEqual({ summary: 'imported', tags: ['new'] })
+    const legacy = JSON.parse(serializeTeamPreset(incoming()))
+    legacy.version = 1
+    delete legacy.team.metadata
+    const oldPlan = planOf(controller, JSON.stringify(legacy))
+    controller.applyImport(oldPlan, { team: 'replace', teamName: '', captain: 'replace', members: {} })
+    expect(controller.store.getSnapshot().teams[0]?.metadata?.summary).toBe('imported')
+    controller.dispose()
+  })
+
+  it('renames the imported captain and member and their declared skill bindings together', () => {
     const { controller } = controllerFor([shareable()])
-    const plan = planOf(controller, serializeTeamPreset(incoming()))
+    const plan = planOf(controller, serializeTeamPreset({ ...incoming(), officialSkills: [
+      { skillId: 'git-release-hygiene', roleName: 'team-lead' },
+      { skillId: 'frontend-design', roleName: 'reviewer' },
+    ] }))
     controller.applyImport(plan, {
       team: 'replace', teamName: plan.suggestedTeamName, captain: 'rename', members: { reviewer: 'rename' },
     })
@@ -1831,6 +1848,10 @@ describe('sharing one Team as a document', () => {
     expect(team?.captain.name).toBe('team-lead 2')
     // The configured member is kept, and the imported one joins under a free name.
     expect(team?.members.map(member => member.name)).toEqual(['reviewer', 'reviewer 2', 'builder'])
+    expect(team?.officialSkills).toEqual([
+      { skillId: 'git-release-hygiene', roleName: 'team-lead 2' },
+      { skillId: 'frontend-design', roleName: 'reviewer 2' },
+    ])
     controller.dispose()
   })
 

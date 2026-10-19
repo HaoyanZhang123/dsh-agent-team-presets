@@ -10,7 +10,8 @@
  * @module dsh-agent-team-presets/team-skills/paths
  */
 
-import { resolve, sep } from 'node:path'
+import { lstat } from 'node:fs/promises'
+import { parse, resolve, sep } from 'node:path'
 
 /** Most files one Team Skill folder may hold. */
 export const MAX_SKILL_FILES = 2000
@@ -91,7 +92,7 @@ export function normalizeSkillPath(raw: string): string {
  */
 export function resolveInside(root: string, relative: string): string {
   const absoluteRoot = resolve(root)
-  const target = resolve(absoluteRoot, relative)
+  const target = resolve(absoluteRoot, normalizeSkillPath(relative))
   if (target !== absoluteRoot && !target.startsWith(`${absoluteRoot}${sep}`)) {
     throw new SkillPathError('symlink-escape', relative)
   }
@@ -120,8 +121,10 @@ export function checkFolder(files: readonly { readonly path: string; readonly by
   const seen = new Set<string>()
   let total = 0
   for (const file of files) {
-    if (seen.has(file.path)) throw new SkillPathError('duplicate-path', file.path)
-    seen.add(file.path)
+    const path = normalizeSkillPath(file.path)
+    if (seen.has(path)) throw new SkillPathError('duplicate-path', path)
+    seen.add(path)
+    if (!Number.isSafeInteger(file.bytes) || file.bytes < 0) throw new SkillPathError('file-too-large', path)
     checkFileSize(file.path, file.bytes)
     total += file.bytes
   }
@@ -175,4 +178,20 @@ export function assetDirectoryName(skillId: string): string {
  */
 export function checkNotSymlink(stats: { isSymbolicLink(): boolean }, path: string): void {
   if (stats.isSymbolicLink()) throw new SkillPathError('symlink-escape', path)
+}
+
+/** Reject actual symlinks in every existing component, including root ancestors. */
+export async function assertNoSymlinks(path: string): Promise<void> {
+  const absolute = resolve(path)
+  const root = parse(absolute).root
+  let current = root
+  for (const segment of absolute.slice(root.length).split(sep).filter(Boolean)) {
+    current = resolve(current, segment)
+    try {
+      checkNotSymlink(await lstat(current), current)
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw error
+    }
+  }
 }

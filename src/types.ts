@@ -67,6 +67,8 @@ export type TeamPreset = {
    * Settings page and the composer, and it travels with the shareable preset.
    */
   metadata?: TeamDisplayMetadata
+  /** Portable declarations of shipped skills; never personal asset bindings. */
+  officialSkills?: readonly { readonly skillId: string; readonly roleName: string }[]
 }
 
 /** One Session's active Team preset. */
@@ -481,7 +483,13 @@ export interface TeamSkillDetailView {
   /** The `SKILL.md` body, without frontmatter. */
   readonly body: string
   /** Declared dependencies, with the executable check that can be made here. */
-  readonly dependencies?: { readonly executables: readonly { readonly name: string; readonly found: boolean }[]; readonly mcpServers: readonly string[] }
+  readonly dependencies?: {
+    readonly executables: readonly { readonly name: string; readonly found: boolean }[]
+    readonly mcpServers: readonly string[]
+    readonly mcpDeclarations?: TeamSkillDependencies['mcpServers']
+    readonly unverified?: readonly string[]
+    readonly otherSkills?: readonly { readonly id: string; readonly found: boolean }[]
+  }
 }
 
 /** Why a management call was refused. */
@@ -502,5 +510,49 @@ export interface TeamSkillDeleteView {
   readonly blockers: readonly { readonly kind: string; readonly detail: string }[]
   /** Advisory text matches that did not block. */
   readonly warnings: readonly string[]
+}
+
+/** One folder the import-directory scan examined. */
+export interface TeamSkillScanEntry {
+  /** Folder name inside the scan root. */
+  readonly folder: string
+  /** Whether it was imported, already present, or refused. */
+  readonly status: 'imported' | 'existing' | 'invalid'
+  /** Skill name read from its `SKILL.md`, when the folder was readable. */
+  readonly skillId?: string
+  /** Asset identity for an imported or already-present skill. */
+  readonly assetId?: string
+  /** Machine-readable refusal reason, or `duplicate` for an existing name. */
+  readonly reason?: string
+  /** Path or other detail that explains the reason. */
+  readonly detail?: string
+}
+
+/** Result of preparing the private import directory for a file-manager gesture. */
+export interface TeamSkillImportFolderView {
+  /** This answer prepared the directory. */
+  readonly ok: true
+  /** Private library root that owns the folder. */
+  readonly root: string
+  /** Absolute import directory, created when it was missing. */
+  readonly path: string
+}
+
+/** Result of one scan of the private import directory. */
+export interface TeamSkillScanView {
+  /** This answer is a completed scan. */
+  readonly ok: true
+  /** Absolute directory that was scanned. */
+  readonly root: string
+  /** Folders examined. */
+  readonly scanned: number
+  /** Folders published as new custom assets. */
+  readonly imported: number
+  /** Folders whose skill name already exists in the library. */
+  readonly existing: number
+  /** Folders refused with a reason. */
+  readonly invalid: number
+  /** One row per folder, in name order. */
+  readonly entries: readonly TeamSkillScanEntry[]
 }
 

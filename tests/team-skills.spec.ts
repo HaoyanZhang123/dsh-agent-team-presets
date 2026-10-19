@@ -209,6 +209,31 @@ describe('importing a ZIP', () => {
     const result = readZip(archive)
     expect(result.ok).toBe(false)
   })
+
+  it('refuses a stored entry whose declared size hides a reused data block', () => {
+    const archive = zip([{ path: 'SKILL.md', bytes: text('---\nname: test-skill\ndescription: x\n---\nBody\n') }])
+    const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength)
+    for (let at = 0; at < archive.length - 4; at += 1) {
+      if (view.getUint32(at, true) !== 0x02014b50) continue
+      // The declared decoded size says "nothing", while the stored block is the
+      // real payload; only the bounds/size agreement check can refuse it.
+      view.setUint32(at + 24, 0, true)
+      break
+    }
+    expect(readZip(archive).ok).toBe(false)
+  })
+
+  it('refuses a stored entry whose data range leaves the archive', () => {
+    const archive = zip([{ path: 'SKILL.md', bytes: text('---\nname: test-skill\ndescription: x\n---\n') }])
+    const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength)
+    for (let at = 0; at < archive.length - 4; at += 1) {
+      if (view.getUint32(at, true) !== 0x02014b50) continue
+      view.setUint32(at + 20, 0x7fffffff, true)
+      view.setUint32(at + 24, 0x7fffffff, true)
+      break
+    }
+    expect(readZip(archive).ok).toBe(false)
+  })
 })
 
 describe('the private store', () => {
@@ -434,6 +459,56 @@ describe('per-Agent visibility', () => {
     await runtime.dispose()
   })
 
+  it.each([false, true])('loads the exact same-name candidate selected by the registry (override first: %s)', async (overrideFirst) => {
+    const root = await base()
+    const source = await base()
+    await writeFile(join(source, 'SKILL.md'), '---\nname: frontend-design\ndescription: official method\n---\n\nOfficial body.\n')
+    const store = new TeamSkillStore(root)
+    await store.open()
+    await store.ensureOfficial([{ skillId: 'frontend-design', directory: source, version: 'official-1' }])
+    const official = store.get('builtin:frontend-design')!
+    const initialOverride = await store.createOverride('frontend-design', 'override:frontend-design')
+    const override = await store.writeFile(initialOverride.id, 'SKILL.md', '---\nname: frontend-design\ndescription: overridden method\n---\n\nOverride body.\n')
+    const { ctx, skills } = await registry()
+    const runtime = new TeamSkillRuntime(ctx, store, () => {})
+    try {
+      await runtime.sync({ agent: agentA as never, assets: overrideFirst ? [override, official] : [official, override] })
+      const summaries = await skills.list({ scope: agentA as object })
+      expect(summaries).toHaveLength(1)
+      const summary = summaries[0]!
+      const chosen = summary.description === official.description ? official : override
+      const expectedBody = chosen === official ? 'Official body.' : 'Override body.'
+      const expectedBase = { kind: 'directory', path: store.assetPath(chosen.id, chosen.version) }
+      expect(summary.resourceBase).toEqual(expectedBase)
+      const loaded = await skills.get('frontend-design', { scope: agentA as object })
+      expect(loaded?.description).toBe(summary.description)
+      expect(loaded?.content).toBe(expectedBody)
+      expect(loaded?.resourceBase).toEqual(expectedBase)
+      expect(await readFile(join(expectedBase.path, 'SKILL.md'), 'utf8')).toContain(expectedBody)
+    } finally {
+      await runtime.dispose()
+    }
+  })
+
+  it('keeps the registered body and resources pinned through edits and resync, until unassigned', async () => {
+    const root = await base()
+    const { ctx, skills } = await registry()
+    const { store, asset } = await stored(root)
+    const runtime = new TeamSkillRuntime(ctx, store, () => {})
+    await runtime.sync({ agent: agentA as never, assets: [asset] })
+    await store.writeFile(asset.id, 'SKILL.md', '---\nname: frontend-design\ndescription: updated\n---\n\nNew method.\n')
+    expect((await skills.get('frontend-design', { scope: agentA as object }))?.content).toContain('Use this method.')
+    await runtime.sync({ agent: agentA as never, assets: [store.get(asset.id)!] })
+    expect((await skills.get('frontend-design', { scope: agentA as object }))?.content).toContain('Use this method.')
+    const summary = (await skills.list({ scope: agentA as object }))[0]
+    expect(summary?.resourceBase).toEqual({ kind: 'directory', path: store.assetPath(asset.id, asset.version) })
+    await runtime.sync({ agent: agentA as never, assets: [] })
+    expect(await skills.get('frontend-design', { scope: agentA as object })).toBeUndefined()
+    await runtime.sync({ agent: agentA as never, assets: [store.get(asset.id)!] })
+    expect((await skills.get('frontend-design', { scope: agentA as object }))?.content).toContain('New method.')
+    await runtime.dispose()
+  })
+
   it('releases discovery when the Agent is disposed or unassigned', async () => {
     const root = await base()
     const { ctx, skills } = await registry()
@@ -471,9 +546,57 @@ describe('per-Agent visibility', () => {
     const notes: string[] = []
     const runtime = new TeamSkillRuntime(ctx, store, message => notes.push(message))
     expect(runtime.available).toBe(false)
-    await runtime.sync({ agent: agentA as never, assets: [asset] })
+    const pending = runtime.sync({ agent: agentA as never, assets: [asset] })
     expect(notes.join(' ')).toContain('skill service is not composed')
+    runtime.release(agentA as never)
+    await pending
     await runtime.dispose()
+  })
+
+  it('registers the pending assignment when the real SkillRegistry is composed later', async () => {
+    const root = await base()
+    const ctx = new Context()
+    contexts.push(ctx)
+    const { store, asset } = await stored(root)
+    const runtime = new TeamSkillRuntime(ctx, store, () => {})
+    try {
+      const pending = runtime.sync({ agent: agentA as never, assets: [asset] })
+      // An identical sync while waiting must retain the original inject fiber.
+      await runtime.sync({ agent: agentA as never, assets: [asset] })
+      expect(runtime.available).toBe(false)
+      await ctx.plugin(SkillRegistry)
+      await pending
+      expect(runtime.available).toBe(true)
+      expect((await ctx.skills.get('frontend-design', { scope: agentA }))?.content).toBe('Use this method.')
+      expect(await ctx.skills.get('frontend-design', { scope: agentB })).toBeUndefined()
+      expect(await ctx.skills.get('frontend-design')).toBeUndefined()
+    } finally {
+      await runtime.dispose()
+    }
+  })
+
+  it('retries the same assignment after registerProvider fails once', async () => {
+    const root = await base()
+    const { ctx, skills } = await registry()
+    const { store, asset } = await stored(root)
+    const notes: string[] = []
+    const runtime = new TeamSkillRuntime(ctx, store, message => notes.push(message))
+    const register = vi.spyOn(SkillRegistry.prototype, 'registerProvider')
+      .mockImplementationOnce(() => { throw new Error('registration unavailable once') })
+    try {
+      await runtime.sync({ agent: agentA as never, assets: [asset] })
+      expect(notes.join(' ')).toContain('registration unavailable once')
+      expect(await skills.get('frontend-design', { scope: agentA })).toBeUndefined()
+      // No release, assignment change or new asset object should be necessary.
+      await runtime.sync({ agent: agentA as never, assets: [asset] })
+      expect(register).toHaveBeenCalledTimes(2)
+      expect((await skills.get('frontend-design', { scope: agentA }))?.content).toBe('Use this method.')
+      expect(await skills.get('frontend-design', { scope: agentB })).toBeUndefined()
+      expect(await skills.get('frontend-design')).toBeUndefined()
+    } finally {
+      register.mockRestore()
+      await runtime.dispose()
+    }
   })
 
   it('registers nothing globally at construction time', async () => {

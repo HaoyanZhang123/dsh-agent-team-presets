@@ -56,6 +56,7 @@ const teamSchema = z.object({
   name: z.string().default(''),
   description: z.string().default(''),
   metadata: metadataSchema,
+  officialSkills: z.array(z.object({ skillId: z.string().required(), roleName: z.string().required() })).default([]),
   captain: captainSchema,
   members: z.array(memberSchema).default([]),
 })

@@ -10,9 +10,10 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { selectedTeam } from '../presets.ts'
-import { TEAM_SERIES, teamSeriesOf } from '../team-catalog.ts'
-import { matchTeam, queryTokens, teamOrigin } from '../team-search.ts'
-import type { TeamPreset } from '../types.ts'
+import { TEAM_SERIES } from '../team-catalog.ts'
+import { matchTeam, orderedCategories, queryTokens, teamOrigin } from '../team-search.ts'
+import { groupTeams, matchesCategoryFilter } from './team-grouping.ts'
+import type { TeamPreset, TeamSeries } from '../types.ts'
 import type { TeamPresetsInjected } from './team-presets-controller.ts'
 import { FORM_ISSUE_KEYS, selectionFailureText } from './locales.ts'
 import css from './ComposerTeamSelect.module.css'
@@ -47,6 +48,8 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
   const writable = state.status === 'ready' && state.writable
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<'all' | 'builtin' | 'custom'>('all')
+  const [series, setSeries] = useState<TeamSeries | 'all'>('all')
+  const [categoryId, setCategoryId] = useState('')
   const popover = useRef<HTMLDivElement | null>(null)
 
   // Close on Escape or on a press outside, which is what a popover that is not a
@@ -67,13 +70,26 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
   }, [open])
 
   const tokens = queryTokens(query)
-  const groups = useMemo(() => TEAM_SERIES.map(series => ({
-    series: series.id,
-    teams: state.teams.filter((team: TeamPreset) => {
+  const categories = useMemo(() => orderedCategories(state.categories), [state.categories])
+  // The same taxonomy as the settings list: source, then the series or the
+  // reader's own categories, with placement winning over the shipped series.
+  const groups = useMemo(() => groupTeams(
+    state.teams.filter((team: TeamPreset) => {
       const matchesSource = source === 'all' || teamOrigin(team.id).source === source
-      return matchesSource && teamSeriesOf(team.id) === series.id && (tokens.length === 0 || matchTeam(team, tokens) !== undefined)
+      const matchesCategory = matchesCategoryFilter(team, series, categoryId, state.teamCategories)
+      const matchesQuery = tokens.length === 0 || matchTeam(team, tokens) !== undefined
+      return matchesSource && matchesCategory && matchesQuery
     }),
-  })), [state.teams, source, tokens])
+    state.categories,
+    state.teamCategories,
+  ), [state.teams, state.categories, state.teamCategories, source, series, categoryId, tokens])
+  const groupLabel = (group: (typeof groups)[number]): string => {
+    if (group.kind === 'series') return group.series === 'classic-development' ? t('composeSeriesDev') : t('composeSeriesModes')
+    if (group.kind === 'category') {
+      return categories.find(entry => entry.id === group.categoryId)?.name ?? group.categoryId ?? ''
+    }
+    return t('composeUncategorized')
+  }
 
   const choose = (teamId: string | undefined): void => {
     setOpen(false)
@@ -121,9 +137,37 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
               onChange={(event) => { setQuery(event.target.value) }}
             />
             <div className={css.popChips}>
-              <button type="button" className={`${css.popChip} ${source === 'all' ? css.popChipActive : ''}`} onClick={() => { setSource('all') }}>{t('composeAll')}</button>
-              <button type="button" className={`${css.popChip} ${source === 'builtin' ? css.popChipActive : ''}`} onClick={() => { setSource('builtin') }}>{t('skillsBuiltin')}</button>
-              <button type="button" className={`${css.popChip} ${source === 'custom' ? css.popChipActive : ''}`} onClick={() => { setSource('custom') }}>{t('skillsCustom')}</button>
+              <span className={css.popFilterLabel}>{t('filterSource')}</span>
+              <button type="button" className={`${css.popChip} ${source === 'all' ? css.popChipActive : ''}`} onClick={() => { setSource('all') }}>{t('listAll')}</button>
+              <button type="button" className={`${css.popChip} ${source === 'builtin' ? css.popChipActive : ''}`} onClick={() => { setSource('builtin'); setCategoryId('') }}>{t('listBuiltin')}</button>
+              <button type="button" className={`${css.popChip} ${source === 'custom' ? css.popChipActive : ''}`} onClick={() => { setSource('custom'); setSeries('all') }}>{t('listCustom')}</button>
+            </div>
+            <div className={css.popChips}>
+              <span className={css.popFilterLabel}>{t('filterCategory')}</span>
+              <button
+                type="button"
+                className={`${css.popChip} ${series === 'all' && categoryId === '' ? css.popChipActive : ''}`}
+                onClick={() => { setSeries('all'); setCategoryId('') }}
+              >{t('listAll')}</button>
+              {source !== 'custom' ? TEAM_SERIES.map(entry => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`${css.popChip} ${series === entry.id ? css.popChipActive : ''}`}
+                  onClick={() => { setSeries(series === entry.id ? 'all' : entry.id); setCategoryId('') }}
+                >{entry.id === 'classic-development' ? t('seriesDevelopment') : t('seriesWorkModes')}</button>
+              )) : null}
+              {source !== 'builtin' ? categories.map(entry => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`${css.popChip} ${categoryId === entry.id ? css.popChipActive : ''}`}
+                  onClick={() => { setCategoryId(categoryId === entry.id ? '' : entry.id); setSeries('all') }}
+                >{entry.name}</button>
+              )) : null}
+              {source === 'custom' && categories.length === 0
+                ? <span className={css.popFilterLabel}>{t('filterNoCategory')}</span>
+                : null}
             </div>
             <div className={css.popList}>
               {/* The no-Team choice is pinned first, exactly as the prototype
@@ -144,8 +188,8 @@ export function ComposerTeamSelect(props: ComposerTeamSelectProps) {
                 </button>
               ) : null}
               {groups.map(group => group.teams.length === 0 ? null : (
-                <div key={group.series}>
-                  <div className={css.popGroup}>{group.series === 'classic-development' ? t('composeSeriesDev') : t('composeSeriesModes')}</div>
+                <div key={group.id}>
+                  <div className={css.popGroup}>{groupLabel(group)}</div>
                   {group.teams.map((team: TeamPreset) => (
                     <button
                       key={team.id}

@@ -7,6 +7,9 @@ import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { apply, inject } from '../src/index.ts'
+import * as Presentation from '../src/presentation.ts'
+import { TeamSkills } from '../src/team-skills/index.ts'
+import { MemberRuntime } from '../src/member-runtime.ts'
 import type { Config } from '../src/config.ts'
 import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
 import { TeamId } from '@deepseek-ai/dsh-experimental-agent-team'
@@ -18,6 +21,7 @@ const contexts: Context[] = []
 
 afterEach(async () => {
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
+  vi.restoreAllMocks()
 })
 
 /** Writable stand-in for one volatile Config reference. */
@@ -169,6 +173,192 @@ describe('Team preset reconciliation', () => {
 
     await fiber.dispose()
     await handle.dispose()
+  })
+
+  it.each(['none', 'missing'] as const)('cancels pending preparation when selection becomes %s', async (selection) => {
+    const h = await setup([TEAM], [{ sessionId: 's1', teamId: TEAM.id }])
+    const handle = await createAgent(h.ctx, 's1')
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const entered = vi.spyOn(Presentation, 'readWire').mockImplementationOnce(async () => {
+      await gate
+      return { sections: [], tools: [] }
+    })
+    const fiber = await mount(h.ctx, h.config)
+    await vi.waitFor(() => expect(entered).toHaveBeenCalled())
+    h.selectionsRef.set(selection === 'none' ? [] : [{ sessionId: 's1', teamId: 'missing' }])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    release()
+    await settle()
+    expect(h.ctx.tools.get('spawn_team_member', handle.agent)).toBeUndefined()
+    await fiber.dispose()
+  })
+
+  it('cancels a pending replacement when the selection returns to the applied Team', async () => {
+    const replacement = { ...TEAM, id: 'replacement' }
+    const h = await setup([TEAM, replacement], [{ sessionId: 's1', teamId: TEAM.id }])
+    const handle = await createAgent(h.ctx, 's1')
+    const fiber = await mount(h.ctx, h.config)
+    await settle()
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const wire = vi.spyOn(Presentation, 'readWire').mockImplementationOnce(async () => {
+      await gate
+      return { sections: [], tools: [] }
+    })
+    const sync = vi.spyOn(TeamSkills.prototype, 'syncAgent')
+    h.selectionsRef.set([{ sessionId: 's1', teamId: replacement.id }])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    await vi.waitFor(() => expect(wire).toHaveBeenCalled())
+    h.selectionsRef.set([{ sessionId: 's1', teamId: TEAM.id }])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    sync.mockClear()
+    release()
+    await settle()
+    expect(h.ctx.tools.get('spawn_team_member', handle.agent)).toBeDefined()
+    expect(sync.mock.calls.filter(([agent, role]) => agent === handle.agent && role?.teamId === replacement.id)).toHaveLength(0)
+    await fiber.dispose()
+  })
+
+  it('defers a prepared replacement when the current captain starts running', async () => {
+    const replacement = { ...TEAM, id: 'replacement' }
+    const h = await setup([TEAM, replacement], [{ sessionId: 's1', teamId: TEAM.id }])
+    const handle = await createAgent(h.ctx, 's1')
+    const fiber = await mount(h.ctx, h.config)
+    await settle()
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const wire = vi.spyOn(Presentation, 'readWire').mockImplementationOnce(async () => {
+      await gate
+      return { sections: [], tools: [] }
+    })
+    const sync = vi.spyOn(TeamSkills.prototype, 'syncAgent')
+    h.selectionsRef.set([{ sessionId: 's1', teamId: replacement.id }])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    await vi.waitFor(() => expect(wire).toHaveBeenCalled())
+    let status: Agent['status'] = 'running'
+    vi.spyOn(handle.agent, 'status', 'get').mockImplementation(() => status)
+    sync.mockClear()
+    release()
+    await settle()
+    expect(sync.mock.calls.filter(([agent, role]) => agent === handle.agent && role?.teamId === replacement.id)).toHaveLength(0)
+    status = 'idle'
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    await vi.waitFor(() => expect(sync.mock.calls.some(([agent, role]) => agent === handle.agent && role?.teamId === replacement.id)).toBe(true))
+    await fiber.dispose()
+  })
+
+  it('does not resurrect a revoked application after its post-install wire check', async () => {
+    const strict = team([], { toolMode: 'custom', tools: [] })
+    const h = await setup([strict], [{ sessionId: 's1', teamId: strict.id }])
+    const handle = await createAgent(h.ctx, 's1')
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    vi.spyOn(Presentation, 'prepareNativePresentation').mockResolvedValue({ kind: 'already-native' })
+    const wire = vi.spyOn(Presentation, 'readWire')
+      .mockResolvedValueOnce({ sections: [], tools: [] })
+      .mockImplementationOnce(async () => { await gate; return undefined })
+    const releaseSkills = vi.spyOn(TeamSkills.prototype, 'releaseAgent')
+    const syncSkills = vi.spyOn(TeamSkills.prototype, 'syncAgent')
+    const fiber = await mount(h.ctx, h.config)
+    await vi.waitFor(() => expect(wire).toHaveBeenCalledTimes(2))
+    h.selectionsRef.set([])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    expect(releaseSkills).toHaveBeenCalledWith(handle.agent)
+    syncSkills.mockClear()
+    release()
+    await settle()
+    expect(h.ctx.tools.get('spawn_team_member', handle.agent)).toBeUndefined()
+    expect(syncSkills).not.toHaveBeenCalledWith(handle.agent, expect.anything())
+    await fiber.dispose()
+  })
+
+  it('does not resync skill versions for an unrelated volatile update', async () => {
+    const h = await setup([TEAM], [{ sessionId: 's1', teamId: TEAM.id }])
+    await createAgent(h.ctx, 's1')
+    const fiber = await mount(h.ctx, h.config)
+    await settle()
+    // The store opens asynchronously and the ready pass syncs the existing
+    // role once. Wait for that pass, then observe only the unrelated update.
+    const service = (h.ctx as unknown as { teamSkills?: { library(): Promise<unknown> } }).teamSkills
+    if (service !== undefined) await service.library()
+    await settle()
+    const sync = vi.spyOn(TeamSkills.prototype, 'syncAgent')
+    sync.mockClear()
+    h.ctx.emit('loader/volatile-update', [['selections']])
+    await settle()
+    expect(sync.mock.calls.length).toBe(0)
+    await fiber.dispose()
+  })
+
+  it('keeps the previous captain role when a replacement fails its final wire check', async () => {
+    const h = await setup([TEAM], [{ sessionId: 's1', teamId: TEAM.id }])
+    const handle = await createAgent(h.ctx, 's1')
+    const fiber = await mount(h.ctx, h.config)
+    await settle()
+    const sync = vi.spyOn(TeamSkills.prototype, 'syncAgent')
+    vi.spyOn(Presentation, 'prepareNativePresentation').mockResolvedValue({ kind: 'already-native' })
+    vi.spyOn(Presentation, 'readWire')
+      .mockResolvedValueOnce({ sections: [], tools: [] })
+      .mockResolvedValueOnce(undefined)
+    const replacement = { ...team([], { toolMode: 'custom', tools: [] }), id: 'replacement' }
+    h.teamsRef.set([TEAM, replacement])
+    h.selectionsRef.set([{ sessionId: 's1', teamId: replacement.id }])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    await settle()
+    expect(h.ctx.tools.get('spawn_team_member', handle.agent)).toBeDefined()
+    expect(sync).toHaveBeenCalledWith(handle.agent, expect.objectContaining({ teamId: TEAM.id }))
+    expect(sync).not.toHaveBeenCalledWith(handle.agent, expect.objectContaining({ teamId: replacement.id }))
+    await fiber.dispose()
+  })
+
+  it.each([true, false])('only lifts a startup child quarantine after a successful durable claim (%s)', async (intact) => {
+    const h = await setup([TEAM], [])
+    const root = await createAgent(h.ctx, 'root')
+    const child = await createAgent(h.ctx, 'child', 'subagent')
+    vi.spyOn(h.ctx.agentTeams, 'tryMembership').mockImplementation(agent => agent === child.agent
+      ? { root: root.agent, id: TeamId(root.agent.id), role: 'teammate', name: 'member' }
+      : { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' })
+    h.ctx.tools.register({ name: 'plain_tool', description: 'plain', parameters: {},
+      output: { schema: { type: 'string' }, render: () => [] }, async execute() { return 'ok' } })
+    let release!: () => void
+    const ready = new Promise<void>(resolve => { release = resolve })
+    const originalReady = MemberRuntime.prototype.whenReady
+    vi.spyOn(MemberRuntime.prototype, 'whenReady').mockImplementation(async function () {
+      await ready
+      return originalReady.call(this)
+    })
+    const claim = vi.spyOn(MemberRuntime.prototype, 'claim')
+      .mockReturnValue({ kind: 'invalid', reason: 'store opening' })
+    const fiber = await mount(h.ctx, h.config)
+    const call = () => h.ctx.tools.execute({ callId: ToolCallId('child'), name: 'plain_tool', arguments: {},
+      agent: child.agent, signal: new AbortController().signal })
+    expect((await call()).isError).toBe(true)
+    if (intact) claim.mockReturnValue({ kind: 'installed', record: {
+      teamId: TEAM.id, memberName: 'member', roleId: 'member', lifecycle: 'bound', policy: { mode: 'all', allow: [] },
+    } } as ReturnType<MemberRuntime['claim']>)
+    else claim.mockReturnValue({ kind: 'invalid', reason: 'snapshot corrupt' })
+    release()
+    await settle()
+    expect((await call()).isError).toBe(!intact)
+    await fiber.dispose()
+  })
+
+  it('releases captain skill ownership on deselection and never resyncs the stale role', async () => {
+    const h = await setup([TEAM], [{ sessionId: 's1', teamId: TEAM.id }])
+    const handle = await createAgent(h.ctx, 's1')
+    const sync = vi.spyOn(TeamSkills.prototype, 'syncAgent')
+    const release = vi.spyOn(TeamSkills.prototype, 'releaseAgent')
+    const fiber = await mount(h.ctx, h.config)
+    await settle()
+    expect(sync).toHaveBeenCalledWith(handle.agent, expect.objectContaining({ teamId: TEAM.id }))
+    sync.mockClear()
+    h.selectionsRef.set([])
+    h.ctx.emit('loader/volatile-update', COMMITTED)
+    await settle()
+    expect(release).toHaveBeenCalledWith(handle.agent)
+    expect(sync).not.toHaveBeenCalledWith(handle.agent, expect.anything())
+    await fiber.dispose()
   })
 
   it('releases the application when its Session is disposed', async () => {

@@ -12,7 +12,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { TeamSkillManager } from './manager.ts';
 import { TeamSkillStore } from './store.ts';
-import type { TeamPreset, TeamSkillDeleteView, TeamSkillDetailView, TeamSkillImportFile, TeamSkillLibraryView, TeamSkillRefusalView } from '../types.ts';
+import type { TeamPreset, TeamSkillDeleteView, TeamSkillDetailView, TeamSkillImportFile, TeamSkillImportFolderView, TeamSkillLibraryView, TeamSkillRefusalView, TeamSkillScanView, TeamSkillDependencies } from '../types.ts';
 declare module '@deepseek-ai/cordis' {
     interface Context {
         /** Remote management surface for the private Team Skill library. */
@@ -104,11 +104,31 @@ export declare class TeamSkillService extends TypertRemoteService {
      */
     importSkill(files: readonly TeamSkillImportFile[]): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
     /**
+     * Create the private import directory when it is missing.
+     *
+     * The page opens this folder for the user, so the gesture has to work on a
+     * fresh installation where no scan ever ran. Creating it here also keeps the
+     * path the same one {@link scanImportFolder} reads.
+     * @returns the absolute folder, or a refusal when it cannot be created safely.
+     */
+    prepareImportFolder(): Promise<TeamSkillImportFolderView | TeamSkillRefusalView>;
+    /**
+     * Scan the private import directory and publish every legal new skill.
+     *
+     * The directory is the only supported way to hand the plugin a skill without
+     * the browser picker. Each folder is judged by the same importer rules as a
+     * picked folder, and the answer names the exact refusal for the ones that
+     * fail, so the page can list them instead of reporting a single count.
+     * @returns one row per folder, or a refusal when the store is unavailable.
+     */
+    scanImportFolder(): Promise<TeamSkillScanView | TeamSkillRefusalView>;
+    /**
      * Copy one shipped skill into an editable override.
      * @param skillId - shipped skill id.
      * @returns the new detail, or a refusal.
      */
     overrideSkill(skillId: string): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
+    updateDependencies(assetId: string, dependencies: TeamSkillDependencies): Promise<TeamSkillDetailView | TeamSkillRefusalView>;
     /**
      * Reset one override back to the shipped copy.
      * @param assetId - override identity.
@@ -131,6 +151,7 @@ export declare class TeamSkillService extends TypertRemoteService {
     assignRole(teamId: string, roleId: string, assetId: string): Promise<{
         ok: boolean;
         detail: string;
+        unverified?: readonly string[];
         library: TeamSkillLibraryView;
     }>;
     /**

@@ -38,6 +38,6 @@ export interface TeamSkillToolDeps {
  * @param ctx - the plugin context, for its logger.
  * @param agent - the Session root the tools belong to.
  * @param deps - the store, the manager, and the live roster.
- * @returns the disposer withdrawing all four tools.
+ * @returns the disposer withdrawing the management tools.
  */
 export declare function registerTeamSkillTools(ctx: Context, agent: Agent, deps: TeamSkillToolDeps): () => void;

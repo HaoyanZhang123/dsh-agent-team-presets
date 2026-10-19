@@ -84,6 +84,10 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             quickPrompts?: string[] | null;
             notes?: string | null;
         } & import("@deepseek-ai/cosmokit").Dict) | null;
+        officialSkills?: ({
+            skillId?: string | null;
+            roleName?: string | null;
+        } & import("@deepseek-ai/cosmokit").Dict)[] | null;
         captain?: ({
             name?: string | null;
             color?: string | null;
@@ -121,6 +125,13 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             quickPrompts: z<string[], string[], "defined">;
             notes: z<string, string, "defined">;
         }>>, "plain">;
+        officialSkills: z<({
+            skillId?: string | null;
+            roleName?: string | null;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            skillId: z<string, string, "defined">;
+            roleName: z<string, string, "defined">;
+        }>>[], "defined">;
         captain: z<Schemastery.ObjectS<NoInfer<{
             name: z<string, string, "defined">;
             color: z<string, string, "defined">;
@@ -199,6 +210,10 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             quickPrompts?: string[] | null;
             notes?: string | null;
         } & import("@deepseek-ai/cosmokit").Dict) | null;
+        officialSkills?: ({
+            skillId?: string | null;
+            roleName?: string | null;
+        } & import("@deepseek-ai/cosmokit").Dict)[] | null;
         captain?: ({
             name?: string | null;
             color?: string | null;
@@ -236,6 +251,13 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
             quickPrompts: z<string[], string[], "defined">;
             notes: z<string, string, "defined">;
         }>>, "plain">;
+        officialSkills: z<({
+            skillId?: string | null;
+            roleName?: string | null;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            skillId: z<string, string, "defined">;
+            roleName: z<string, string, "defined">;
+        }>>[], "defined">;
         captain: z<Schemastery.ObjectS<NoInfer<{
             name: z<string, string, "defined">;
             color: z<string, string, "defined">;

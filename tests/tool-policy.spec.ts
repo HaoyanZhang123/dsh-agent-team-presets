@@ -1,8 +1,34 @@
 /** Persisted strict policy decoding never accepts malformed records as all tools. */
 import { describe, expect, it } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { descriptorPolicy, hasLegacyPresetBriefing } from '../src/tool-policy.ts'
+import { descriptorPolicy, guardPolicy, hasLegacyPresetBriefing } from '../src/tool-policy.ts'
 const agentWith = (data: object): Agent => ({ session: { ownEvents: () => [{ type: 'subagent/descriptor', data }] } } as unknown as Agent)
+/** One Agent double exposing only the guard surface the policy needs. */
+function guarded(): { verdict(name: string): string | undefined; dispose(): void } {
+  let check: ((exec: { name: string }) => string | undefined) | undefined
+  const agent = {
+    ctx: { tools: {
+      presentAs: () => () => {},
+      guard: (handler: (exec: { name: string }) => string | undefined) => { check = handler; return () => {} },
+    } },
+  } as unknown as Agent
+  const dispose = guardPolicy(agent, { teamId: 'team-1', mode: 'custom', allow: [] })
+  return { verdict: name => check?.({ name }), dispose }
+}
+
+describe('strict tool policy guard', () => {
+  it('keeps fixed Team operations reachable under an empty custom allow-list', () => {
+    const guard = guarded()
+    for (const name of ['spawn_team_member', 'get_team_preset', 'update_team_preset', 'send_message', 'wait_agent']) {
+      expect(guard.verdict(name), name).toBeUndefined()
+    }
+    expect(guard.verdict('read')).toContain('denies "read"')
+    expect(guard.verdict('run_code')).toContain('deny general-purpose run_code')
+    expect(guard.verdict('spawn_teammate')).toContain('spawn_team_member')
+    guard.dispose()
+  })
+})
+
 describe('durable strict tool policy', () => {
   it('distinguishes plugin-authored legacy briefings from ordinary native member personas', () => {
     expect(hasLegacyPresetBriefing(agentWith({ mode: 'continuable', persona: 'You are "reviewer" on the Agent Team "Reviews".\n\nYour role: review' }))).toBe(true)

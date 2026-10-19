@@ -74,21 +74,24 @@ function providerFor(assets: readonly TeamSkillAsset[], store: TeamSkillStore): 
     resourceBase: { kind: 'directory', path: store.assetPath(asset.id, asset.version) },
     locator: { assetId: asset.id, version: asset.version },
   }))
-  const byName = new Map(assets.map(asset => [asset.skillId, asset]))
   return {
     name: TEAM_SKILL_PROVIDER,
     list: () => Promise.resolve(candidates),
     get: async (candidate: SkillCandidate) => {
-      const asset = byName.get(candidate.name)
+      const locator = candidate.locator
+      if (locator === null || typeof locator !== 'object' || !('assetId' in locator) || !('version' in locator)) return undefined
+      // Several bound assets may share one skill name. The registry chooses a
+      // candidate; its locator identifies the exact bytes and resource directory.
+      const asset = assets.find(asset => asset.id === locator.assetId && asset.version === locator.version && asset.skillId === candidate.name)
       if (asset === undefined) return undefined
-      const body = await store.readText(asset.id, 'SKILL.md')
+      const body = await store.readText(asset.id, 'SKILL.md', asset.version)
       return {
         name: asset.skillId,
         description: asset.description,
         invocation: candidate.invocation,
         provider: TEAM_SKILL_PROVIDER,
         source: 'custom',
-        ...candidate.resourceBase === undefined ? {} : { resourceBase: candidate.resourceBase },
+        resourceBase: { kind: 'directory', path: store.assetPath(asset.id, asset.version) },
         content: stripFrontmatter(body),
       }
     },
@@ -157,20 +160,27 @@ export class TeamSkillRuntime {
    */
   async sync(binding: AgentSkillBinding): Promise<void> {
     if (this.disposed) return
+    // An Agent keeps the bytes it first received for each still-authorized
+    // asset. Library edits publish versions for future residencies; an explicit
+    // unassignment still removes the asset immediately.
+    const previous = this.desired.get(binding.agent) ?? []
+    const assets = binding.assets.map(asset => previous.find(pinned => pinned.id === asset.id) ?? asset)
+    if (previous.length === assets.length && assets.every((asset, index) => asset === previous[index])
+      && (assets.length === 0 || this.live.has(binding.agent) || this.pendingSettle.has(binding.agent))) return
     this.release(binding.agent)
-    this.desired.set(binding.agent, binding.assets)
-    if (binding.assets.length === 0) return
+    this.desired.set(binding.agent, assets)
+    if (assets.length === 0) return
     if (!this.available) {
-      this.log('the skill service is not composed, so Team Skills stay unavailable in this deployment')
-      return
+      this.log('the skill service is not composed yet; Team Skills will register when it becomes available')
     }
     let settle: () => void = () => {}
     const installed = new Promise<void>((resolve) => { settle = resolve })
     this.pendingSettle.set(binding.agent, settle)
     const disposeInject = this.ctx.inject(['skills'], (injected) => {
       settle()
+      this.pendingSettle.delete(binding.agent)
       const intended = this.desired.get(binding.agent)
-      if (this.disposed || intended !== binding.assets || intended === undefined || intended.length === 0) return
+      if (this.disposed || intended !== assets || intended === undefined || intended.length === 0) return
       // A scope keyed by the Agent itself is exactly the layer the host's
       // `skill` tool reads when it passes `scope: exec.agent`.
       const minted = createScope(injected, binding.agent)
@@ -275,6 +285,8 @@ export class TeamSkillRuntime {
     this.live.clear()
     this.pendingInject.clear()
     this.desired.clear()
+    for (const settle of this.pendingSettle.values()) settle()
+    this.pendingSettle.clear()
     await Promise.allSettled(registrations.map((registration) => {
       registration.disposeProvider()
       return registration.scope.dispose()

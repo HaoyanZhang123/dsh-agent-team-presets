@@ -18,6 +18,8 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import { MEMBER_FRESH_PROVIDER, MEMBER_FORK_PROVIDER } from '../src/member-identity.ts'
 import type { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { MemberRuntime } from '../src/member-runtime.ts'
 import type { MemberIntent } from '../src/member-runtime.ts'
@@ -37,6 +39,7 @@ interface MemoryStore {
   readonly facility: DomainFacility
   /** Direct record access, so a case can seed a state `prepare` cannot produce. */
   readonly table: Map<string, MemberRecord>
+  failNextPut(): void
 }
 
 /**
@@ -45,6 +48,7 @@ interface MemoryStore {
  * @returns the double.
  */
 function memoryStore(seed: readonly MemberRecord[] = []): MemoryStore {
+  let failPut = false
   const table = new Map<string, MemberRecord>()
   for (const record of seed) table.set(memberRecordKey(record.rootSessionId, record.memberName), record)
   const facility = {
@@ -58,7 +62,10 @@ function memoryStore(seed: readonly MemberRecord[] = []): MemoryStore {
           entries: () => table.entries(),
           keys: () => table.keys(),
           get size() { return table.size },
-          put: async (key: string, value: MemberRecord) => { table.set(key, value) },
+          put: async (key: string, value: MemberRecord) => {
+            if (failPut) { failPut = false; throw new Error('injected bind persistence failure') }
+            table.set(key, value)
+          },
           delete: async (key: string) => table.delete(key),
           update: async (key: string, fn: (current: MemberRecord) => MemberRecord) => {
             const current = table.get(key)
@@ -72,7 +79,7 @@ function memoryStore(seed: readonly MemberRecord[] = []): MemoryStore {
       close: async () => {},
     }),
   }
-  return { facility: facility as unknown as DomainFacility, table }
+  return { facility: facility as unknown as DomainFacility, table, failNextPut: () => { failPut = true } }
 }
 
 /** One stored record for the `(lead, reviewer)` instance. */
@@ -319,6 +326,83 @@ describe('preparing one creation', () => {
 })
 
 describe('binding and failure notes', () => {
+  it('recovers a failed bind from a verified historical descriptor and repairs the durable intent', async () => {
+    const h = await harness({ seed: [recordFor({ lifecycle: 'intent', childSessionId: undefined })] })
+    const membership = { root: h.lead, name: 'reviewer' }
+    h.child.session.append('subagent/descriptor', snapshotSubagentDescriptor({ mode: 'continuable', provider: MEMBER_FRESH_PROVIDER, label: 'review diffs' }))
+    // The same descriptor on a fresh creation cannot skip generation admission.
+    expect(h.members.claim(h.child, membership, true)).toMatchObject({ kind: 'installed', record: { lifecycle: 'intent' } })
+    h.memory.failNextPut()
+    await h.members.bind(h.child, membership)
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))?.lifecycle).toBe('intent')
+    expect(h.members.recordFor(h.child)).toMatchObject({ lifecycle: 'bound', childSessionId: 'child' })
+    const seed = h.child.session.snapshotEvents()
+    h.members.releaseAll()
+    await h.members.close()
+    const restored = (await h.ctx.agents.create({ sessionId: SessionId('restored'), parentAgent: h.lead,
+      meta: { parentSession: h.lead.id, origin: 'subagent' }, seed, agentOptions: { provider: 'mock', model: 'mock' } })).agent
+    const runtime = new MemberRuntime(h.ctx)
+    await runtime.whenReady()
+    expect(runtime.claim(restored, membership, true)).toMatchObject({ kind: 'installed', record: { lifecycle: 'bound', childSessionId: restored.id } })
+    // Close waits for the recovery write too.
+    await runtime.closeAdmission()
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))).toMatchObject({ lifecycle: 'bound', childSessionId: restored.id, intentId: 'intent-1' })
+    await runtime.close()
+  })
+
+  it.each(['provider', 'parent', 'failed', 'bound-child', 'unmarked'] as const)('does not recover an intent using mismatched %s evidence', async mismatch => {
+    const h = await harness({ seed: [recordFor({ lifecycle: mismatch === 'failed' ? 'failed' : mismatch === 'bound-child' ? 'bound' : 'intent', childSessionId: mismatch === 'bound-child' ? 'another-child' : undefined })] })
+    h.child.session.append('subagent/descriptor', snapshotSubagentDescriptor({ mode: 'continuable', provider: mismatch === 'provider' ? MEMBER_FORK_PROVIDER : MEMBER_FRESH_PROVIDER, label: 'review diffs' }))
+    const restored = (await h.ctx.agents.create({ sessionId: SessionId('restored'), parentAgent: h.lead,
+      meta: { parentSession: mismatch === 'parent' ? 'wrong-parent' : h.lead.id, origin: 'subagent' }, seed: h.child.session.snapshotEvents(),
+      agentOptions: { provider: 'mock', model: 'mock' } })).agent
+    const claim = h.members.claim(restored, { root: h.lead, name: 'reviewer' }, mismatch !== 'unmarked')
+    if (mismatch === 'unmarked') expect(claim).toMatchObject({ kind: 'installed', record: { lifecycle: 'intent' } })
+    else expect(claim.kind).toBe('invalid')
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))?.childSessionId).toBe(mismatch === 'bound-child' ? 'another-child' : undefined)
+    await h.members.close()
+  })
+
+  it('keeps a recovered child bound in memory when the repair write also fails, then retries bind', async () => {
+    const h = await harness({ seed: [recordFor({ lifecycle: 'intent', childSessionId: undefined })] })
+    h.child.session.append('subagent/descriptor', snapshotSubagentDescriptor({ mode: 'continuable', provider: MEMBER_FRESH_PROVIDER, label: 'review diffs' }))
+    const restored = (await h.ctx.agents.create({ sessionId: SessionId('restored'), parentAgent: h.lead,
+      meta: { parentSession: h.lead.id, origin: 'subagent' }, seed: h.child.session.snapshotEvents(), agentOptions: { provider: 'mock', model: 'mock' } })).agent
+    const membership = { root: h.lead, name: 'reviewer' }
+    h.memory.failNextPut()
+    expect(h.members.claim(restored, membership, true)).toMatchObject({ kind: 'installed', record: { lifecycle: 'bound' } })
+    await Promise.resolve()
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))?.lifecycle).toBe('intent')
+    expect(h.members.claim(restored, membership, true)).toMatchObject({ kind: 'installed', record: { lifecycle: 'bound', childSessionId: restored.id } })
+    await h.members.bind(restored, membership)
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))).toMatchObject({ lifecycle: 'bound', childSessionId: restored.id })
+    await h.members.close()
+  })
+
+  it('rejects malformed historical descriptors and never substitutes a later valid descriptor', async () => {
+    const h = await harness({ seed: [recordFor({ lifecycle: 'intent', childSessionId: undefined })] })
+    h.child.session.append('subagent/descriptor', { version: 3, mode: 'continuable', provider: MEMBER_FRESH_PROVIDER, label: 7 } as never)
+    h.child.session.append('subagent/descriptor', snapshotSubagentDescriptor({ mode: 'continuable', provider: MEMBER_FRESH_PROVIDER, label: 'valid later' }))
+    const restored = (await h.ctx.agents.create({ sessionId: SessionId('restored'), parentAgent: h.lead,
+      meta: { parentSession: h.lead.id, origin: 'subagent' }, seed: h.child.session.snapshotEvents(), agentOptions: { provider: 'mock', model: 'mock' } })).agent
+    expect(h.members.claim(restored, { root: h.lead, name: 'reviewer' }, true)).toMatchObject({ kind: 'invalid' })
+    expect(h.members.installedCount).toBe(0)
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))?.lifecycle).toBe('intent')
+    await h.members.close()
+  })
+
+  it('never binds an unclaimed child or a replacement intent', async () => {
+    const h = await harness({ seed: [recordFor({ lifecycle: 'intent', childSessionId: undefined })] })
+    const membership = { root: h.lead, name: 'reviewer' }
+    await h.members.bind(h.child, membership)
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))?.lifecycle).toBe('intent')
+    h.members.claim(h.child, membership, true)
+    h.memory.table.set(memberRecordKey('lead', 'reviewer'), recordFor({ lifecycle: 'intent', childSessionId: undefined, intentId: 'replacement' }))
+    await h.members.bind(h.child, membership)
+    expect(h.memory.table.get(memberRecordKey('lead', 'reviewer'))).toMatchObject({ lifecycle: 'intent', intentId: 'replacement' })
+    await h.members.close()
+  })
+
   it('binds the created child durably and reports the member\'s own failure cause', async () => {
     const h = await harness({ seed: [recordFor({ lifecycle: 'intent', childSessionId: undefined })] })
     // The creation edge claims the child — which installs the failure observer —

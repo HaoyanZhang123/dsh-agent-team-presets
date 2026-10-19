@@ -14,8 +14,16 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from 'dsh-agent-team-presets/remote'
 import type {
   TeamSkillDeleteView, TeamSkillDetailView, TeamSkillImportFile,
-  TeamSkillLibraryView, TeamSkillRefusalView,
+  TeamSkillLibraryView, TeamSkillRefusalView, TeamSkillScanView,
 } from '../types.ts'
+
+/** The optional Host desktop carrier this page uses to reveal the import folder. */
+interface WorkspacePathRemote {
+  readonly session?: {
+    canOpenWorkspacePath?(): Promise<{ readonly ok: boolean; readonly value?: boolean }>
+    openWorkspacePath?(request: { readonly path: string; readonly action: 'reveal' }): Promise<{ readonly ok: boolean }>
+  }
+}
 
 /**
  * Unwrap one Remote answer, turning a transport failure into the same shape the
@@ -50,6 +58,14 @@ export interface TeamSkillsState {
   readonly file: string | undefined
   /** That file's text, once read. */
   readonly fileText: string | undefined
+  /** The last directory scan, so the page can list every folder it judged. */
+  readonly scan: TeamSkillScanView | undefined
+  /** Whether this Host can reveal a folder natively; false means the control copies the path. */
+  readonly canOpenScanFolder: boolean
+  /** Absolute import folder, once prepared. */
+  readonly scanFolderPath: string | undefined
+  /** How the last open/copy gesture ended, localized by the page. */
+  readonly scanFolderNotice: 'opened' | 'copied' | 'copy-failed' | undefined
 }
 
 /**
@@ -74,9 +90,14 @@ export class TeamSkillsController {
     issue: undefined,
     file: undefined,
     fileText: undefined,
+    scan: undefined,
+    canOpenScanFolder: false,
+    scanFolderPath: undefined,
+    scanFolderNotice: undefined,
   }
 
   private readonly listeners = new Set<() => void>()
+  private readonly ctx: Context
   private disposed = false
 
   /**
@@ -94,6 +115,7 @@ export class TeamSkillsController {
    * @param ctx - the browser context this panel reads its Remote through.
    */
   constructor(ctx: Context) {
+    this.ctx = ctx
     // A namespace this build cannot inject must degrade this panel only. The
     // registration itself is guarded because a client-side inject that cannot be
     // satisfied would otherwise fail the whole browser entry.
@@ -105,6 +127,70 @@ export class TeamSkillsController {
       })
     } catch (error: unknown) {
       this.state = { ...this.state, status: 'unavailable', issue: String(error) }
+    }
+    void this.detectOpenCapability()
+  }
+
+  /** Read whether this Host can reveal a folder natively; absence means copy mode. */
+  private async detectOpenCapability(): Promise<void> {
+    try {
+      const session = ((this.ctx.remote as unknown) as WorkspacePathRemote).session
+      const answer = await session?.canOpenWorkspacePath?.()
+      this.publish({ canOpenScanFolder: answer?.ok === true && answer.value === true })
+    } catch {
+      this.publish({ canOpenScanFolder: false })
+    }
+  }
+
+  /** Reveal one Host path in the native file manager, when the Host offers it. */
+  private async revealFolder(path: string): Promise<boolean> {
+    try {
+      const session = ((this.ctx.remote as unknown) as WorkspacePathRemote).session
+      const answer = await session?.openWorkspacePath?.({ path, action: 'reveal' })
+      return answer?.ok === true
+    } catch {
+      return false
+    }
+  }
+
+  /** Copy one absolute path, reporting whether the browser allowed it. */
+  private async copyPath(path: string): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(path)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Create (when missing) and reveal the import folder.
+   *
+   * A Host without a native opener, or one that refuses this path, falls back to
+   * the clipboard so the gesture still gives the user a way to the folder.
+   */
+  async openScanFolder(): Promise<void> {
+    this.publish({ busy: true, scanFolderNotice: undefined, message: undefined, failed: false })
+    try {
+      const answer = unwrap(await this.api().prepareImportFolder())
+      if (!('path' in answer)) {
+        this.publish({ busy: false, message: (answer as TeamSkillRefusalView).detail, failed: true })
+        return
+      }
+      this.publish({ scanFolderPath: answer.path })
+      if (this.state.canOpenScanFolder) {
+        if (await this.revealFolder(answer.path)) {
+          this.publish({ busy: false, scanFolderNotice: 'opened' })
+          return
+        }
+        // The Host advertised a native opener but refused this path: switch the
+        // control to its copy mode so the next click does not promise an open.
+        this.publish({ canOpenScanFolder: false })
+      }
+      const copied = await this.copyPath(answer.path)
+      this.publish({ busy: false, scanFolderNotice: copied ? 'copied' : 'copy-failed' })
+    } catch (error: unknown) {
+      this.publish({ busy: false, message: String(error), failed: true })
     }
   }
 
@@ -209,7 +295,7 @@ export class TeamSkillsController {
     if (assetId === undefined) return
     await this.run(async () => {
       const answer = unwrap(await this.api().writeFile(assetId, path, text))
-      if (!isDetail(answer)) return answer.detail
+      if (!isDetail(answer)) return (answer as TeamSkillRefusalView).detail
       this.publish({ detail: answer })
       await this.refresh()
       await this.openFile(path)
@@ -225,7 +311,7 @@ export class TeamSkillsController {
   async create(skillId: string, description: string): Promise<void> {
     await this.run(async () => {
       const answer = unwrap(await this.api().createSkill(skillId, description))
-      if (!isDetail(answer)) return answer.detail
+      if (!isDetail(answer)) return (answer as TeamSkillRefusalView).detail
       this.publish({ detail: answer, selectedId: answer.asset.id })
       await this.refresh()
       return 'created'
@@ -244,10 +330,29 @@ export class TeamSkillsController {
     }))
     await this.run(async () => {
       const answer = unwrap(await this.api().importSkill(payload))
-      if (!isDetail(answer)) return answer.detail
+      if (!isDetail(answer)) return (answer as TeamSkillRefusalView).detail
       this.publish({ detail: answer, selectedId: answer.asset.id })
       await this.refresh()
       return 'imported'
+    })
+  }
+
+  /**
+   * Scan the Host's import folder and publish every new legal skill.
+   *
+   * The Host owns the judgement; this only forwards the answer so the page can
+   * show one row per folder instead of collapsing refusals into a count.
+   */
+  async scanImportFolder(): Promise<void> {
+    await this.run(async () => {
+      const answer = unwrap(await this.api().scanImportFolder())
+      if (!('entries' in answer)) {
+        this.publish({ scan: undefined })
+        return (answer as TeamSkillRefusalView).detail
+      }
+      this.publish({ scan: answer })
+      await this.refresh()
+      return 'scanned'
     })
   }
 
@@ -258,7 +363,7 @@ export class TeamSkillsController {
   async createOverride(skillId: string): Promise<void> {
     await this.run(async () => {
       const answer = unwrap(await this.api().overrideSkill(skillId))
-      if (!isDetail(answer)) return answer.detail
+      if (!isDetail(answer)) return (answer as TeamSkillRefusalView).detail
       this.publish({ detail: answer, selectedId: answer.asset.id })
       await this.refresh()
       return 'override-created'
@@ -272,7 +377,7 @@ export class TeamSkillsController {
   async resetOverride(assetId: string): Promise<void> {
     await this.run(async () => {
       const answer = unwrap(await this.api().resetSkill(assetId))
-      if (!isDetail(answer)) return answer.detail
+      if (!isDetail(answer)) return (answer as TeamSkillRefusalView).detail
       this.publish({ detail: answer })
       await this.refresh()
       return 'override-reset'
@@ -372,7 +477,7 @@ export class TeamSkillsController {
       const message = await work()
       // A success is shown by the refreshed panel itself; only a refusal needs
       // words, so a machine key never reaches the user as raw text.
-      const succeeded = /^(saved|created|imported|deleted|assigned|unassigned|override-)/u.test(message)
+      const succeeded = /^(saved|created|imported|deleted|assigned|unassigned|scanned|override-)/u.test(message)
       this.publish({ busy: false, message: succeeded ? undefined : message, failed: !succeeded })
     } catch (error: unknown) {
       this.publish({ busy: false, message: String(error), failed: true })

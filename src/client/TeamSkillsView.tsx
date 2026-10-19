@@ -18,7 +18,7 @@ import css from './TeamSkillsView.module.css'
 // very same classes rather than a lookalike set that can drift.
 import chips from './TeamPresetsSection.module.css'
 import type { TeamSkillsController, TeamSkillsState } from './team-skills-controller.ts'
-import type { TeamSkillAssetView } from '../types.ts'
+import type { TeamSkillAssetView, TeamSkillScanEntry } from '../types.ts'
 
 /** Locale keys this panel reads. */
 export type TeamSkillsLocaleKey =
@@ -32,6 +32,14 @@ export type TeamSkillsLocaleKey =
   | 'skillsCancel' | 'skillsConfirm' | 'skillsName' | 'skillsDesc' | 'skillsNewTitle'
   | 'skillsVersion' | 'skillsOverrideOn' | 'skillsBlockedAssign' | 'skillsMcpUnverified'
   | 'skillsNameClash' | 'skillsNameClashBody' | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
+  | 'skillsScan' | 'skillsScanHint' | 'skillsScanSummary' | 'skillsScanEmpty'
+  | 'skillsScanImported' | 'skillsScanExisting' | 'skillsScanInvalid'
+  | 'skillsScanMissingSkill' | 'skillsScanInvalidFrontmatter' | 'skillsScanInvalidName'
+  | 'skillsScanMissingDescription' | 'skillsScanTooLarge' | 'skillsScanSymlink'
+  | 'skillsScanNotDirectory' | 'skillsScanUnreadable' | 'skillsScanDuplicate'
+  | 'skillsScanInstallRefused'
+  | 'skillsOpenScanFolder' | 'skillsCopyScanFolder'
+  | 'skillsScanFolderOpened' | 'skillsScanFolderCopied' | 'skillsScanFolderCopyFailed'
 
 /** Props of {@link TeamSkillsView}. */
 export interface TeamSkillsViewProps {
@@ -54,6 +62,31 @@ function originTone(styles: Record<string, string | undefined>, origin: string):
   if (origin === 'builtin') return styles.originBuiltin ?? ''
   if (origin === 'override') return styles.originOverride ?? ''
   return styles.originCustom ?? ''
+}
+
+/** Locale text for each refusal the scanner can report. */
+const SCAN_REASON_KEYS: Readonly<Record<string, TeamSkillsLocaleKey>> = {
+  'missing-skill-file': 'skillsScanMissingSkill',
+  'invalid-frontmatter': 'skillsScanInvalidFrontmatter',
+  'invalid-name': 'skillsScanInvalidName',
+  'missing-description': 'skillsScanMissingDescription',
+  'too-many-files': 'skillsScanTooLarge',
+  'file-too-large': 'skillsScanTooLarge',
+  'folder-too-large': 'skillsScanTooLarge',
+  'too-long': 'skillsScanTooLarge',
+  'symlink-escape': 'skillsScanSymlink',
+  'not-directory': 'skillsScanNotDirectory',
+  'unreadable': 'skillsScanUnreadable',
+  'duplicate': 'skillsScanDuplicate',
+  'duplicate-path': 'skillsScanDuplicate',
+  'install-refused': 'skillsScanInstallRefused',
+}
+
+/** One scan row's explanation, localized when the scanner's code is known. */
+function scanReasonText(entry: TeamSkillScanEntry, t: (key: TeamSkillsLocaleKey) => string): string {
+  const key = entry.reason === undefined ? undefined : SCAN_REASON_KEYS[entry.reason]
+  const label = entry.reason === undefined ? '' : key === undefined ? entry.reason : t(key)
+  return entry.detail === undefined ? label : `${label} (${entry.detail})`
 }
 
 function originLabel(asset: TeamSkillAssetView, t: (key: TeamSkillsLocaleKey) => string): string {
@@ -265,10 +298,18 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
         </div>
         <div className={css.titleActions}>
           <Button variant="outline" onClick={() => { setCreating(true) }}>{t('skillsNew')}</Button>
-          <Button variant="outline" onClick={() => { void navigator.clipboard?.writeText(state.library?.root ?? '') }}>{t('skillsOpenFolder')}</Button>
+          <Button variant="outline" onClick={() => { void controller.openScanFolder() }}>
+            {state.canOpenScanFolder ? t('skillsOpenScanFolder') : t('skillsCopyScanFolder')}
+          </Button>
         </div>
       </div>
       <div className={css.info}>ⓘ <span>{t('skillsNote')}</span></div>
+      {state.scanFolderNotice === undefined ? null : (
+        <div className={css.info}>
+          <span>{t(state.scanFolderNotice === 'opened' ? 'skillsScanFolderOpened'
+            : state.scanFolderNotice === 'copied' ? 'skillsScanFolderCopied' : 'skillsScanFolderCopyFailed')}</span>
+        </div>
+      )}
 
       <div className={css.actions}>
         <input
@@ -280,7 +321,36 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
           {...{ webkitdirectory: '' }}
         />
         <Button variant="outline" onClick={() => { document.getElementById('team-skill-import')?.click() }}>{t('skillsImport')}</Button>
+        <Button variant="outline" onClick={() => { void controller.scanImportFolder() }}>{t('skillsScan')}</Button>
       </div>
+
+      {state.scan === undefined ? null : (
+        <div className={css.scan}>
+          <div className={css.scanHead}>
+            {t('skillsScanSummary')
+              .replace('{scanned}', String(state.scan.scanned))
+              .replace('{imported}', String(state.scan.imported))
+              .replace('{existing}', String(state.scan.existing))
+              .replace('{invalid}', String(state.scan.invalid))}
+          </div>
+          <div className={css.muted}>{t('skillsScanHint')} {state.scan.root}</div>
+          {state.scan.entries.length === 0 ? <div className={css.muted}>{t('skillsScanEmpty')}</div> : (
+            <ul className={css.scanList}>
+              {state.scan.entries.map(entry => (
+                <li key={entry.folder} className={css.scanRow}>
+                  <span className={css.scanFolder}>{entry.folder}</span>
+                  <span className={`${css.tag} ${entry.status === 'imported' ? css.tagOk : entry.status === 'invalid' ? css.tagWarn : ''}`}>
+                    {t(entry.status === 'imported' ? 'skillsScanImported' : entry.status === 'existing' ? 'skillsScanExisting' : 'skillsScanInvalid')}
+                  </span>
+                  <span className={css.muted}>
+                    {entry.status === 'invalid' ? scanReasonText(entry, t) : entry.assetId ?? entry.skillId ?? ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className={css.toolbar}>
         <input className={css.search} value={query} placeholder={t('skillsSearch')} onChange={(event) => { setQuery(event.target.value) }} />

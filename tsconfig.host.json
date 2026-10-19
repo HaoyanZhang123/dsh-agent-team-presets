@@ -14,7 +14,6 @@
     "src/application.ts",
     "src/execution.ts",
     "src/index.ts",
-    "src/skills.ts",
     "src/tool-catalog.ts",
     "src/team-catalog.ts",
     "src/team-search.ts",

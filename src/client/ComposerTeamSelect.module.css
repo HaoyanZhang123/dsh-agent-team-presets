@@ -207,3 +207,4 @@
   color: var(--dsw-alias-label-secondary);
   text-align: center;
 }
+.popFilterLabel { align-self: center; font-size: 12px; color: var(--dsw-alias-label-secondary, #6b7581); margin-right: 2px; }

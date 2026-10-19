@@ -10,7 +10,7 @@
  * @module dsh-agent-team-presets/client/team-skills-controller
  */
 import type { Context } from '@deepseek-ai/cordis';
-import type { TeamSkillDeleteView, TeamSkillDetailView, TeamSkillLibraryView } from '../types.ts';
+import type { TeamSkillDeleteView, TeamSkillDetailView, TeamSkillLibraryView, TeamSkillScanView } from '../types.ts';
 /** One page snapshot. */
 export interface TeamSkillsState {
     /** Where the library load stands. */
@@ -33,11 +33,20 @@ export interface TeamSkillsState {
     readonly file: string | undefined;
     /** That file's text, once read. */
     readonly fileText: string | undefined;
+    /** The last directory scan, so the page can list every folder it judged. */
+    readonly scan: TeamSkillScanView | undefined;
+    /** Whether this Host can reveal a folder natively; false means the control copies the path. */
+    readonly canOpenScanFolder: boolean;
+    /** Absolute import folder, once prepared. */
+    readonly scanFolderPath: string | undefined;
+    /** How the last open/copy gesture ended, localized by the page. */
+    readonly scanFolderNotice: 'opened' | 'copied' | 'copy-failed' | undefined;
 }
 /** The Team Skill page state. */
 export declare class TeamSkillsController {
     private state;
     private readonly listeners;
+    private readonly ctx;
     private disposed;
     /**
      * The Remote namespace, once the gateway announces it.
@@ -53,6 +62,19 @@ export declare class TeamSkillsController {
      * @param ctx - the browser context this panel reads its Remote through.
      */
     constructor(ctx: Context);
+    /** Read whether this Host can reveal a folder natively; absence means copy mode. */
+    private detectOpenCapability;
+    /** Reveal one Host path in the native file manager, when the Host offers it. */
+    private revealFolder;
+    /** Copy one absolute path, reporting whether the browser allowed it. */
+    private copyPath;
+    /**
+     * Create (when missing) and reveal the import folder.
+     *
+     * A Host without a native opener, or one that refuses this path, falls back to
+     * the clipboard so the gesture still gives the user a way to the folder.
+     */
+    openScanFolder(): Promise<void>;
     /** Current snapshot, stable between changes. */
     getSnapshot: () => TeamSkillsState;
     /**
@@ -100,6 +122,13 @@ export declare class TeamSkillsController {
         path: string;
         content: Uint8Array;
     }[]): Promise<void>;
+    /**
+     * Scan the Host's import folder and publish every new legal skill.
+     *
+     * The Host owns the judgement; this only forwards the answer so the page can
+     * show one row per folder instead of collapsing refusals into a count.
+     */
+    scanImportFolder(): Promise<void>;
     /**
      * Copy one shipped skill into an editable override.
      * @param skillId - shipped skill id.

@@ -1,0 +1,148 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { TeamSkillStore } from '../src/team-skills/store.ts'
+import { TeamSkillManager } from '../src/team-skills/manager.ts'
+import { team, slot } from './fixtures/team-presets.ts'
+import { builtinTeamDefinition, BUILTIN_TEAMS } from '../src/builtin-teams.ts'
+import type { TeamPreset } from '../src/types.ts'
+
+const roots: string[] = []
+afterEach(async () => { vi.restoreAllMocks(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), 'skill-management-'))
+  roots.push(root)
+  const store = new TeamSkillStore(root)
+  await store.open()
+  let teams: readonly TeamPreset[] = [team([slot({ id: 'dev', name: 'developer' })], {})]
+  const manager = new TeamSkillManager(store, root, { teams: () => teams, activeAssetIds: () => new Set(), activeSessions: () => [] })
+  await manager.open()
+  return { root, store, manager, setTeams: (next: readonly TeamPreset[]) => { teams = next } }
+}
+async function install(store: TeamSkillStore, id: string, origin: 'builtin' | 'custom' = 'custom') {
+  const name = id.split(':')[1]!
+  return store.install({ name, description: name, files: [{ path: 'SKILL.md', bytes: new TextEncoder().encode(`---\nname: ${name}\ndescription: demo\n---\n\nBody\n`) }], totalBytes: 1 }, { id, origin, version: '1' })
+}
+
+describe('Team Skill management regressions', () => {
+  it('validates live teams and roles and reports required MCP uncertainty', async () => {
+    const { store, manager } = await fixture()
+    await install(store, 'custom:demo')
+    await store.updateDependencies('custom:demo', { executables: [], otherSkills: [], mcpServers: [{ serverName: 'browser', required: true }] })
+    expect(await manager.assign({ teamId: 'missing', roleId: 'dev', assetId: 'custom:demo' })).toMatchObject({ ok: false, reason: 'unknown-team' })
+    expect(await manager.assign({ teamId: 'team-1', roleId: 'missing', assetId: 'custom:demo' })).toMatchObject({ ok: false, reason: 'unknown-role' })
+    expect(await manager.assign({ teamId: 'team-1', roleId: 'dev', assetId: 'custom:demo' })).toMatchObject({ ok: true, unverified: ['browser'] })
+  })
+
+  it('serializes writes and preserves the last committed binding after a failed rename', async () => {
+    const { root, store, manager } = await fixture()
+    await install(store, 'custom:one'); await install(store, 'custom:two')
+    await Promise.all(['custom:one', 'custom:two'].map(assetId => manager.assign({ teamId: 'team-1', roleId: 'dev', assetId })))
+    expect(JSON.parse(await readFile(join(root, 'bindings.json'), 'utf8')).bindings).toHaveLength(2)
+    const revision = manager.bindingRevision
+    await rm(join(root, 'bindings.json'))
+    await mkdir(join(root, 'bindings.json'))
+    await expect(manager.unassign('team-1', 'dev', 'custom:one')).rejects.toThrow()
+    expect(manager.list()).toHaveLength(2)
+    expect(manager.bindingRevision).toBe(revision)
+  })
+
+  it('removes orphan role bindings and persists default seeds without restoring an explicit unbind', async () => {
+    const { root, store, manager, setTeams } = await fixture()
+    const preset = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-workflow')!)
+    setTeams([preset])
+    await install(store, 'builtin:git-release-hygiene', 'builtin')
+    await manager.reconcile()
+    const role = preset.members.find(member => member.name === 'repository-specialist')!.id!
+    expect(manager.assetsFor(preset.id, role)).toHaveLength(1)
+    await manager.unassign(preset.id, role)
+    const reopened = new TeamSkillManager(store, root, { teams: () => [preset], activeAssetIds: () => new Set(), activeSessions: () => [] })
+    await reopened.open(); await reopened.reconcile()
+    expect(reopened.assetsFor(preset.id, role)).toEqual([])
+    await manager.assign({ teamId: preset.id, roleId: role, assetId: 'builtin:git-release-hygiene' })
+    setTeams([{ ...preset, members: [] }]); await manager.reconcile()
+    expect(manager.list()).toEqual([])
+  })
+
+  it.each(['team', 'role'] as const)('seeds defaults again after a deleted %s is restored', async (deleted) => {
+    const { root, store, manager, setTeams } = await fixture()
+    const preset = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-workflow')!)
+    const role = preset.members.find(member => member.name === 'repository-specialist')!.id!
+    setTeams([preset])
+    await install(store, 'builtin:git-release-hygiene', 'builtin')
+    await manager.reconcile()
+    expect(manager.assetsFor(preset.id, role)).toHaveLength(1)
+    // Start from the marker-only state too: deletion must forget an explicit
+    // unbind for a role that no longer exists.
+    await manager.unassign(preset.id, role)
+    setTeams(deleted === 'team' ? [] : [{ ...preset, members: [] }])
+    await manager.reconcile()
+    expect(JSON.parse(await readFile(join(root, 'bindings.json'), 'utf8')).seeded).toEqual([])
+    setTeams([preset])
+    const reopened = new TeamSkillManager(store, root, { teams: () => [preset], activeAssetIds: () => new Set(), activeSessions: () => [] })
+    await reopened.open(); await reopened.reconcile()
+    expect(reopened.assetsFor(preset.id, role)).toHaveLength(1)
+  })
+
+  it.each([false, true])('forgetTeam clears seed markers even without a binding (%s)', async (unbound) => {
+    const { root, store, manager, setTeams } = await fixture()
+    const preset = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-workflow')!)
+    const role = preset.members.find(member => member.name === 'repository-specialist')!.id!
+    setTeams([preset])
+    await install(store, 'builtin:git-release-hygiene', 'builtin')
+    await manager.reconcile()
+    if (unbound) await manager.unassign(preset.id, role)
+    expect(await manager.forgetTeam(preset.id)).toBe(unbound ? 0 : 1)
+    expect(manager.list()).toEqual([])
+    expect(JSON.parse(await readFile(join(root, 'bindings.json'), 'utf8')).seeded).toEqual([])
+    const reopened = new TeamSkillManager(store, root, { teams: () => [preset], activeAssetIds: () => new Set(), activeSessions: () => [] })
+    await reopened.open(); await reopened.reconcile()
+    expect(reopened.assetsFor(preset.id, role)).toHaveLength(1)
+  })
+
+  it('seeds a shipped Team whose stored record predates the declaration field', async () => {
+    const { store, manager, setTeams } = await fixture()
+    const preset = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-workflow')!)
+    // The schema materializes an empty array for a record written before the
+    // field existed; that must not read as "the user removed every default".
+    setTeams([{ ...preset, officialSkills: [] }])
+    await install(store, 'builtin:git-release-hygiene', 'builtin')
+    await manager.reconcile()
+    const role = preset.members.find(member => member.name === 'repository-specialist')!.id!
+    expect(manager.assetsFor(preset.id, role).map(asset => asset.id)).toEqual(['builtin:git-release-hygiene'])
+    // A custom Team with the same empty declaration gets no shipped binding.
+    setTeams([{ ...preset, id: 'custom-team', officialSkills: [] }])
+    await manager.reconcile()
+    expect(manager.list().filter(row => row.teamId === 'custom-team')).toEqual([])
+  })
+
+  it('rechecks dependency references added during the advisory scan', async () => {
+    const { store, manager } = await fixture()
+    await install(store, 'custom:target'); await install(store, 'custom:other')
+    const original = store.readText.bind(store)
+    vi.spyOn(store, 'readText').mockImplementationOnce(async (...args) => {
+      await store.updateDependencies('custom:other', { executables: [], mcpServers: [], otherSkills: ['custom:target'] })
+      return original(...args)
+    })
+    expect(await manager.remove('custom:target')).toMatchObject({ ok: false, blockers: [{ kind: 'dependency', dependents: ['custom:other'] }] })
+    expect(store.get('custom:target')).toBeDefined()
+  })
+
+  it('serializes a new assignment behind removal and refuses the deleted asset', async () => {
+    const { store, manager } = await fixture()
+    await install(store, 'custom:target'); await install(store, 'custom:other')
+    let entered!: () => void
+    const scanning = new Promise<void>(resolve => { entered = resolve })
+    let resume!: () => void
+    const paused = new Promise<void>(resolve => { resume = resolve })
+    vi.spyOn(store, 'readText').mockImplementationOnce(async () => { entered(); await paused; return '' })
+    const removal = manager.remove('custom:target')
+    await scanning
+    const assignment = manager.assign({ teamId: 'team-1', roleId: 'dev', assetId: 'custom:target' })
+    resume()
+    expect((await removal).ok).toBe(true)
+    expect(await assignment).toMatchObject({ ok: false, reason: 'unknown-asset' })
+    expect(manager.list()).toEqual([])
+  })
+})

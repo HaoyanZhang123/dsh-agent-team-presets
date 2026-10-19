@@ -67,6 +67,9 @@ export declare class TeamSkills {
     /** Shipped skill ids this deployment actually provides. */
     official: readonly string[];
     private opened;
+    private readonly syncGeneration;
+    private closed;
+    private readonly log;
     /**
      * @param ctx - the plugin context.
      * @param root - absolute private root directory.

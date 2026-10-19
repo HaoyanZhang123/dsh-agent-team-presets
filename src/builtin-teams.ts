@@ -133,6 +133,9 @@ export function builtinTeamDefinition(entry: BuiltinTeam): TeamPreset {
     captain: captainFromTransfer(entry.document.team.captain),
     members: entry.document.team.members.map((slot, index) => memberFromDocument(entry.id, slot, index)),
     ...entry.metadata === undefined ? {} : { metadata: cloneMetadata(entry.metadata) },
+    ...entry.officialSkillBindings.length === 0 ? {} : {
+      officialSkills: entry.officialSkillBindings.map(binding => ({ ...binding })),
+    },
   }
 }
 
@@ -282,6 +285,9 @@ function restoreBuiltinTeam(current: TeamPreset, entry: BuiltinTeam): TeamPreset
         : applySharedFields(existing, shared)
     }),
     ...entry.metadata === undefined ? {} : { metadata: cloneMetadata(entry.metadata) },
+    ...entry.officialSkillBindings.length === 0 ? {} : {
+      officialSkills: entry.officialSkillBindings.map(binding => ({ ...binding })),
+    },
   }
 }
 

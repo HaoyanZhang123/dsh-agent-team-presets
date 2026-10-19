@@ -67,6 +67,15 @@ try {
   })
   if (main === undefined) throw new Error('configured root Agent did not activate')
 
+  // A Team application is deliberately queued, and the Session stays denied
+  // until it is installed. Wait for the observable effect (the member tool)
+  // instead of racing the bootstrap's first tool call.
+  const deadline = Date.now() + 15_000
+  while (ctx.tools.get('spawn_team_member', main) === undefined) {
+    if (Date.now() > deadline) throw new Error('the selected Team never finished applying to the root Agent')
+    await new Promise<void>(resolve => { setTimeout(resolve, 25) })
+  }
+
   const captainTools = ctx.tools.schemas(main).map(tool => tool.name).sort()
   const captainSystem = (await ctx.systemPrompt.assemble(assembleContextFor(main))).sections
     .map(section => section.text)

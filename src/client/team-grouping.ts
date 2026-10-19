@@ -192,3 +192,33 @@ export const CATEGORY_NAME_LIMIT = 40
 export function categoryNameOf(name: string): string {
   return name.trim().slice(0, CATEGORY_NAME_LIMIT)
 }
+
+/**
+ * Whether one Team passes the second-level filter the picker shows.
+ *
+ * A user category and a shipped series share one control, exactly as on the
+ * settings list: selecting a category asks membership, selecting a series asks
+ * an official fact, and selecting neither accepts every Team.
+ * @param team - the Team to judge.
+ * @param series - the selected official series, or `all`.
+ * @param categoryId - the selected user category, or the empty string.
+ * @param assignments - the live `teamId → categoryId` memberships.
+ * @returns whether the Team belongs to the active selection.
+ */
+export function matchesCategoryFilter(
+  team: TeamPreset,
+  series: TeamSeries | 'all',
+  categoryId: string,
+  assignments: readonly TeamCategoryAssignment[],
+): boolean {
+  // The settings list ANDs both dimensions; its controls clear the one that no
+  // longer applies, so a caller that sets both asks for their intersection.
+  const matchesSeries = series === 'all' || teamOrigin(team.id).series === series
+  const matchesCategory = categoryId === '' || assignments.some(row => row.teamId === team.id && row.categoryId === categoryId)
+  return matchesSeries && matchesCategory
+}
+
+/**
+ * The Team-level value one picker filter row starts from.
+ */
+export const PICKER_CATEGORY_ALL = { series: 'all' as const, categoryId: '' }

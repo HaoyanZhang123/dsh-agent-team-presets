@@ -90,7 +90,9 @@ function reviewer(overrides: Partial<TeamPreset['members'][number]> = {}): TeamP
 async function delayedStack(root: string, configured: { fresh: string; fork: string }) {
   const ctx = new Context()
   contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
+  // Subagents requires the real working-directory owner; the testkit mounts
+  // its filesystem and projection dependencies through this opt-in.
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   await ctx.plugin(FixtureSessionQuery)
   const storage: MemberStorage = await mountMemberStorage(ctx, join(root, 'storage'))

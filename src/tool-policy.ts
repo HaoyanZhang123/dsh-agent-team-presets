@@ -106,6 +106,12 @@ export function guardPolicy(agent: Agent, policy: StrictToolPolicy, role: GuardR
       // tool allow-list cannot safely admit that general-purpose code runtime.
       return 'Custom Team policies deny general-purpose run_code; use native allowed tools.'
     }
+    // Fixed Team operations are part of the composition itself, not inherited
+    // capabilities: an allow-list cannot remove the member tool, the preset
+    // reader, or native Team coordination. Their availability is decided by
+    // whether this layer registered them, exactly as the inherited preflight
+    // already classifies them.
+    if (OWN_TOOLS.has(exec.name)) return undefined
     if (policy.mode === 'custom' && !allowed.has(exec.name)) {
       return `Team preset "${policy.teamId}" tool policy denies "${exec.name}".`
     }

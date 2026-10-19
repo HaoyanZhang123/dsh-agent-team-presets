@@ -59,6 +59,14 @@ export type TeamPresetsLocaleKey =
   | 'skillsDescriptionPlaceholder'
   | 'skillsRoot'
   | 'skillsRefresh'
+  | 'skillsScan' | 'skillsScanHint' | 'skillsScanSummary' | 'skillsScanEmpty'
+  | 'skillsScanImported' | 'skillsScanExisting' | 'skillsScanInvalid'
+  | 'skillsScanMissingSkill' | 'skillsScanInvalidFrontmatter' | 'skillsScanInvalidName'
+  | 'skillsScanMissingDescription' | 'skillsScanTooLarge' | 'skillsScanSymlink'
+  | 'skillsScanNotDirectory' | 'skillsScanUnreadable' | 'skillsScanDuplicate'
+  | 'skillsScanInstallRefused'
+  | 'skillsOpenScanFolder' | 'skillsCopyScanFolder'
+  | 'skillsScanFolderOpened' | 'skillsScanFolderCopied' | 'skillsScanFolderCopyFailed'
   | 'skillsOverride'
   | 'skillsReset'
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
@@ -105,6 +113,7 @@ export type TeamPresetsLocaleKey =
   | 'composeClose'
   | 'composeSearch'
   | 'composeAll'
+  | 'composeFilterCategory' | 'composeCategoryAll' | 'composeUncategorized'
   | 'composeNoneSub'
   | 'composeSeriesDev'
   | 'composeSeriesModes'
@@ -295,6 +304,28 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsDescriptionPlaceholder: 'When should this method apply?',
   skillsRoot: 'Private library',
   skillsRefresh: 'Refresh',
+  skillsScan: 'Scan import folder',
+  skillsScanHint: 'Folder path:',
+  skillsScanSummary: 'Scanned {scanned}: imported {imported}, already present {existing}, refused {invalid}.',
+  skillsScanEmpty: 'No skill folder was found in the import folder.',
+  skillsScanImported: 'imported',
+  skillsScanExisting: 'already present',
+  skillsScanInvalid: 'refused',
+  skillsScanMissingSkill: 'missing SKILL.md',
+  skillsScanInvalidFrontmatter: 'invalid frontmatter',
+  skillsScanInvalidName: 'name is not kebab-case',
+  skillsScanMissingDescription: 'missing description',
+  skillsScanTooLarge: 'exceeds the size limit',
+  skillsScanSymlink: 'contains a symlink',
+  skillsScanNotDirectory: 'not a folder',
+  skillsScanUnreadable: 'cannot be read',
+  skillsScanDuplicate: 'same skill name',
+  skillsScanInstallRefused: 'publish refused',
+  skillsOpenScanFolder: 'Open scan folder',
+  skillsCopyScanFolder: 'Copy scan folder path',
+  skillsScanFolderOpened: 'The scan folder is open. Put one skill folder inside it, then scan.',
+  skillsScanFolderCopied: 'The scan folder is ready; its path is on the clipboard.',
+  skillsScanFolderCopyFailed: 'The scan folder is ready, but the browser blocked the clipboard; use the path shown by the scan result.',
   skillsOverride: 'Create editable copy',
   skillsReset: 'Reset to the built-in version',
   tabTeams: 'Team presets',
@@ -384,6 +415,9 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   composeClose: 'Close',
   composeSearch: 'Search name, tags, use cases…',
   composeAll: 'All',
+  composeFilterCategory: 'Category',
+  composeCategoryAll: 'All categories',
+  composeUncategorized: 'Uncategorized',
   composeNoneSub: 'The session runs without a team',
   composeSeriesDev: 'Built-in · development',
   composeSeriesModes: 'Built-in · work modes',
@@ -545,6 +579,28 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsDescriptionPlaceholder: '这个方法在什么情况下适用？',
   skillsRoot: '私有库目录',
   skillsRefresh: '刷新',
+  skillsScan: '扫描导入目录',
+  skillsScanHint: '目录路径：',
+  skillsScanSummary: '已检查 {scanned} 个：新增 {imported}，已存在 {existing}，无法导入 {invalid}。',
+  skillsScanEmpty: '导入目录里没有发现技能文件夹。',
+  skillsScanImported: '已导入',
+  skillsScanExisting: '已存在',
+  skillsScanInvalid: '无法导入',
+  skillsScanMissingSkill: '缺少 SKILL.md',
+  skillsScanInvalidFrontmatter: 'frontmatter 格式不正确',
+  skillsScanInvalidName: 'name 不符合 kebab-case',
+  skillsScanMissingDescription: '缺少 description',
+  skillsScanTooLarge: '超出大小限制',
+  skillsScanSymlink: '包含符号链接',
+  skillsScanNotDirectory: '不是文件夹',
+  skillsScanUnreadable: '无法读取',
+  skillsScanDuplicate: '技能名重复',
+  skillsScanInstallRefused: '发布被拒绝',
+  skillsOpenScanFolder: '打开扫描技能目录',
+  skillsCopyScanFolder: '复制扫描技能目录',
+  skillsScanFolderOpened: '已打开扫描目录。把一个技能文件夹放进去后点扫描即可。',
+  skillsScanFolderCopied: '扫描目录已就绪，路径已复制到剪贴板。',
+  skillsScanFolderCopyFailed: '扫描目录已就绪，但浏览器拒绝了剪贴板，请使用扫描结果里显示的路径。',
   skillsOverride: '创建可编辑副本',
   skillsReset: '恢复为插件内置版本',
   tabTeams: '团队预设',
@@ -634,6 +690,9 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   composeClose: '关闭',
   composeSearch: '搜索名称、标签、适用场景…',
   composeAll: '全部',
+  composeFilterCategory: '分类',
+  composeCategoryAll: '全部分类',
+  composeUncategorized: '未分类',
   composeNoneSub: '本会话不使用团队',
   composeSeriesDev: '插件内置 · 研发规模',
   composeSeriesModes: '插件内置 · 工作模式',

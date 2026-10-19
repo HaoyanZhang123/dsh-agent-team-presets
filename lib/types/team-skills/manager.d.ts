@@ -32,14 +32,16 @@ export interface TeamSkillGuardContext {
     readonly activeSessions: (assetId: string) => readonly string[];
 }
 /** Why one assignment was refused. */
-export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-role' | 'asset-missing' | `dependency-missing: ${string}`;
+export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-team' | 'unknown-role' | 'asset-missing' | `dependency-missing: ${string}`;
 /** Result of one assignment attempt. */
 export type TeamSkillAssignResult = {
     readonly ok: true;
     readonly binding: TeamSkillBinding;
+    readonly unverified: readonly string[];
 } | {
     readonly ok: false;
     readonly reason: TeamSkillAssignFailure;
+    readonly unverified?: readonly string[];
 };
 /** Deletion outcome carrying every blocking reason at once. */
 export interface TeamSkillDeleteOutcome {
@@ -54,6 +56,8 @@ export declare class TeamSkillManager {
     private bindings;
     private revision;
     private opened;
+    private seeded;
+    private pending;
     private readonly guards;
     /**
      * @param store - the asset store this manager binds assets from.
@@ -85,6 +89,8 @@ export declare class TeamSkillManager {
         assetId: string;
         captain?: boolean;
     }): Promise<TeamSkillAssignResult>;
+    /** Replace existing shipped bindings after an editable copy is created. */
+    replaceBuiltinBindings(skillId: string, overrideId: string): Promise<number>;
     /**
      * Remove the assignment of one role slot.
      * @param teamId - Team identity.
@@ -120,6 +126,11 @@ export declare class TeamSkillManager {
      * @returns the outcome, with blockers when it was refused.
      */
     remove(assetId: string): Promise<TeamSkillDeleteOutcome>;
+    private deleteBlockers;
+    hasRole(teamId: string, roleId: string): boolean;
+    reconcile(): Promise<void>;
+    private reconcileNow;
+    private mutate;
     /**
      * Find text mentions of one skill name inside another asset.
      * @param assetId - asset whose files are scanned.
@@ -143,6 +154,12 @@ export declare class TeamSkillManager {
             found: boolean;
         }[];
         mcpServers: string[];
+        mcpDeclarations: TeamSkillAsset['dependencies']['mcpServers'];
+        unverified: string[];
+        otherSkills: {
+            id: string;
+            found: boolean;
+        }[];
     }>;
     /**
      * The verifiable reasons this asset cannot be assigned yet.

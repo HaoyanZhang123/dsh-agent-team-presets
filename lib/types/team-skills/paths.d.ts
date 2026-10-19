@@ -103,3 +103,5 @@ export declare function assetDirectoryName(skillId: string): string;
 export declare function checkNotSymlink(stats: {
     isSymbolicLink(): boolean;
 }, path: string): void;
+/** Reject actual symlinks in every existing component, including root ancestors. */
+export declare function assertNoSymlinks(path: string): Promise<void>;

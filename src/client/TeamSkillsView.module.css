@@ -63,3 +63,8 @@
 .dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .field { width: 100%; border: 1px solid #d8dce1; border-radius: 9px; padding: 8px 11px; margin: 4px 0 10px; background: #fff; color: inherit; }
 .label { font-size: 12.5px; color: #5f6875; }
+.scan { border: 1px solid #e2e5e8; border-radius: 8px; padding: 10px 12px; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.scanHead { font-weight: 600; }
+.scanList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.scanRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.scanFolder { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

@@ -493,7 +493,7 @@ export function exportTeamPreset(team: TeamPreset, options: TeamPresetExportOpti
   // An all-empty metadata object is omitted rather than written as blanks, so a
   // user Team with no discovery data exports exactly the version 1 shape.
   if (Object.keys(metadata).length > 0) body.metadata = metadata
-  const officialSkills = options.officialSkills
+  const officialSkills = options.officialSkills ?? team.officialSkills
   if (officialSkills !== undefined && officialSkills.length > 0) {
     body.officialSkills = officialSkills.map(entry => ({ skillId: entry.skillId, roleName: entry.roleName }))
   }
@@ -579,6 +579,9 @@ export function teamFromTransfer(transfer: TeamPresetTransfer, id: string): Team
     description: transfer.team.description,
     captain: captainFromTransfer(transfer.team.captain),
     members: transfer.team.members.map(member => memberFromTransfer(member)),
+    ...transfer.team.officialSkills === undefined ? {} : {
+      officialSkills: transfer.team.officialSkills.map(entry => ({ ...entry })),
+    },
     ...metadata === undefined ? {} : {
       metadata: {
         ...metadata.summary === undefined ? {} : { summary: metadata.summary },

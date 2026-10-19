@@ -17,11 +17,15 @@ const ts = require('typescript')
 const { build } = await import(pathToFileURL(require.resolve('tsdown')).href)
 const { transform } = require('lightningcss')
 const zodDir = dirname(scopedRequire.resolve('zod/package.json'))
+const yamlDir = dirname(createRequire(join(root, 'package.json')).resolve('yaml/package.json'))
 // The staging workspace has no node_modules. Resolve the build-time schema
 // dependency explicitly, then inline it in every shipped Typert entrypoint.
 const schemaDependency = {
   name: 'team-presets-schema-dependency',
-  resolveId(id) { if (id === 'zod') return join(zodDir, 'index.js') },
+  resolveId(id) {
+    if (id === 'zod') return join(zodDir, 'index.js')
+    if (id === 'yaml') return join(yamlDir, 'dist/index.js')
+  },
 }
 const { WorkspaceTypertGenerator } = await import(pathToFileURL(join(harness, 'packages/typert/generator/lib/index.js')).href)
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -47,6 +51,10 @@ for (const entry of mirror) {
     cpSync(join(harness, entry), join(stage, entry), { recursive: true })
   }
 }
+// The standalone package resolves its private schema dependencies from the
+// staging workspace, which has no node_modules of its own.
+const stagedYaml = join(stage, 'node_modules', 'yaml')
+if (!existsSync(stagedYaml)) cpSync(yamlDir, stagedYaml, { recursive: true })
 for (const name of ['package.json', 'tsconfig.base.json', 'tsconfig.base.client.json']) {
   if (existsSync(join(harness, name))) cpSync(join(harness, name), join(stage, name))
 }
@@ -166,7 +174,7 @@ try {
     const entry = `typert.${face}`
     await build({ ...common, entry: { [entry]: join(pkg, 'lib', entry + '.js') }, format: 'esm', platform: 'neutral', deps: { neverBundle: id => isBuiltin(id), alwaysBundle: id => !isBuiltin(id) }, plugins: [schemaDependency, protocolRuntime] })
   }
-  writeFileSync(join(pkg, 'lib/THIRD-PARTY-NOTICES.txt'), `Bundled dependency: zod\n\n${readFileSync(join(zodDir, 'LICENSE'), 'utf8')}`)
+  writeFileSync(join(pkg, 'lib/THIRD-PARTY-NOTICES.txt'), `Bundled dependency: zod\n\n${readFileSync(join(zodDir, 'LICENSE'), 'utf8')}\n\nBundled dependency: yaml\n\n${readFileSync(join(yamlDir, 'LICENSE'), 'utf8')}`)
   const external = new Set(['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'])
   // 0.2.1's generated remote factory imports the protocol's runtime helper. It is
   // bundled from source rather than left external: a wire face must load in a
@@ -188,7 +196,11 @@ try {
       const path = id.slice('\0team-css:'.length, -4)
       this.addWatchFile(path)
       const css = transform({ filename: relative(pkg, path), code: readFileSync(path), cssModules: { pattern: '[hash]_[local]' }, minify: true })
-      const classes = Object.fromEntries(Object.entries(css.exports ?? {}).map(([name, value]) => [name, value.name]))
+      // Lightning CSS returns its export map in hash order, which changes from
+      // run to run. Sort it so two builds of the same source are byte-identical.
+      const classes = Object.fromEntries(Object.entries(css.exports ?? {})
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, value]) => [name, value.name]))
       const key = manifest.name + ':' + relative(join(pkg, 'src'), path)
       return `const key=${JSON.stringify(key)};if(typeof document!=='undefined'&&!document.querySelector('style[data-team-presets-style="'+key+'"]')){const style=document.createElement('style');style.dataset.teamPresetsStyle=key;style.textContent=${JSON.stringify(css.code.toString())};document.head.appendChild(style);}export default ${JSON.stringify(classes)};`
     },

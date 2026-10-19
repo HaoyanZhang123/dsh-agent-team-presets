@@ -40,7 +40,6 @@ import { registerPresetTools } from './preset-tools.ts'
 import { CAPTAIN_ROLE, TeamSkills, resolveSkillRoot, roleOfMember } from './team-skills/index.ts'
 import { TeamSkillService } from './team-skills/service.ts'
 import { registerTeamSkillTools } from './team-skills/tools.ts'
-import { installShippedSkills } from './skills.ts'
 import { definitionFingerprint, findTeam, selectedTeam, toolMode } from './presets.ts'
 import type { TeamPreset } from './types.ts'
 import TeamPresetsToolCatalog from './tool-catalog.ts'
@@ -116,9 +115,6 @@ export function apply(ctx: Context, config: Config): void {
     },
   )
   ctx.effect(() => () => { providers.dispose() }, 'agent-team-presets: member execution aliases')
-  // The skills the shipped role prompts name. Offered, never required: a
-  // deployment without a skill service keeps loading every Team.
-  installShippedSkills(ctx, message => { ctx.logger.warn(`${LOG}: %s`, message) })
   const quarantine = (agent: Agent, reason: string): void => {
     const previous = quarantines.get(agent)
     if (previous !== undefined) { previous.reason = reason; return }
@@ -188,6 +184,10 @@ export function apply(ctx: Context, config: Config): void {
             return
           }
         }
+        // A startup scan may have denied this child while the durable store
+        // was still opening. A successful claim now owns its complete policy.
+        quarantines.get(agent)?.dispose()
+        quarantines.delete(agent)
         managedMembers.add(agent)
         // A member's Team Skills are its own: the durable snapshot names the
         // role, so the assignment is resolved from the record rather than from
@@ -278,6 +278,26 @@ export function apply(ctx: Context, config: Config): void {
     teams: () => config.teams.get(),
     resync: () => { for (const [live, role] of agentRoles) teamSkills.syncAgent(live, role) },
   }
+  // Volatile settings updates also carry routes, colors, selections and
+  // unrelated plugin values. Only a changed Team/role roster can invalidate a
+  // binding table; explicit assignment writes use the resync callback above.
+  // Runtime providers retain their pinned asset versions until released.
+  const roleRosterFingerprint = (): string => JSON.stringify(config.teams.get().map(team => [
+    team.id,
+    team.captain.name,
+    team.members.map(member => [member.id ?? '', member.name]),
+    team.officialSkills ?? [],
+  ]))
+  let rosterFingerprint = roleRosterFingerprint()
+  const resyncBindings = (): void => {
+    const next = roleRosterFingerprint()
+    if (next === rosterFingerprint) return
+    rosterFingerprint = next
+    void teamSkills.manager.reconcile().then(() => {
+      if (disposed) return
+      for (const [agent, role] of agentRoles) teamSkills.syncAgent(agent, role)
+    }).catch(error => { ctx.logger.warn(`${LOG}: Team Skill bindings could not be reconciled: %s`, String(error)) })
+  }
   /** Session roots whose durable roster settlement waits for the next microtask. */
   const pendingRoster = new Set<Agent>()
   let rosterScheduled = false
@@ -351,6 +371,11 @@ export function apply(ctx: Context, config: Config): void {
     readonly promise: Promise<void>
   }
   const jobs = new Map<Agent, ApplicationJob>()
+  let nextEpoch = 0
+  const cancelApplication = (agent: Agent): void => {
+    const prior = jobs.get(agent)
+    if (prior !== undefined) jobs.set(agent, { epoch: ++nextEpoch, promise: prior.promise })
+  }
 
   /**
    * Options that declare a custom Team's native presentation at the Agent scope.
@@ -397,7 +422,11 @@ export function apply(ctx: Context, config: Config): void {
     previous: TeamPreset | undefined,
     redeclareNative: boolean,
   ): void => {
-    if (previous === undefined) return
+    if (previous === undefined) {
+      agentRoles.delete(agent)
+      teamSkills.releaseAgent(agent)
+      return
+    }
     try {
       const options = toolMode(previous.captain) === 'custom' && redeclareNative
         ? presentationOptions(agent)
@@ -406,7 +435,12 @@ export function apply(ctx: Context, config: Config): void {
         ctx, agent, previous, providers, () => findTeam(config.teams.get(), previous.id), members, options,
       ))
       definitions.set(agent, previous)
+      const role = { teamId: previous.id, roleId: CAPTAIN_ROLE, captain: true }
+      agentRoles.set(agent, role)
+      teamSkills.syncAgent(agent, role)
     } catch (error: unknown) {
+      agentRoles.delete(agent)
+      teamSkills.releaseAgent(agent)
       ctx.logger.warn(
         `${LOG}: the previous Team "%s" could not be restored for Session "%s": %s`,
         previous.id, agent.session.id, String(error),
@@ -476,10 +510,21 @@ export function apply(ctx: Context, config: Config): void {
       return
     }
     if (superseded()) return
+    // Preparation may have yielded while a task started on the current Team.
+    // Keep that task's application frozen; its idle edge retries the selection.
+    if (applications.has(agent) && (agent.status === 'running' || teammatesBusy(ctx, agent))) return
     const previous = definitions.get(agent)
     const previousApplication = applications.get(agent)
     previousApplication?.dispose()
     applications.delete(agent)
+    let candidate: TeamApplication | undefined
+    const rollback = (): void => {
+      if (candidate !== undefined && applications.get(agent) !== candidate) return
+      candidate?.dispose()
+      applications.delete(agent)
+      definitions.delete(agent)
+      if (!disposed) restorePrevious(agent, previous, previousApplication?.presentationNote !== undefined)
+    }
     try {
       // The route is read from the stored Team at spawn time, not captured here:
       // a member's model route is recovery-relevant and outside the definition a
@@ -487,20 +532,14 @@ export function apply(ctx: Context, config: Config): void {
       const application = applyTeamToAgent(
         ctx, agent, team, providers, () => findTeam(config.teams.get(), team.id), members, options,
       )
+      candidate = application
       applications.set(agent, application)
       definitions.set(agent, team)
-      // The captain is a role slot too, addressed by its own identity so an
-      // assignment to the captain can never be read as a member's.
-      const captainRole = { teamId: team.id, roleId: CAPTAIN_ROLE, captain: true }
-      agentRoles.set(agent, captainRole)
-      teamSkills.syncAgent(agent, captainRole)
       if (toolMode(team.captain) === 'custom') {
         const after = await readWire(agent)
+        if (superseded()) { rollback(); return }
         if (after === undefined || after.tools.includes(RUN_CODE_NAME)) {
-          application.dispose()
-          applications.delete(agent)
-          definitions.delete(agent)
-          restorePrevious(agent, previous, previousApplication?.presentationNote !== undefined)
+          rollback()
           refuseTeam(agent, team, after === undefined
             ? 'the effective tool surface could not be read after the native presentation was installed'
             : 'the effective tool surface still exposes the general purpose PTC transport after the native presentation '
@@ -508,13 +547,17 @@ export function apply(ctx: Context, config: Config): void {
           return
         }
       }
+      if (superseded()) { rollback(); return }
+      const captainRole = { teamId: team.id, roleId: CAPTAIN_ROLE, captain: true }
+      if (agentRoles.get(agent)?.teamId !== team.id) teamSkills.releaseAgent(agent)
+      agentRoles.set(agent, captainRole)
+      teamSkills.syncAgent(agent, captainRole)
       quarantines.get(agent)?.dispose()
       quarantines.delete(agent)
       monitor.invalidate()
     } catch (error: unknown) {
-      applications.delete(agent)
-      definitions.delete(agent)
-      restorePrevious(agent, previous, previousApplication?.presentationNote !== undefined)
+      rollback()
+      if (superseded()) return
       refuseTeam(agent, team, `application failed: ${String(error)}`)
     }
   }
@@ -529,7 +572,7 @@ export function apply(ctx: Context, config: Config): void {
    * @param team - the definition to apply.
    */
   const schedule = (agent: Agent, team: TeamPreset): void => {
-    const epoch = (jobs.get(agent)?.epoch ?? 0) + 1
+    const epoch = ++nextEpoch
     if (!applications.has(agent)) {
       quarantine(agent, `Team "${team.id}" is being validated for this Session; tool access is paused until it is applied. ${recovery}`)
     }
@@ -600,6 +643,9 @@ export function apply(ctx: Context, config: Config): void {
     const team = selectedTeam(config.teams.get(), config.selections.get(), agent.session.id)
     const current = applications.get(agent)
     if (team === undefined) {
+      cancelApplication(agent)
+      teamSkills.releaseAgent(agent)
+      agentRoles.delete(agent)
       current?.dispose()
       applications.delete(agent)
       definitions.delete(agent)
@@ -611,7 +657,10 @@ export function apply(ctx: Context, config: Config): void {
       return
     }
     const fingerprint = definitionFingerprint(team)
-    if (current !== undefined && current.teamId === team.id && current.fingerprint === fingerprint) return
+    if (current !== undefined && current.teamId === team.id && current.fingerprint === fingerprint) {
+      cancelApplication(agent)
+      return
+    }
     // The synchronous probes own which names an allow-list may carry; the
     // asynchronous preparation that follows owns the effective surface. A
     // refusal here leaves the running application untouched. The capability
@@ -619,12 +668,14 @@ export function apply(ctx: Context, config: Config): void {
     // the Session's own reach) instead of the registry's generic one.
     const unreachable = capabilityRefusal(agent, team)
     if (unreachable !== undefined) {
+      cancelApplication(agent)
       refuseTeam(agent, team, unreachable)
       return
     }
     try {
       assertTeamApplicable(agent, team)
     } catch (error: unknown) {
+      cancelApplication(agent)
       if (current === undefined) quarantine(agent, `Team "${team.id}" application failed validation; no tools were granted. ${recovery}`)
       ctx.logger.warn(`${LOG}: Team "%s" was refused for Session "%s": %s`, team.id, agent.session.id, String(error))
       return
@@ -698,6 +749,7 @@ export function apply(ctx: Context, config: Config): void {
       childPolicies.clear()
       childEnvelopes.clear()
       managedMembers.clear()
+      agentRoles.clear()
       for (const dispose of presetTools.values()) dispose()
       presetTools.clear()
       for (const dispose of skillTools.values()) dispose()
@@ -773,7 +825,7 @@ export function apply(ctx: Context, config: Config): void {
       if (isSessionRoot(agent)) reconcile(agent)
     }
     if (!disposed) void settingsReconcile.request()
-    for (const [agent, role] of agentRoles) teamSkills.syncAgent(agent, role)
+    resyncBindings()
     // A stored change moves the frame even when no Session is online to adopt it.
     monitor.invalidate()
   })

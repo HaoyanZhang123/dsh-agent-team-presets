@@ -15,6 +15,7 @@
  */
 
 import { inflateRawSync } from 'node:zlib'
+import { parseDocument } from 'yaml'
 import {
   MAX_SKILL_FILE_BYTES, checkFolder, normalizeSkillPath, SkillPathError,
 } from './paths.ts'
@@ -81,20 +82,16 @@ const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
 export function parseSkillFrontmatter(text: string): { name: string; description: string } | undefined {
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(text)
   if (match?.[1] === undefined) return undefined
-  const fields = new Map<string, string>()
-  for (const line of match[1].split(/\r?\n/u)) {
-    // A nested block (an indented `metadata:` child, a list item) is not a
-    // top-level scalar and is deliberately not folded into the map.
-    if (/^\s/u.test(line) || line.trim() === '') continue
-    const separator = line.indexOf(':')
-    if (separator <= 0) continue
-    const key = line.slice(0, separator).trim()
-    const value = line.slice(separator + 1).trim().replace(/^['"]|['"]$/gu, '')
-    fields.set(key, value)
+  try {
+    const document = parseDocument(match[1], { uniqueKeys: true })
+    if (document.errors.length > 0) return undefined
+    const fields: unknown = document.toJS({ maxAliasCount: 100 })
+    if (fields === null || typeof fields !== 'object' || Array.isArray(fields)) return undefined
+    const { name, description } = fields as Record<string, unknown>
+    return { name: typeof name === 'string' ? name : '', description: typeof description === 'string' ? description : '' }
+  } catch {
+    return undefined
   }
-  const name = fields.get('name') ?? ''
-  const description = fields.get('description') ?? ''
-  return { name, description }
 }
 
 /**
@@ -222,9 +219,18 @@ function readEntry(bytes: Uint8Array, entry: ZipEntry): Uint8Array {
   const nameLength = view.getUint16(at + 26, true)
   const extraLength = view.getUint16(at + 28, true)
   const start = at + 30 + nameLength + extraLength
-  if (entry.uncompressedSize > MAX_SKILL_FILE_BYTES) throw new SkillPathError('file-too-large', entry.path)
-  const compressed = bytes.subarray(start, start + entry.compressedSize)
-  if (entry.method === 0) return compressed.slice()
+  if (entry.uncompressedSize > MAX_SKILL_FILE_BYTES || entry.compressedSize > MAX_SKILL_FILE_BYTES) {
+    throw new SkillPathError('file-too-large', entry.path)
+  }
+  const end = start + entry.compressedSize
+  if (end > bytes.byteLength) throw new SkillPathError('empty-path', `zip:range:${entry.path}`)
+  const compressed = bytes.subarray(start, end)
+  // A stored entry has no decompression to correct a lie: both sizes must
+  // agree, or a small declared size could smuggle a large shared data block.
+  if (entry.method === 0) {
+    if (entry.compressedSize !== entry.uncompressedSize) throw new SkillPathError('file-too-large', entry.path)
+    return compressed.slice()
+  }
   if (entry.method !== 8) throw new SkillPathError('empty-path', `zip:method:${entry.path}`)
   const inflated = inflateRawSync(compressed, { maxOutputLength: MAX_SKILL_FILE_BYTES })
   // A liars' archive declares a small size and expands past it: the declared
@@ -255,8 +261,17 @@ export function readZip(bytes: Uint8Array): { ok: true; files: ImportedFile[] } 
   const declared = entries.reduce((sum, entry) => sum + entry.uncompressedSize, 0)
   if (declared > MAX_ZIP_BYTES) return { ok: false, reason: 'zip-bomb' }
   const files: ImportedFile[] = []
+  let actual = 0
   try {
-    for (const entry of entries) files.push({ path: entry.path, bytes: readEntry(bytes, entry) })
+    for (const entry of entries) {
+      const file = readEntry(bytes, entry)
+      // The declared sizes passed the pre-check above; the bytes actually
+      // decoded are the only fact that cannot be inflated by a central
+      // directory that reuses one data block.
+      actual += file.byteLength
+      if (actual > MAX_ZIP_BYTES) throw new SkillPathError('folder-too-large', entry.path)
+      files.push({ path: entry.path, bytes: file })
+    }
   } catch (error: unknown) {
     if (error instanceof SkillPathError) {
       return { ok: false, reason: error.reason === 'file-too-large' ? 'zip-bomb' : 'invalid-zip', path: error.path }

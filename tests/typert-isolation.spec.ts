@@ -216,6 +216,40 @@ describe('Typert faces load without a schema dependency', () => {
     // bundles its own schema runtime and function identity is not shared.
     const expected = Object.fromEntries(host.invocations.map(row => [row.id.slice(row.id.indexOf('#') + 1), row.service]))
     expect(Object.fromEntries(Object.entries(remote.spec.methods).map(([key, value]) => [key, value.service]))).toEqual(expected)
+    // Agreement alone would also hold if a decorated method disappeared from
+    // both faces. Pin the management surface the page and the Agent tools call.
+    expect(host.invocations.map(row => row.id.slice(row.id.indexOf('#') + 1)).filter(id => id.startsWith('teamSkills/')).sort()).toEqual([
+      'teamSkills/assignRole', 'teamSkills/createSkill', 'teamSkills/deleteAsset', 'teamSkills/detail',
+      'teamSkills/importSkill', 'teamSkills/library', 'teamSkills/overrideSkill',
+      'teamSkills/prepareImportFolder', 'teamSkills/readFile',
+      'teamSkills/resetSkill', 'teamSkills/scanImportFolder', 'teamSkills/unassignRole',
+      'teamSkills/updateDependencies', 'teamSkills/writeFile',
+    ])
+    const update = host.invocations.find(row => row.id === 'dsh-agent-team-presets#teamSkills/updateDependencies')
+    // `TeamSkillDetailView | TeamSkillRefusalView` has no literal discriminator,
+    // so Typert documents the missing JSON-Schema projection while still
+    // validating and parsing the authored union. Pin that this stays a strict,
+    // callable method rather than silently degrading to an opaque result.
+    expect(update).toMatchObject({ invocation: { kind: 'direct' }, result: { mode: 'strict' } })
+  })
+
+  it('validates the Remote union result against the authored views in process', async () => {
+    // The subprocess probe replaces `create` with a marker because functions do
+    // not survive JSON. Load the real face here so the codec, not a placeholder,
+    // decides what a caller may receive.
+    const host = await import(faces.host) as {
+      TYPERT: { invocations: { id: string; result: { create(): { parse(value: unknown): unknown } } }[] }
+    }
+    const update = host.TYPERT.invocations.find(row => row.id.endsWith('teamSkills/updateDependencies'))!
+    const codec = update.result.create()
+    const asset = {
+      id: 'custom:x', skillId: 'x', description: 'x', origin: 'custom', version: '1', editable: true,
+      fileCount: 1, totalBytes: 12, mcpServers: [], bindings: [],
+    }
+    expect(codec.parse({ asset, files: [], body: 'Body' })).toMatchObject({ asset: { id: 'custom:x' } })
+    expect(codec.parse({ ok: false, reason: 'unknown-asset', detail: 'gone' })).toMatchObject({ ok: false, reason: 'unknown-asset' })
+    expect(() => codec.parse({ ok: true })).toThrow()
+    expect(() => codec.parse({ asset, files: [] })).toThrow()
   })
 
   it('keeps the direct catalog and the cancellable execution stream', () => {

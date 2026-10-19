@@ -14,6 +14,7 @@ import type { ConfigForm, SettingsDescribeFace } from '@deepseek-ai/dsh-client-u
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { toolMode, withSelection } from '../presets.ts'
 import { restoreBuiltinTeams } from '../builtin-teams.ts'
+import { builtinEntry } from '../team-catalog.ts'
 import {
   applySharedFields,
   importConflicts,
@@ -315,6 +316,7 @@ function mergeTransfer(
   resolution: TeamPresetImportResolution,
 ): TeamPreset {
   const members = [...target.members]
+  const importedNames = new Map<string, string>()
   for (const incoming of plan.transfer.team.members) {
     const key = slotNameKey(incoming.name)
     const at = key === '' ? -1 : members.findIndex(member => slotNameKey(member.name) === key)
@@ -322,18 +324,32 @@ function mergeTransfer(
       const existing = members[at]
       if (existing !== undefined) {
         members[at] = applySharedFields(existing, incoming)
+        importedNames.set(incoming.name, incoming.name)
         continue
       }
     }
     const name = uniqueName(incoming.name, members.map(member => member.name))
     members.push(memberFromTransfer({ ...incoming, name }))
+    importedNames.set(incoming.name, name)
   }
   const captain = plan.transfer.team.captain
   const captainName = resolution.captain === 'rename' ? plan.suggestedCaptainName : captain.name
+  importedNames.set(captain.name, captainName)
   return {
     id: target.id,
     name: plan.transfer.team.name,
     description: plan.transfer.team.description,
+    // v1 never carried discovery metadata; preserve it on a legacy overwrite.
+    // v2 owns the field, including an intentionally empty metadata object.
+    ...(plan.transfer.version < 2
+      ? target.metadata === undefined ? {} : { metadata: structuredClone(target.metadata) }
+      : { metadata: structuredClone(plan.transfer.team.metadata ?? {}) }),
+    ...(plan.transfer.team.officialSkills === undefined
+      ? target.officialSkills === undefined ? {} : { officialSkills: structuredClone(target.officialSkills) }
+      : { officialSkills: plan.transfer.team.officialSkills.map(binding => ({
+        ...binding,
+        roleName: importedNames.get(binding.roleName) ?? binding.roleName,
+      })) }),
     captain: applySharedFields(target.captain, { ...captain, name: captainName }),
     members,
   }
@@ -1195,7 +1211,9 @@ export class TeamPresetsController {
    */
   exportTeam(index: number): string | undefined {
     const team = this.visibleTeams()[index]
-    return team === undefined ? undefined : serializeTeamPreset(team)
+    if (team === undefined) return undefined
+    const officialSkills = team.officialSkills ?? builtinEntry(team.id)?.officialSkillBindings
+    return serializeTeamPreset(team, officialSkills === undefined ? {} : { officialSkills })
   }
 
   /**

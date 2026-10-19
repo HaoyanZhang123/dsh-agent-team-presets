@@ -31,6 +31,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-system-prompt'
+import { foldSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import { MEMBER_FRESH_PROVIDER, MEMBER_FORK_PROVIDER } from './member-identity.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { openMemberStore } from './member-store.ts'
 import type { MemberRecord, MemberStore } from './member-store.ts'
@@ -261,7 +263,7 @@ export class MemberRuntime {
         ? { kind: 'invalid', reason: `${NO_STORE_REASON} The Host records teammate "${membership.name}" as created through this plugin's member backend, so it is refused instead of resuming without its frozen configuration.` }
         : { kind: 'unmanaged' }
     }
-    const record = state.store.get(membership.root.id, membership.name)
+    let record = state.store.get(membership.root.id, membership.name)
     if (record === undefined) {
       return managed
         ? {
@@ -295,6 +297,26 @@ export class MemberRuntime {
           + `"${record.childSessionId}", not to this Agent "${agent.id}"; refusing to rebind a member to another child.`,
       }
     }
+    if (managed && record.lifecycle === 'intent' && record.childSessionId === undefined) {
+      // A fresh child already has a descriptor before agent/created, so a
+      // descriptor alone cannot bypass the new-generation admission check.
+      // Only the establishing descriptor loaded from a previous residency
+      // proves this child existed before the bind bookkeeping was lost.
+      const events = agent.session.ownEvents()
+      const established = events.find(event => event.type === 'subagent/descriptor')
+      if (established !== undefined && established.seq < agent.session.firstLiveSeq) {
+        let descriptor: ReturnType<typeof foldSubagentDescriptor>
+        try { descriptor = foldSubagentDescriptor(events) } catch (error: unknown) {
+          return { kind: 'invalid', reason: `the persisted member descriptor is invalid: ${String(error)}` }
+        }
+        const provider = record.spawnContext === 'fresh' ? MEMBER_FRESH_PROVIDER : MEMBER_FORK_PROVIDER
+        if (descriptor?.mode !== 'continuable' || descriptor.provider !== provider
+          || agent.session.header.parentSession !== membership.root.id) {
+          return { kind: 'invalid', reason: 'the persisted member descriptor or parent does not match its frozen configuration; refusing to recover its child binding.' }
+        }
+        record = { ...record, lifecycle: 'bound', childSessionId: agent.id, updatedAt: Date.now() }
+      }
+    }
     // Every registration is owned by `agent.ctx`: a throw here rolls back the
     // partial install and the caller vetoes creation, so no member ever runs
     // under a half-applied policy.
@@ -312,6 +334,11 @@ export class MemberRuntime {
       record,
       dispose: () => { observeFailure(); dispose() },
     })
+    if (record.lifecycle === 'bound') {
+      const binding = this.bind(agent, membership)
+      this.inFlight.add(binding)
+      void binding.finally(() => { this.inFlight.delete(binding) })
+    }
     return { kind: 'installed', record }
   }
 
@@ -338,9 +365,19 @@ export class MemberRuntime {
     const state = this.state
     if (state === undefined || state.kind !== 'ready') return
     const current = state.store.get(membership.root.id, membership.name)
-    if (current === undefined || current.childSessionId === agent.id) return
+    const installation = this.installations.get(agent)
+    if (current === undefined || installation === undefined
+      || current.rootSessionId !== membership.root.id || current.memberName !== membership.name
+      || installation.record.rootSessionId !== membership.root.id || installation.record.memberName !== membership.name
+      || installation.record.intentId !== current.intentId || current.lifecycle === 'failed'
+      || (current.childSessionId !== undefined && current.childSessionId !== agent.id)) return
+    if (current.lifecycle === 'bound' && current.childSessionId === agent.id) return
+    const bound: MemberRecord = { ...current, lifecycle: 'bound', childSessionId: agent.id, updatedAt: Date.now() }
+    // Preserve the verified child identity for this residency even if storage
+    // fails; a later residency must independently prove it from its own log.
+    this.installations.set(agent, { ...installation, record: bound })
     try {
-      await state.store.put({ ...current, lifecycle: 'bound', childSessionId: agent.id, updatedAt: Date.now() })
+      await state.store.put(bound)
     } catch (error: unknown) {
       this.ctx.logger.warn(
         `${LOG}: could not bind child "%s" to its member snapshot; the snapshot recorded before creation still governs it: %s`,

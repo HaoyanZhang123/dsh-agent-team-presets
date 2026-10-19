@@ -9,14 +9,18 @@
  * @module dsh-agent-team-presets/team-skills/service
  */
 
+import { mkdir, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { buildSkillPackage, decodeImportFiles } from './import.ts'
 import { CAPTAIN_ROLE, TeamSkillManager } from './manager.ts'
-import { TeamSkillStore } from './store.ts'
+import { assertNoSymlinks } from './paths.ts'
+import { inspectSkillDirectory, TeamSkillStore } from './store.ts'
 import type {
   TeamPreset, TeamSkillAssetView, TeamSkillDeleteView, TeamSkillDetailView, TeamSkillImportFile,
-  TeamSkillLibraryView, TeamSkillRefusalView, TeamSkillTeamView,
+  TeamSkillImportFolderView, TeamSkillLibraryView, TeamSkillRefusalView, TeamSkillScanEntry,
+  TeamSkillScanView, TeamSkillTeamView, TeamSkillDependencies,
 } from '../types.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -43,6 +47,9 @@ export interface TeamSkillServiceConfig {
 }
 
 /** Text the page shows when this deployment could not open its store. */
+/** Folder under the private root that a scan reads. */
+const IMPORT_FOLDER = 'inbox'
+
 const UNAVAILABLE = 'the Team Skill store could not be opened in this deployment'
 
 /** Blank instruction text a freshly created skill starts from. */
@@ -71,7 +78,9 @@ export class TeamSkillService extends TypertRemoteService {
     } catch (error: unknown) {
       return `${UNAVAILABLE}: ${String(error)}`
     }
-    return opened ? undefined : UNAVAILABLE
+    if (!opened) return UNAVAILABLE
+    try { await this.config.manager.reconcile() } catch (error) { return String(error) }
+    return undefined
   }
 
   /**
@@ -160,8 +169,8 @@ export class TeamSkillService extends TypertRemoteService {
     let body = ''
     try {
       body = await this.config.store.readText(assetId, 'SKILL.md')
-    } catch {
-      body = ''
+    } catch (error) {
+      return { ok: false, reason: 'unreadable', detail: String(error) }
     }
     const report = await this.config.manager.dependencyReport(assetId)
     return {
@@ -223,7 +232,10 @@ export class TeamSkillService extends TypertRemoteService {
     const result = buildSkillPackage([{ path: 'SKILL.md', bytes: new TextEncoder().encode(text) }])
     if (!result.ok) return { ok: false, reason: result.reason, detail: `"${skillId}" is not a legal skill id.` }
     const id = `custom:${skillId}`
-    await this.config.store.install(result.skill, { id, origin: 'custom', version: '1' })
+    if (this.config.store.list().some(asset => asset.skillId === result.skill.name)) return { ok: false, reason: 'duplicate', detail: `a skill named "${result.skill.name}" already exists` }
+    try {
+      await this.config.store.install(result.skill, { id, origin: 'custom', version: '1' })
+    } catch (error) { return { ok: false, reason: 'install-refused', detail: String(error) } }
     return this.detail(id)
   }
 
@@ -236,17 +248,99 @@ export class TeamSkillService extends TypertRemoteService {
   async importSkill(files: readonly TeamSkillImportFile[]): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
     const issue = await this.settle()
     if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
-    const decoded = decodeImportFiles(files.map(file => ({ path: file.path, base64: file.base64 })))
+    let decoded
+    try { decoded = decodeImportFiles(files.map(file => ({ path: file.path, base64: file.base64 }))) }
+    catch (error) { return { ok: false, reason: 'import-refused', detail: String(error) } }
     const result = buildSkillPackage(decoded)
     if (!result.ok) {
       return { ok: false, reason: result.reason, detail: `${result.reason}${result.path === undefined ? '' : ` at ${result.path}`}` }
     }
     const id = `custom:${result.skill.name}`
-    if (this.config.store.get(id) !== undefined) {
+    if (this.config.store.list().some(asset => asset.skillId === result.skill.name)) {
       return { ok: false, reason: 'duplicate', detail: `a skill named "${result.skill.name}" already exists` }
     }
-    await this.config.store.install(result.skill, { id, origin: 'custom', version: '1' })
+    try {
+      await this.config.store.install(result.skill, { id, origin: 'custom', version: '1' })
+    } catch (error) { return { ok: false, reason: 'install-refused', detail: String(error) } }
     return this.detail(id)
+  }
+
+  /**
+   * Create the private import directory when it is missing.
+   *
+   * The page opens this folder for the user, so the gesture has to work on a
+   * fresh installation where no scan ever ran. Creating it here also keeps the
+   * path the same one {@link scanImportFolder} reads.
+   * @returns the absolute folder, or a refusal when it cannot be created safely.
+   */
+  @Remote
+  async prepareImportFolder(): Promise<TeamSkillImportFolderView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
+    const path = join(this.config.store.root, IMPORT_FOLDER)
+    try {
+      await mkdir(path, { recursive: true })
+      await assertNoSymlinks(path)
+    } catch (error: unknown) {
+      return { ok: false, reason: 'scan-folder-refused', detail: String(error) }
+    }
+    return { ok: true, root: this.config.store.root, path }
+  }
+
+  /**
+   * Scan the private import directory and publish every legal new skill.
+   *
+   * The directory is the only supported way to hand the plugin a skill without
+   * the browser picker. Each folder is judged by the same importer rules as a
+   * picked folder, and the answer names the exact refusal for the ones that
+   * fail, so the page can list them instead of reporting a single count.
+   * @returns one row per folder, or a refusal when the store is unavailable.
+   */
+  @Remote
+  async scanImportFolder(): Promise<TeamSkillScanView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
+    const root = join(this.config.store.root, IMPORT_FOLDER)
+    let dirents
+    try { dirents = await readdir(root, { withFileTypes: true }) }
+    catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { ok: true, root, scanned: 0, imported: 0, existing: 0, invalid: 0, entries: [] }
+      }
+      return { ok: false, reason: 'scan-refused', detail: String(error) }
+    }
+    // One scan is a check-and-publish across many folders; holding the store
+    // lock keeps a concurrent assignment or edit from interleaving a version
+    // publish between the duplicate check and the install.
+    return this.config.store.withLock(async () => {
+      const entries: TeamSkillScanEntry[] = []
+      for (const dirent of dirents.sort((left, right) => left.name.localeCompare(right.name))) {
+        if (dirent.name.startsWith('.')) continue
+        if (!dirent.isDirectory()) {
+          entries.push({ folder: dirent.name, status: 'invalid', reason: dirent.isSymbolicLink() ? 'symlink-escape' : 'not-directory' })
+          continue
+        }
+        const inspected = await inspectSkillDirectory(join(root, dirent.name))
+        if (!inspected.ok) {
+          entries.push({ folder: dirent.name, status: 'invalid', reason: inspected.reason, ...inspected.path === undefined ? {} : { detail: inspected.path } })
+          continue
+        }
+        const skillId = inspected.skill.name
+        const clash = this.config.store.list().find(asset => asset.skillId === skillId)
+        if (clash !== undefined) {
+          entries.push({ folder: dirent.name, status: 'existing', skillId, assetId: clash.id, reason: 'duplicate' })
+          continue
+        }
+        try {
+          const asset = await this.config.store.install(inspected.skill, { id: `custom:${skillId}`, origin: 'custom', version: '1' })
+          entries.push({ folder: dirent.name, status: 'imported', skillId, assetId: asset.id })
+        } catch (error: unknown) {
+          entries.push({ folder: dirent.name, status: 'invalid', skillId, reason: 'install-refused', detail: String(error) })
+        }
+      }
+      const count = (status: TeamSkillScanEntry['status']): number => entries.filter(entry => entry.status === status).length
+      return { ok: true, root, scanned: entries.length, imported: count('imported'), existing: count('existing'), invalid: count('invalid'), entries }
+    })
   }
 
   /**
@@ -261,10 +355,22 @@ export class TeamSkillService extends TypertRemoteService {
     const id = `override:${skillId}`
     try {
       await this.config.store.createOverride(skillId, id)
+      await this.config.manager.replaceBuiltinBindings(skillId, id)
+      this.config.resync()
     } catch (error: unknown) {
       return { ok: false, reason: 'override-refused', detail: String(error) }
     }
     return this.detail(id)
+  }
+
+  @Remote
+  async updateDependencies(assetId: string, dependencies: TeamSkillDependencies): Promise<TeamSkillDetailView | TeamSkillRefusalView> {
+    const issue = await this.settle()
+    if (issue !== undefined) return { ok: false, reason: 'unavailable', detail: issue }
+    try { await this.config.store.updateDependencies(assetId, dependencies) }
+    catch (error) { return { ok: false, reason: 'dependency-refused', detail: String(error) } }
+    this.config.resync()
+    return this.detail(assetId)
   }
 
   /**
@@ -294,7 +400,9 @@ export class TeamSkillService extends TypertRemoteService {
   async deleteAsset(assetId: string): Promise<TeamSkillDeleteView> {
     const issue = await this.settle()
     if (issue !== undefined) return { ok: false, blockers: [{ kind: 'unavailable', detail: issue }], warnings: [] }
-    const outcome = await this.config.manager.remove(assetId)
+    let outcome
+    try { outcome = await this.config.manager.remove(assetId) }
+    catch (error) { return { ok: false, blockers: [{ kind: 'delete-refused', detail: String(error) }], warnings: [] } }
     if (outcome.ok) this.config.resync()
     return {
       ok: outcome.ok,
@@ -318,14 +426,17 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns whether the assignment landed, and the refreshed library.
    */
   @Remote
-  async assignRole(teamId: string, roleId: string, assetId: string): Promise<{ ok: boolean; detail: string; library: TeamSkillLibraryView }> {
+  async assignRole(teamId: string, roleId: string, assetId: string): Promise<{ ok: boolean; detail: string; unverified?: readonly string[]; library: TeamSkillLibraryView }> {
     const issue = await this.settle()
     if (issue !== undefined) return { ok: false, detail: issue, library: await this.library() }
-    const result = await this.config.manager.assign({ teamId, roleId, assetId, captain: roleId === CAPTAIN_ROLE })
+    let result
+    try { result = await this.config.manager.assign({ teamId, roleId, assetId, captain: roleId === CAPTAIN_ROLE }) }
+    catch (error) { return { ok: false, detail: String(error), library: await this.library() } }
     if (result.ok) this.config.resync()
     return {
       ok: result.ok,
-      detail: result.ok ? '' : result.reason,
+      detail: result.ok ? (result.unverified.length === 0 ? '' : `Required MCP servers are unverified: ${result.unverified.join(', ')}`) : result.reason,
+      unverified: result.unverified ?? [],
       library: await this.library(),
     }
   }
@@ -339,7 +450,8 @@ export class TeamSkillService extends TypertRemoteService {
   @Remote
   async unassignRole(teamId: string, roleId: string, assetId?: string): Promise<TeamSkillLibraryView> {
     if (await this.settle() !== undefined) return await this.library()
-    await this.config.manager.unassign(teamId, roleId, assetId)
+    try { await this.config.manager.unassign(teamId, roleId, assetId) }
+    catch (error) { return { ...await this.library(), issue: String(error) } }
     this.config.resync()
     return this.library()
   }
