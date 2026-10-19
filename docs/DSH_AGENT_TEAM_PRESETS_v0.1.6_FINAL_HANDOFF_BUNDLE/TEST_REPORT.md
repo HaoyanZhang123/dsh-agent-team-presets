@@ -168,4 +168,4 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 - `assign()` 在写入绑定前检查，命中则以 `dependency-missing: the executable "…" is not on PATH` 拒绝（新增单测）。
 - 真机（3081，给 `custom:demo-imported` 造了缺失依赖）：详情页出现红色横幅「缺少必需依赖，分配会被拒绝」，
   依赖行分别显示「已声明」（MCP）与「PATH 中缺失」（可执行文件）。
-- 未取到证据：成员页勾选被拒时的 UI 提示（本轮脚本没进入成员页）。
+- 成员页勾选被拒（round 23 已补证）：勾选 `demo-imported` 后页面出现 `dependency-missing: the executable "…" is not on PATH`，且四个勾选框全部保持未选中——没有写入绑定。
