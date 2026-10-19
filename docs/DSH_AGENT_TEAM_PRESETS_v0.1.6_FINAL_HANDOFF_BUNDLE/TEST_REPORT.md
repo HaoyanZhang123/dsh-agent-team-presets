@@ -215,3 +215,12 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 | 团队列表 | 0.1.5 的独立卡片堆叠，非原型的单容器行列表 | 改为 `rowlist`：1px 边框、17px 圆角、行间 1px 分隔、行最小高 64px、hover 底色；「管理分类」并入 chips 行 | 实测容器 `radius:17px border:1px`、10 行、行高 81px（含两行内容与行内动作） |
 
 截图已刷新：`docs/shots/skills-library.png`、`skill-git-release-hygiene.png`、`member-skill-grid.png`、`teams-list.png`。
+
+### 续（round 2–3）
+
+| 位置 | 问题 | 修正 | 实测 |
+|---|---|---|---|
+| 团队编辑「所属分类」 | 原生 select 保留系统外观；宿主也有 `select` 规则，裸类被层叠覆盖 | 改为 `select.select` 自绘盒子 + 内联 chevron | `h:32 / radius:8 / border:1 / pad:10,30 / appearance:none / bg:url(svg)` |
+| 页脚状态提示 | 灰字夹在页脚与保存栏之间，视觉上融合 | `.footerNote` 加 1px 描边、8px 圆角、9px 内边距、浅底 | `border:1 / radius:8 / pad:5 9 / bg:rgb(247,248,250)` |
+| composer 副行 | 字号 11.5、无间距 | 对齐原型 `small`：11px + `margin-top:2px` | 选项 `pad 8×9 / radius 8`、弹层 `pad 12`、副行 `11px` |
+| 团队行高 | 77–81px，原型 64px 起 | 收紧内边距（6/10） | 行高 77px（含名称+副行与行内动作，仍高于 64 下限） |
