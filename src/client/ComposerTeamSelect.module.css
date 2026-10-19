@@ -78,6 +78,9 @@
 /* The picker popover, following the v0.1.6 prototype: a pinned "no team"
  * option, a search field, source chips, and one row per Team. */
 .popover {
+  /* The host does not guarantee a global border-box rule, so the popover states
+   * it: without it the search field's width:100% overflows by its own padding. */
+  box-sizing: border-box;
   position: absolute;
   bottom: 40px;
   left: 0;
@@ -111,7 +114,9 @@
 }
 
 .popSearch {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
   border: 1px solid var(--dsw-alias-line-regular, #d8dce1);
   border-radius: 9px;
   padding: 7px 10px;
@@ -122,6 +127,7 @@
 }
 
 .popChips {
+  box-sizing: border-box;
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
@@ -143,6 +149,7 @@
 }
 
 .popList {
+  box-sizing: border-box;
   max-height: 268px;
   overflow: auto;
   display: flex;

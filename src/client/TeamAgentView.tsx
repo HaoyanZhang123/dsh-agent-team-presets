@@ -82,7 +82,10 @@ function SkillAssignmentGrid(props: { controller: TeamSkillsController; teamId: 
   if (state.status === 'unavailable') return null
   return (
     <>
-      <div className={css.sepTitle}>{props.t('skillsAssignTitle')}</div>
+      <div className={css.sepTitle}>
+        {props.t('skillsAssignTitle')}
+        <span className={css.hint}> · {String([...held].length)}/{String(assets.length)}</span>
+      </div>
       <div className={css.panel}>
         <p className={css.muted} style={{ marginTop: 0 }}>{props.t('skillsAssignHint')}</p>
         {assets.length === 0 ? <p className={css.muted}>{props.t('skillsAssignEmpty')}</p> : (
