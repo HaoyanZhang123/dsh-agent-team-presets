@@ -135,7 +135,7 @@ log relative path: [path]
 | S11 | fresh/fork/恢复/退出/热重载/卸载/切 Team 后无残留 Provider | `PASS`（部分） | `NOT_RUN` | release 同步撤销发现用例；宿主侧 fresh/fork 未逐一实测 |
 | S12 | 无/禁用 Skill 服务，旧团队功能仍能加载并有提示 | `PASS` | `NOT_RUN` | unavailable 降级用例；顶层值导入已移除 |
 | S13 | 通过文件/ZIP 导入恶意路径、symlink、ZIP bomb 均拒绝且不污染库 | `PASS` | `NOT_RUN` | 穿越/加密/炸弹/重复/超大用例；symlink 在 store 读取时拒绝 |
-| S14 | UI 与 Agent 双入口共享后端权限、revision/事务和验证 | `PARTIAL` | `NOT_RUN` |  页面入口已全部可用；Agent 侧工具模块与单测已交付，但因 PTC 呈现交互问题**未接线**，见 TEST_REPORT §7 |
+| S14 | UI 与 Agent 双入口共享后端权限、revision/事务和验证 | `PASS` | `NOT_RUN` |  页面入口全部可用；Agent 侧 4 个工具已接线（round 9 证实此前的失败是测试屏障竞态，非工具副作用）并共用同一 manager 与阻断规则；真机模型调用因验证 profile 凭据无效未执行（见 TEST_REPORT §7） |
 | S15 | Skill 有成员绑定 → 删除强阻断，展示所有角色依赖 | `PASS` | `NOT_RUN` |  真机：已绑定的技能点删除并确认，宿主一次性列出 `binding: 轻量研发团队 → team-lead` 等全部阻断理由 |
 | S16 | Skill 被活动 Agent 使用 → 删除阻断、资源不消失 | `PASS` | `NOT_RUN` |  真机：阻断理由含 `active: <持有者>`（本轮改为真实 Agent 标识，新增单测覆盖） |
 | S17 | 显式依赖阻断、疑似文本依赖警告；解除依赖后可以事务删除 | `PASS` | `NOT_RUN` | dependency 阻断 + 文本告警用例 |
