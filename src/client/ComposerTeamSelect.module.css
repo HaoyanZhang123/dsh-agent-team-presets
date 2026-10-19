@@ -88,9 +88,12 @@
   bottom: 40px;
   left: 0;
   width: min(360px, calc(100vw - 76px));
-  background: var(--dsw-specific-menu);
-  backdrop-filter: var(--dsw-menu-backdrop-filter);
-  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter);
+  /* Same material as the permission menu, made opaque on purpose: a desktop
+   * compositor can skip backdrop filtering, and a translucent fill would then
+   * let conversation text show through the list. The solid layer is the first
+   * declaration so engines without relative colours still paint a surface. */
+  background: var(--dsw-alias-bg-layer-3);
+  background: rgb(from var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3)) r g b / 1);
   border: 1px solid var(--dsw-alias-border-l3);
   border-radius: 13px;
   box-shadow: var(--dsw-elevation-prominent);

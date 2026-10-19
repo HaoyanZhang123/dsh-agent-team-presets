@@ -225,7 +225,8 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
               {detail.asset.origin === 'override'
                 ? <Button onClick={() => { void controller.resetOverride(detail.asset.id) }}>{t('skillsResetCopy')}</Button>
                 : null}
-              <Button onClick={() => { void navigator.clipboard?.writeText(`${state.library?.root ?? ''}/assets/${detail.asset.id}`) }}>
+              {/* The Host owns the storage layout, so it supplies this path. */}
+              <Button onClick={() => { void navigator.clipboard?.writeText(detail.directory) }}>
                 {t('skillsOpenAssetFolder')}
               </Button>
               <Button onClick={() => { setConfirmDelete(true); setDeleteOutcome(undefined) }}>{t('skillsDelete')}</Button>

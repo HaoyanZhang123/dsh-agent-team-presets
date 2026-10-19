@@ -228,7 +228,8 @@ function colourLiterals(css: string): ColourLiteral[] {
   for (const match of css.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
     if (match.index !== undefined) found.push({ index: match.index, literal: match[0] })
   }
-  for (const match of css.matchAll(/(?:^|[^\w-])((?:rgba?|hsla?)\()/gi)) {
+  // Relative colours derive their channels from a theme token, not literals.
+  for (const match of css.matchAll(/(?:^|[^\w-])((?:rgba?|hsla?)\()(?!\s*from\s+var\()/gi)) {
     if (match.index !== undefined) {
       found.push({ index: match.index + (match[0].length - (match[1] ?? '').length), literal: match[1] ?? '' })
     }
@@ -379,23 +380,30 @@ describe('no literal colours in stylesheets', () => {
 })
 
 /* ------------------------------------------------------------------------- *
- * 3. The composer popover uses the menu surface tokens
+ * 3. Custom popovers reuse the permission-menu hue with a fully opaque fill
  * ------------------------------------------------------------------------- */
 
 const composerPath = join(srcRoot, 'client', 'ComposerTeamSelect.module.css')
 
-describe('composer team-select popover', () => {
-  const source = readFileSync(composerPath, 'utf8')
-  const css = stripComments(source)
-  const popover = rules(css).find(rule => rule.selector === '.popover')
+describe.each([
+  [composerPath, '.popover'],
+  [join(srcRoot, 'client', 'TeamPresetsSection.module.css'), '.selectPop'],
+])('opaque desktop popover: %s', (path, selector) => {
+  const source = readFileSync(path, 'utf8')
+  const popover = rules(stripComments(source)).find(rule => rule.selector === selector)
 
-  it('paints its surface with --dsw-specific-menu', () => {
-    expect(popover?.body, 'ComposerTeamSelect.module.css needs a `.popover` rule').toBeDefined()
-    expect(popover?.body).toContain('--dsw-specific-menu')
+  it('keeps a solid themed fallback before the opaque menu colour', () => {
+    expect(popover?.body, `${path} needs a ${selector} rule`).toBeDefined()
+    expect(popover?.body).toMatch(/background:\s*var\(--dsw-alias-bg-layer-3\);[\s\S]*background:\s*rgb\(from var\(--dsw-specific-menu, var\(--dsw-alias-bg-layer-3\)\) r g b \/ 1\);/)
   })
 
-  it('keeps the menu backdrop filter', () => {
-    expect(popover?.body).toContain('--dsw-menu-backdrop-filter')
+  it('paints the permission-menu hue at full opacity, with no blur dependency', () => {
+    // `rgb(from ... r g b / 1)` keeps the menu's channels and strips the alpha
+    // that would let conversation text bleed through on a compositor that
+    // ignores backdrop filtering.
+    expect(popover?.body).toContain('rgb(from var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3)) r g b / 1)')
+    expect(source).not.toContain('backdrop-filter')
+    expect(source).not.toMatch(/rgb\(from [^;]*\/ 0?\.\d+\)/)
   })
 
   it('no longer reaches for the undefined elevated-surface alias', () => {
