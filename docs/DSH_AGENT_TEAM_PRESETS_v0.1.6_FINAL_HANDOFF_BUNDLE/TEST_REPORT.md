@@ -239,3 +239,13 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 - **元数据面板**：字段标签统一 `margin:10px 0 4px`（实测三个标签均为 `mt 10 / mb 4`），与原型
   label→control 的 4px 间距一致。
 - **技能详情绑定行**：实测行高 50px、`padding:8px 0`，与原型 member-row 的节奏相同。
+
+### 续（round 8）：资源文件区、删除弹窗、空态
+
+| 位置 | 原型 | 修正后实测 |
+|---|---|---|
+| 文件树 | `width:200px; max-width:43%; padding:9px 8px; background:#fbfbfc`、按钮 `padding:7px; radius:6px` | **w 200、pad 9/8、bg rgb(251,251,252)** |
+| 删除弹窗 | `width:min(510px,100%); radius:15px; padding:20px; max-height:85vh; h2 17px` | **w 510、radius 15、pad 20、maxH 624.75（85vh）、h2 17px** |
+| 空态 | `padding:18px; border:1px dashed #dfe3e7; radius:9px; 13px 居中` | 已按此实现（`未分配给任何成员`、`还没有安装任何团队技能` 等处） |
+
+截图：`docs/shots/skill-delete-dialog.png`。
