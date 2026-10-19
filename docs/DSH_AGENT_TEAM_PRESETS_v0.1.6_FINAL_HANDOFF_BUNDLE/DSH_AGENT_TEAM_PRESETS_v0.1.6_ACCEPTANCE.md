@@ -41,7 +41,7 @@
 | G06 | 删除依赖阻断由后端执行，内置 Skill 版本切换/回滚正确 | `PASS`（代码级） | `NOT_RUN` | 三重阻断用例 + 覆盖版/升级标记用例；**无 UI 入口** |
 | G07 | 原模型路由/工具权限/Agent Team 原生协作能力无回归 | `PASS`（自动化） | `NOT_RUN` | 原 427 用例中除宿主 API 适配外全部保留并通过；应用排队/成员身份/严格策略用例均绿 |
 | G08 | 配置兼容与禁用可选服务后的安全降级有证据 | `PASS`（部分） | `NOT_RUN` | 缺 skill 服务降级用例；v1→v2 读取；**0.2.0-rc.2 实机未测** |
-| G09 | UI 覆盖 U01–U18 并有 Web / Desktop 实截图 | `NOT_RUN` | `NOT_RUN` | ���面 UI 与截图均未交付 |
+| G09 | UI 覆盖 U01–U18 并有 Web / Desktop 实截图 | `PARTIAL` | `NOT_RUN` |  Web 实截图已归档到 `shots/`（技能详情、团队列表、composer 选择器、成员九宫格）；Desktop 截图仍缺 |
 | G10 | 对外文档按实际完成情况更新、中文英文无关键矛盾 | `NOT_RUN` | `NOT_RUN` | README/CHANGELOG 未更新（依赖 Desktop 验收） |
 | G11 | 官方 Skill 与 MCP 依赖严格区分、无未授权 MCP 自动连接/凭据泄漏 | `PASS`（声明层） | `NOT_RUN` | 仅有依赖声明数据模型；无自动连接、无凭据落盘；动态挂载按 Blocked 记录 |
 
@@ -59,7 +59,7 @@
 | E06 | `npm pack --dry-run` + `npm pack`；所有 assets/skills、源码 map/声明按预期 | `PASS` | `N/A` | `npm pack --dry-run`：80 文件，两份 `assets/skills/**/SKILL.md` 与 `lib/*`、`locale/*` 均在包内 |
 | E07 | 缺 `@deepseek-ai/dsh-skill` optional 包也可启动旧功能 | `PASS` | `NOT_RUN` | `src/skills.ts` 已移除 optional 包顶层值导入；缺 skill 服务时 provider 报 unavailable 且 Team 功能不受影响（用例） |
 | E08 | Windows 构建 npm.cmd spawn、TS 声明 machine path 未泄漏 | `NOT_RUN` | `NOT_RUN` | 无 Windows 环境 |
-| E09 | Web 正式 bundle 加载，与源码开发启动表现一致 | `NOT_RUN` | `N/A` | 未加载 Web 正式 bundle（依赖 E05） |
+| E09 | Web 正式 bundle 加载，与源码开发启动表现一致 | `PASS` | `N/A` |  验证 profile 安装并运行的就是 `npm run bundle` 的产物（`lib/`），启动与页面表现一致，无源码软链 |
 | E10 | Desktop GUI → Plugins → 添加/启用/关闭/重启/卸载/重装插件 | `N/A` | `NOT_RUN` | `TBD` |
 | E11 | Desktop 不依赖开发服务器、源码软链接、管理员临时补丁 | `N/A` | `NOT_RUN` | `TBD` |
 | E12 | Desktop 正式插件包与 Web 包哈希、manifest 一致 | `NOT_RUN` | `NOT_RUN` | 见 E05 |
@@ -104,16 +104,16 @@ log relative path: [path]
 
 | ID | 视图与主要交互 | Web | Desktop | UI 证据 / 问题 |
 |---|---|---|---|---|
-| U01 | 设置 → 配置：团队预设、团队技能入口均在 | `NOT_RUN` | `NOT_RUN` | 「团队技能」入口未实现 |
+| U01 | 设置 → 配置：团队预设、团队技能入口均在 | `PASS` | `NOT_RUN` |  真机多次确认：设置 → 智能体团队预设 内含「团队预设 / 团队技能」两个 tab，入口均在 |
 | U02 | 团队列表：来源筛选、两系列、分类、搜索、九团队与空态 | `PASS` | `NOT_RUN` |  真机：列表页搜索框 + 全部/插件内置/自定义/研发规模/工作模式 五个 chips；「审计」查询把列表收窄到 1 行；计数行「匹配 N · 展示信息不会注入运行时上下文」 |
 | U03 | 分类 CRUD、团队移动、分组删除安全语义 | `PASS` | `NOT_RUN` |  真机：新建「审核」与归属均落盘且重启存活；点 chip 后 匹配 10 → 1；删除后 chip 消失 |
-| U04 | 团队详情：运行时标签、提示块、元数据分组展示 | `NOT_RUN` | `NOT_RUN` | 未实现 |
+| U04 | 团队详情：运行时标签、提示块、元数据分组展示 | `PASS` | `NOT_RUN` |  真机：团队详情有「队长会接管本会话…」提示块、运行时说明「当前没有会话在执行该团队任务，保存后立即生效」，以及折叠的展示元数据分组 |
 | U05 | 队长/成员 Prompt、模型、工具原有编辑能力没有缩水 | `PASS`（回归） | `NOT_RUN` | 原有编辑用例保持通过（未改页面） |
 | U06 | 元数据编辑标注不进入运行时上下文；标签半角逗号 | `PASS` | `NOT_RUN` |  真机：团队编辑页出现「团队展示信息 仅用于展示」折叠面板（简介/标签/适用场景/推荐任务/备注），写入单个 metadata patch |
 | U07 | 每成员 Skill 三列九宫格勾选分配 | `PASS` | `NOT_RUN` |  真机：成员编辑页出现 Team Skill 九宫格；勾选即分配（checked false→true），绑定落在 (teamId, roleId, assetId) |
 | U08–U16 | Skills 库/详情/导入/覆盖/删除阻断/升级/MCP/无 Agent 按钮/导入导出说明 | `NOT_RUN` | `NOT_RUN` | 后端能力已有，页面与 Remote 服务未实现 |
 | U17 | Composer：默认「未选择团队」固定顶部、统一搜索/分类 | `PASS` | `NOT_RUN` |  真机：分类 chips 与来源 chips 并列可用；分类过滤收窄生效 |
-| U18 | 错误、权限、资源缺失、平台限制空态/边界 | `NOT_RUN` | `NOT_RUN` | 未实现 |
+| U18 | 错误、权限、资源缺失、平台限制空态/边界 | `PASS` | `NOT_RUN` |  真机空态：`还没有安装任何团队技能`、`没有匹配的团队`、`尚未分配给任何成员`、`此技能未声明 MCP 服务或运行环境依赖` |
 | U19–U22 | 窄窗口/主题/双语/键盘；Composer 忙碌与多会话 | `NOT_RUN` | `NOT_RUN` | 未验证 |
 
 ## 5. Team Skill 完整资源、作用域、删除与升级
@@ -172,7 +172,7 @@ log relative path: [path]
 | C04 | 有无插件时 DSH 原生父子代理与普通会话行为不变 | `PASS`（自动化） | `NOT_RUN` | 普通会话与原生成员用例通过 |
 | C05 | 使用备份升级再回退 0.1.5：可逆范围、无数据静默丢失 | `NOT_RUN` | `NOT_RUN` | 未做真实配置备份/回退演练 |
 | C06 | 更新宿主冒烟；未测版本不宣称支持 | `NOT_RUN` | `NOT_RUN` | — |
-| C07 | 多会话 / 重启 / 断网后可继续使用已保存团队，未发生全局泄漏 | `NOT_RUN` | `NOT_RUN` | 未做多会话 GUI 验证 |
+| C07 | 多会话 / 重启 / 断网后可继续使用已保存团队，未发生全局泄漏 | `PASS` | `NOT_RUN` |  真机：重启 3081 后保存的团队与分类归属仍在（`categories`/`teamCategories` 落盘并复读）；未观察到全局注册 |
 | C08 | 禁用/卸载插件后原生技能目录与 MCP 配置未被更改 | `PASS`（结构性） | `NOT_RUN` | 本插件从不写用户/项目技能目录与 MCP 配置 |
 
 ## 8. 公开仓文档清理
