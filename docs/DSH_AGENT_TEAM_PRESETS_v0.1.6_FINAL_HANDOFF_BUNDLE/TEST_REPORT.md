@@ -224,3 +224,10 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 | 页脚状态提示 | 灰字夹在页脚与保存栏之间，视觉上融合 | `.footerNote` 加 1px 描边、8px 圆角、9px 内边距、浅底 | `border:1 / radius:8 / pad:5 9 / bg:rgb(247,248,250)` |
 | composer 副行 | 字号 11.5、无间距 | 对齐原型 `small`：11px + `margin-top:2px` | 选项 `pad 8×9 / radius 8`、弹层 `pad 12`、副行 `11px` |
 | 团队行高 | 77–81px，原型 64px 起 | **根因是 `content-box`**：`min-height:64px` 在 content-box 下约束的是内容高度，12px 内边距再加在外面 ⇒ 64+12=76。加 `box-sizing:border-box` 后 | 实测**行高 64px**，与原型一致（`pad 6/10/6/14、gap 4、子元素 42 与 28`） |
+
+### 续（round 6）：卡片与 chips
+
+| 位置 | 原型 | 现状 | 处理 |
+|---|---|---|---|
+| chips（列表筛选、composer 来源） | `padding:6px 10px; border-radius:7px; font-size:12px` | 原为 `5px 9px` | 改为 **6px 10px**，圆角与字号本就一致 |
+| 设置页卡片（`.card`） | 原型 `--radius:16px` | 宿主 token `--dsw-radius-xl`（20px）、`padding:10px 12px` | **保留宿主 token**：该页面嵌在 Harness 设置窗内，与其它设置卡片（同样 20px）保持一致比贴合独立原型更正确；已在文档说明这是有意偏离 |

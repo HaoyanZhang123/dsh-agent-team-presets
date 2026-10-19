@@ -528,7 +528,7 @@ select.select:disabled {
 .listToolbar { display: flex; gap: 8px; margin: 10px 0 8px; }
 .listSearch { flex: 1; min-width: 0; border: 1px solid var(--dsw-alias-line-regular, #d8dce1); border-radius: 9px; padding: 8px 11px; font-size: 13px; background: transparent; color: inherit; outline: none; }
 .chipRow { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-.chip { border: 1px solid var(--dsw-alias-line-regular, #dee2e7); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font-size: 12px; padding: 5px 9px; cursor: pointer; }
+.chip { border: 1px solid var(--dsw-alias-line-regular, #dee2e7); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font-size: 12px; padding: 6px 10px; cursor: pointer; }
 .chipActive { background: var(--dsw-alias-interactive-bg-hover, #e9edf3); color: var(--dsw-alias-label-primary, #202935); }
 
 /* Category management, kept inline so it never opens a second dialog. */
