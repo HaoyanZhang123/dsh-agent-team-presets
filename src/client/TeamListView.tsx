@@ -168,10 +168,10 @@ export function TeamListView(props: TeamListViewProps) {
       </p>
 
       {props.teams.length === 0
-        ? <p className={css.empty}>{t('emptyTeams')}</p>
+        ? <p className={css.emptyPage}>{t('emptyTeams')}</p>
         : (
           <ul className={css.rows}>
-            {visible.length === 0 ? <li className={css.empty}>{t('listNoMatch')}</li> : null}
+            {visible.length === 0 ? <li className={css.rowsEmpty}>{t('listNoMatch')}</li> : null}
             {visible.map(team => (
               <li key={team.id} className={css.card} data-series={teamSeriesOf(team.id) ?? ''}>
                 <button type="button" className={css.rowMain} onClick={() => { props.onOpen(team.id) }}>

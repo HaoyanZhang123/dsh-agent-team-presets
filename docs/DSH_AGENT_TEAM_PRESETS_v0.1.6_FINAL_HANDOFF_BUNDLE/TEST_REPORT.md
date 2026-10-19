@@ -381,3 +381,11 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 
 真机实测（打开「所属分类」弹出层）：`opts:2（未分类 + 666）`、`radius:10px`、`padding:4px`、`border:1px`、
 `option padding:7px 10px`、`option radius:7px`。截图 `docs/shots/category-select-popup.png`。
+
+## 23. 列表空态的内边距
+
+「没有匹配的团队」原来直接渲染在带边框的列表容器里，只用了全局的 `.empty`（`margin:4px 0`），于是文字贴着容器左上角、整个框显得是空的。
+
+- 列表内空态改成 `.rowsEmpty`：`padding:22px 14px`、居中、12.5px —— 实测 `pad 22×14 / center / 高 63`。
+- 「一个团队都没有」的情况用 `.emptyPage`（原型 `.empty`：虚线框 + 18px 内边距 + 9px 圆角 + 居中）。
+- 看图确认：空态现在是容器内一段居中的提示，四周留白正常。

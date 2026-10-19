@@ -666,3 +666,24 @@ select.select:disabled {
   background: var(--dsw-alias-interactive-bg-selected, #e9eef7);
   font-weight: 550;
 }
+
+/* An empty result sits inside the bordered row list, so it needs its own padding
+ * and centred text instead of hugging the container's edge. */
+.rowsEmpty {
+  padding: 22px 14px;
+  text-align: center;
+  color: var(--dsw-alias-label-secondary, #818792);
+  font-size: 12.5px;
+  list-style: none;
+}
+
+/* The "this Team list is empty" state draws the prototype's dashed frame. */
+.emptyPage {
+  margin: 12px 0;
+  padding: 18px;
+  text-align: center;
+  color: var(--dsw-alias-label-secondary, #8a93a0);
+  font-size: 13px;
+  border: 1px dashed var(--dsw-alias-line-regular, #dfe3e7);
+  border-radius: 9px;
+}
