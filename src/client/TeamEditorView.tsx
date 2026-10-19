@@ -213,7 +213,7 @@ export function TeamEditorView(props: TeamEditorViewProps) {
           <span className={css.cardTitle}>{props.t('categoryOf')}</span>
           <div className={css.field}>
             <select
-              className={css.input}
+              className={css.select}
               disabled={props.disabled}
               value={props.categoryId ?? ''}
               onChange={(event) => { props.onSetCategory?.(event.target.value) }}
