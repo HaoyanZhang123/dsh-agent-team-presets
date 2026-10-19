@@ -203,6 +203,15 @@
   gap: 8px;
 }
 
+/* One row per entry, name on the left and actions on the right, so a category is
+ * not two stacked lines inside a box that looks half empty. */
+.plainRows > .card {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
 .entry {
   display: flex;
   align-items: center;
@@ -600,3 +609,9 @@ select.select:disabled {
  * Flattening both into one chip row read like a single three-level hierarchy. */
 .filterRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .filterLabel { flex: 0 0 auto; font-size: 12px; color: var(--dsw-alias-label-secondary, #818792); min-width: 32px; }
+
+/* The add-a-category row: the field takes the room, the button keeps its own width.
+ * A width:100% field in a plain action row squeezed the button into two lines. */
+.addRow { display: flex; align-items: center; gap: 8px; margin: 10px 0 12px; }
+.addRow .textInput { flex: 1 1 auto; width: auto; min-width: 0; }
+.addRow > * { flex: 0 0 auto; white-space: nowrap; }

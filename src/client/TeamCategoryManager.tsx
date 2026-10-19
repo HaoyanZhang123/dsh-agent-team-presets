@@ -50,7 +50,7 @@ export function TeamCategoryManager(props: TeamCategoryManagerProps): React.Reac
         <p className={css.intro}>{t('categorySub')}</p>
       </header>
 
-      <div className={css.actionRow}>
+      <div className={css.addRow}>
         <input
           className={css.textInput}
           value={draft}
