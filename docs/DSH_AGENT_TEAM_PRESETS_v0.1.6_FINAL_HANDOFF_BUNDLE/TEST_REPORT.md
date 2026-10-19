@@ -389,3 +389,18 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 - 列表内空态改成 `.rowsEmpty`：`padding:22px 14px`、居中、12.5px —— 实测 `pad 22×14 / center / 高 63`。
 - 「一个团队都没有」的情况用 `.emptyPage`（原型 `.empty`：虚线框 + 18px 内边距 + 9px 圆角 + 居中）。
 - 看图确认：空态现在是容器内一段居中的提示，四周留白正常。
+
+## 24. 技能库筛选与团队列表用同一套 chip
+
+技能页的「全部/插件内置/自定义」原来自带一套 `.segment button` 样式（白底、`#65707b` 文字、选中还改描边色），
+与团队列表的 `.chip/.chipActive`（透明底、secondary 文字、选中 `#e9edf3`）是两套近似但不同的实现。
+
+改为**直接复用** `TeamPresetsSection.module.css` 里的 `chip` / `chipActive`（技能页 import 同一个 CSS Module），
+`.segment` 只保留容器布局（`gap:4px; margin-bottom:8px`），两套外观不再可能漂移。
+
+真机同页对比（同一个「插件内置」按钮）：
+
+| 页面 | 实测 |
+|---|---|
+| 团队预设 | `bg transparent / color rgb(97,102,107) / border rgb(222,226,231) / padding 6×10 / radius 7` |
+| 团队技能 | `bg transparent / color rgb(97,102,107) / border rgb(222,226,231) / padding 6×10 / radius 7` |

@@ -17,9 +17,7 @@
 .toolbar { display: flex; gap: 9px; margin: 10px 0; flex-wrap: wrap; }
 .search { border: 1px solid #d8dce1; border-radius: 9px; padding: 8px 12px; flex: 1; min-width: 190px; outline: none; background: #fff; color: inherit; }
 .search:focus { border-color: #7da9f1; }
-.segment { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; margin-bottom: 10px; }
-.segment button { border: 1px solid #dee2e7; border-radius: 7px; background: #fff; color: #65707b; font-size: 12px; padding: 6px 10px; cursor: pointer; }
-.segment button.active { background: #e9edf3; color: #202935; border-color: #d5dbe3; }
+.segment { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
 
 /* The selected file in the tree and the pressed segment chip share one class in
  * the component; a nested `.segment button.active` selector does not export an

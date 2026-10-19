@@ -14,6 +14,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './TeamSkillsView.module.css'
+// The library filters are the same control as the Team list's chips, so they use the
+// very same classes rather than a lookalike set that can drift.
+import chips from './TeamPresetsSection.module.css'
 import type { TeamSkillsController, TeamSkillsState } from './team-skills-controller.ts'
 import type { TeamSkillAssetView } from '../types.ts'
 
@@ -275,9 +278,9 @@ export function TeamSkillsView(props: TeamSkillsViewProps): React.ReactElement {
         <input className={css.search} value={query} placeholder={t('skillsSearch')} onChange={(event) => { setQuery(event.target.value) }} />
       </div>
       <div className={css.segment}>
-        <button type="button" className={origin === 'all' ? css.active : ''} onClick={() => { setOrigin('all') }}>{t('skillsAll')}</button>
-        <button type="button" className={origin === 'builtin' ? css.active : ''} onClick={() => { setOrigin('builtin') }}>{t('skillsBuiltin')}</button>
-        <button type="button" className={origin === 'custom' ? css.active : ''} onClick={() => { setOrigin('custom') }}>{t('skillsCustom')}</button>
+        <button type="button" className={`${chips.chip} ${origin === 'all' ? chips.chipActive : ''}`} onClick={() => { setOrigin('all') }}>{t('skillsAll')}</button>
+        <button type="button" className={`${chips.chip} ${origin === 'builtin' ? chips.chipActive : ''}`} onClick={() => { setOrigin('builtin') }}>{t('skillsBuiltin')}</button>
+        <button type="button" className={`${chips.chip} ${origin === 'custom' ? chips.chipActive : ''}`} onClick={() => { setOrigin('custom') }}>{t('skillsCustom')}</button>
       </div>
 
       <div className={css.rowlist}>
