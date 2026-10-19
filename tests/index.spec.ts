@@ -75,7 +75,7 @@ async function setup(
     getProvider: () => undefined,
     list: () => [],
     resolveMaxDepth: () => 2,
-    drainContinuableChildren: async () => {},
+    drainChildren: async () => {},
   })
   const configure = vi.fn(() => () => {})
   const update = vi.fn(async (_ns: string, _patch: { teams: TeamPreset[]; seededDefaults: string[] }) => {})

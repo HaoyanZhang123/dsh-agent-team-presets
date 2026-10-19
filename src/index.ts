@@ -590,7 +590,7 @@ export function apply(ctx: Context, config: Config): void {
     }
     for (const [root, ids] of byRoot) {
       try {
-        await subagents.drainContinuableChildren(root, ids)
+        await subagents.drainChildren(root, ids)
       } catch (error: unknown) {
         ctx.logger.warn(
           `${LOG}: managed members of Session "%s" could not be drained: %s`, root.session.id, String(error),

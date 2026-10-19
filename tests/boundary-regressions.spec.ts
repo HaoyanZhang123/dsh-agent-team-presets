@@ -24,7 +24,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Subagents from '@deepseek-ai/dsh-subagent'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import TeamService from '@deepseek-ai/dsh-experimental-agent-team'
@@ -136,7 +136,7 @@ async function stack(root: string, options: {
 } = {}) {
   const ctx = new Context()
   contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   await ctx.plugin(FixtureSessionQuery)
   const storage: MemberStorage | undefined = options.noStorage === true
@@ -195,6 +195,10 @@ async function stack(root: string, options: {
           ...options.parentDepth === undefined ? {} : { subagentDepth: options.parentDepth },
         },
       })).agent
+  // The Team application is queued and awaits the effective prompt assembly
+  // before it installs anything (Host 0.2.1), so a case that drives the member
+  // tool must first let that job settle.
+  await settlePlugin()
   return { ctx, fiber, root: root_ as Agent, lead, member, storage, definition, release }
 }
 
@@ -243,12 +247,15 @@ describe('durable member identity', () => {
       resumeSessionId: SessionId('lead'),
       agentOptions: { provider: 'mock', model: 'lead-model' },
     })).agent
-    const delivery = await second.ctx.agentTeams.sendMessage(resumed, {
+    // Host 0.2.1 awaits the cold resume inside `sendMessage`, so a vetoed
+    // creation surfaces as a rejected delivery instead of a queued one. The
+    // contract under test is unchanged: the child never runs and is never
+    // published on either route.
+    await second.ctx.agentTeams.sendMessage(resumed, {
       target: 'reviewer',
       content: [{ type: 'text', text: 'SECOND' }],
       signal: new AbortController().signal,
-    })
-    expect(delivery.status).toBe('queued')
+    }).catch(() => undefined)
     await settlePlugin()
     // No model request reached the member OR the Lead route for that child, and
     // the child was never published: the creation transaction was vetoed.
@@ -278,7 +285,7 @@ describe('durable member identity', () => {
       target: 'reviewer',
       content: [{ type: 'text', text: 'SECOND' }],
       signal: new AbortController().signal,
-    })
+    }).catch(() => undefined)
     await settlePlugin()
     expect(second.member.requests.filter(request => request.sessionId === childId)).toHaveLength(0)
     expect(second.lead.requests.filter(request => request.sessionId === childId)).toHaveLength(0)
@@ -417,7 +424,7 @@ async function presentationStack(
 ) {
   const ctx = new Context()
   contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx, { tools: { mode: 'native' } })
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true, tools: { mode: 'native' } })
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   await ctx.plugin(BindingProbeRuntime)
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -599,8 +606,8 @@ describe('ordered teardown', () => {
     const row = memberRow(h)!
     await vi.waitFor(() => expect(h.ctx.agents.get(row.id)).toBeDefined())
     const drained: string[][] = []
-    const realDrain = h.ctx.subagents.drainContinuableChildren.bind(h.ctx.subagents)
-    vi.spyOn(h.ctx.subagents, 'drainContinuableChildren').mockImplementation(async (parent, ids) => {
+    const realDrain = h.ctx.subagents.drainChildren.bind(h.ctx.subagents)
+    vi.spyOn(h.ctx.subagents, 'drainChildren').mockImplementation(async (parent, ids) => {
       drained.push([...ids])
       // Let the held member finish so the official drain can reach quiescence.
       h.release()
@@ -619,8 +626,8 @@ describe('ordered teardown', () => {
     expect(resultText(spawned), resultText(spawned)).not.toContain('Error')
     const row = memberRow(h)!
     await vi.waitFor(() => expect(h.ctx.agents.get(row.id)).toBeDefined())
-    const realDrain = h.ctx.subagents.drainContinuableChildren.bind(h.ctx.subagents)
-    vi.spyOn(h.ctx.subagents, 'drainContinuableChildren').mockImplementation(async (parent, ids) => {
+    const realDrain = h.ctx.subagents.drainChildren.bind(h.ctx.subagents)
+    vi.spyOn(h.ctx.subagents, 'drainChildren').mockImplementation(async (parent, ids) => {
       h.release()
       await realDrain(parent, ids)
     })

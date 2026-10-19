@@ -19,10 +19,11 @@ import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { settlePlugin, waitForTeamApplication } from './fixtures/plugin-harness.ts'
 import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Subagents from '@deepseek-ai/dsh-subagent'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import TeamService from '@deepseek-ai/dsh-experimental-agent-team'
@@ -120,7 +121,7 @@ async function stack(options: {
   const sessionId = options.ids?.session ?? 'lead'
   const ctx = new Context()
   contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   const sessionRoot = await mkdtemp(join(tmpdir(), 'team-presets-injection-sessions-'))
   temporary.push(sessionRoot)
   await ctx.plugin(JsonlSessionPersistence, { root: sessionRoot, compression: 'none' })
@@ -192,6 +193,10 @@ async function stack(options: {
     sessionId: SessionId(sessionId),
     agentOptions: { provider: 'mock', model: 'lead-model', reasoningEffort: ReasoningEffortId('high') },
   })
+  // The Team application is queued and awaits the effective prompt assembly
+  // before it installs anything (Host 0.2.1); let it settle before driving tools.
+  await settlePlugin()
+  await waitForTeamApplication(ctx, root.agent)
   return {
     ctx,
     root: root.agent,

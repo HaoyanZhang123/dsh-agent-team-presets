@@ -12,6 +12,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Subagents from '@deepseek-ai/dsh-subagent'
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Context as CordisContext } from '@deepseek-ai/cordis'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import {
@@ -85,6 +86,7 @@ interface Harness {
  */
 async function harness(configured: { fresh: string; fork: string }): Promise<Harness> {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   contexts.push(ctx)
   await ctx.plugin(Subagents, { maxDepth: 2 })
   const transitions: Transition[] = []
@@ -118,6 +120,7 @@ function liveAliases(ctx: Context): number {
 describe('member execution aliases follow the provider registry', () => {
   it('registers both aliases when the providers activate before the plugin', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     contexts.push(ctx)
     await ctx.plugin(Subagents, { maxDepth: 2 })
     const upstreamFresh = provider('spawn')
@@ -341,7 +344,7 @@ describe('member execution aliases over a minimal service double', () => {
       getProvider: (name: string) => registered.get(name) ?? (spawn.name === name ? spawn : undefined),
       list: () => [...registered.keys()],
       resolveMaxDepth: () => 2,
-      drainContinuableChildren: async () => {},
+      drainChildren: async () => {},
     } as unknown as CordisContext['subagents'])
 
     // The double already answers for `spawn`, so the initial scan registers both

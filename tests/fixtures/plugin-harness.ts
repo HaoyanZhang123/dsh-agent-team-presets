@@ -26,6 +26,39 @@ export async function settlePlugin(): Promise<void> {
   }
 }
 
+/**
+ * Wait until one Session root's Team application has installed its captain
+ * surface.
+ *
+ * Host 0.2.1 queues the application and awaits the effective prompt assembly
+ * before installing anything, so a fixed number of macrotasks is not a
+ * deterministic barrier. The member tool is registered by that installation, so
+ * its presence is the observable settlement point.
+ * @param ctx - the composed test context.
+ * @param agent - the Session-root Agent whose application is awaited.
+ * @param timeoutMs - upper bound before the helper fails the case.
+ * @returns resolution once the application installed the captain surface.
+ * @throws when the application did not settle in time.
+ */
+export async function waitForTeamApplication(
+  ctx: { tools: { get: (name: string, agent: unknown) => unknown } },
+  agent: unknown,
+  timeoutMs = 5000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (ctx.tools.get('spawn_team_member', agent) !== undefined) {
+      // The registration happens inside the application; a strict custom
+      // policy is only released after the effective surface is read once more,
+      // so let that short tail settle before the caller drives the tool.
+      await settlePlugin()
+      return
+    }
+    await new Promise<void>((resolve) => { setTimeout(resolve, 5) })
+  }
+  throw new Error('the Team application did not settle before the deadline')
+}
+
 /** Knobs for {@link subagentServiceDouble}. */
 export interface SubagentDoubleOptions {
   /** Provider names this deployment registers. Defaults to the plugin's own defaults. */
@@ -59,7 +92,7 @@ export function subagentServiceDouble(options: SubagentDoubleOptions = {}): Reco
     getProvider: (name: string) => providers.includes(name) ? provider(name) : undefined,
     list: () => [...providers],
     resolveMaxDepth: () => options.maxDepth ?? 2,
-    drainContinuableChildren: async () => {},
-    drainContinuableDescendants: async () => {},
+    drainChildren: async () => {},
+    drainDescendants: async () => {},
   }
 }

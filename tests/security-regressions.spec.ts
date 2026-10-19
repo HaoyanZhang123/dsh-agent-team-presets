@@ -9,7 +9,7 @@ import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Subagents from '@deepseek-ai/dsh-subagent'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { applyTeamToAgent } from '../src/application.ts'
 import { apply, inject } from '../src/index.ts'
+import { waitForTeamApplication } from './fixtures/plugin-harness.ts'
 import TeamPresetsToolCatalog from '../src/tool-catalog.ts'
 import { guardPolicy, policyOf } from '../src/tool-policy.ts'
 import { BUILTIN_TEAM_IDS } from '../src/builtin-teams.ts'
@@ -42,10 +43,10 @@ afterEach(async () => {
 async function call(ctx: Context, agent: Agent, name: string, args: object = {}) {
   return ctx.tools.execute({ callId: ToolCallId(crypto.randomUUID()), name, arguments: args, agent, signal: new AbortController().signal })
 }
-async function base(script?: ConstructorParameters<typeof MockAdapter>[0]) {
+async function base(script?: ConstructorParameters<typeof MockAdapter>[0], options: { workingDirectory?: boolean } = {}) {
   const ctx = new Context()
   contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: options.workingDirectory ?? true })
   await ctx.plugin(AgentLoop, { agents: [] })
   const adapter = new MockAdapter(script ?? Array.from({ length: 30 }, () => textResponse('done')))
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -74,7 +75,13 @@ describe('strict capability execution', () => {
       if (event.type === 'tool/result') childResults.push({ callId: event.data.message.toolCallId, error: event.data.message.isError === true,
         text: event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('') })
     })
-    const run = await ctx.subagents.start('spawn', { parent: handle.agent, prompt: [{ type: 'text', text: 'ordinary task' }], signal: new AbortController().signal })
+    const run = await ctx.subagents.startActivation({
+      provider: 'spawn',
+      label: 'ordinary',
+      request: { parent: handle.agent, prompt: [{ type: 'text', text: 'ordinary task' }], signal: new AbortController().signal },
+      signal: new AbortController().signal,
+      delivery: 'caller',
+    })
     await run.result
     await run.dispose()
     // The preset tools are the discovery path for an unselected Session; only
@@ -96,9 +103,11 @@ describe('strict capability execution', () => {
 
   it('lists inherited builtins without a live Agent and denies own-layer write/edit bodies', async () => {
     const { ctx } = await base()
-    const writeText = vi.fn()
-    const editText = vi.fn()
-    ctx.provide('fs', { writeText, editText })
+    // Host 0.2.1 owns the `fs` service in this composition, so the case observes
+    // the real service instead of replacing it with a second registration.
+    const fs = ctx.get('fs') as { writeText: (...args: unknown[]) => unknown; editText: (...args: unknown[]) => unknown }
+    const writeText = vi.spyOn(fs, 'writeText')
+    const editText = vi.spyOn(fs, 'editText')
     const presetKey = {}
     let preset!: ReturnType<typeof createScope>
     const owner = await ctx.plugin(Object.assign((scoped: Context) => { preset = createScope(scoped, presetKey) }, { inject: ['tools', 'systemPrompt', 'fs'] }))
@@ -219,6 +228,7 @@ describe('real durable preset-managed creation', () => {
     const config = { teams: { get: () => [definition] }, selections: { get: () => [{ sessionId: 'managed-root', teamId: 'team-1' }] }, freshProvider: 'spawn', seededDefaults: { get: () => [...BUILTIN_TEAM_IDS] }, forkProvider: 'fork' }
     await ctx.plugin(Object.assign((owner: Context) => apply(owner, config), { inject }))
     const root = await ctx.agents.create({ sessionId: SessionId('managed-root'), agentOptions: { provider: 'mock', model: 'mock' } })
+    await waitForTeamApplication(ctx, root.agent)
     const first = await call(ctx, root.agent, 'spawn_team_member', { member: 'reviewer', task: 'review first' })
     expect(first.isError, JSON.stringify(first.content)).toBe(false)
     const second = await call(ctx, root.agent, 'spawn_team_member', { member: 'reviewer', task: 'review second', context: 'fork' })
@@ -239,7 +249,7 @@ describe('real durable preset-managed creation', () => {
     expect((await call(ctx, root.agent, 'spawn_teammate', { name: 'bypass', description: 'bypass', prompt: 'bypass' })).isError).toBe(true)
     expect(body).not.toHaveBeenCalled()
     const firstId = rows[0]!.id
-    await ctx.subagents.drainContinuableChildren(root.agent, [firstId])
+    await ctx.subagents.drainChildren(root.agent, [firstId])
     expect(ctx.agents.get(firstId)).toBeUndefined()
     const previousCreations = created.filter(agent => agent.id === firstId).length
     await ctx.agentTeams.sendMessage(root.agent, { target: 'reviewer', content: [{ type: 'text', text: 'continue' }], signal: new AbortController().signal })

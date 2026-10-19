@@ -24,8 +24,19 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { BUNDLED_SKILL_RANK } from '@deepseek-ai/dsh-skill'
 import type { SkillCandidate, SkillProvider } from '@deepseek-ai/dsh-skill'
+
+/**
+ * Standard precedence rank for packaged skill providers.
+ *
+ * Mirrors the published `BUNDLED_SKILL_RANK` constant of the optional
+ * `@deepseek-ai/dsh-skill` package. It is restated here as a plain number so
+ * this module has no top-level VALUE import of that optional package: a
+ * deployment that composes no skill service must still be able to load the
+ * plugin entry (and with it every Team), and a static import would make the
+ * whole `lib/index.js` unresolvable instead of merely disabling the skills.
+ */
+const BUNDLED_SKILL_RANK = 600
 
 /** Provider name this plugin registers on `ctx.skills`. */
 export const SKILL_PROVIDER = 'dsh-team-presets'
@@ -133,8 +144,8 @@ export function shippedSkillProvider(root: string): SkillProvider {
   return {
     name: SKILL_PROVIDER,
     list: () => Promise.resolve(candidates),
-    get: (candidate) => {
-      const skill = byName.get(candidate.name)
+    get: (candidate: SkillCandidate) => {
+      const skill = byName.get(candidate.name as (typeof SHIPPED_SKILLS)[number])
       if (skill === undefined) return Promise.resolve(undefined)
       const body = readSkill(skill)
       return Promise.resolve({
