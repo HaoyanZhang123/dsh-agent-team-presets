@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SkillCandidate, SkillProvider } from '@deepseek-ai/dsh-skill'
+import type { SkillCandidate, SkillLookupOptions, SkillProvider } from '@deepseek-ai/dsh-skill'
 
 /**
  * Standard precedence rank for packaged skill providers.
@@ -144,7 +144,7 @@ export function shippedSkillProvider(root: string): SkillProvider {
   return {
     name: SKILL_PROVIDER,
     list: () => Promise.resolve(candidates),
-    get: (candidate: SkillCandidate) => {
+    get: (candidate: SkillCandidate, _options: SkillLookupOptions) => {
       const skill = byName.get(candidate.name as (typeof SHIPPED_SKILLS)[number])
       if (skill === undefined) return Promise.resolve(undefined)
       const body = readSkill(skill)
@@ -154,7 +154,7 @@ export function shippedSkillProvider(root: string): SkillProvider {
         invocation: candidate.invocation,
         provider: SKILL_PROVIDER,
         source: 'bundled',
-        resourceBase: candidate.resourceBase,
+        ...candidate.resourceBase === undefined ? {} : { resourceBase: candidate.resourceBase },
         content: body.content,
       })
     },

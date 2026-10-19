@@ -127,7 +127,7 @@ export const memberDomainSpec = {
   name: MEMBER_DOMAIN_NAME,
   version: MEMBER_RECORD_VERSION,
   tables: {
-    members: { valueSchema: memberRecordSchema } as DomainTableSpec<string, MemberRecord>,
+    members: { valueSchema: memberRecordSchema } as unknown as DomainTableSpec<string, MemberRecord>,
   },
 } satisfies DomainSpec
 

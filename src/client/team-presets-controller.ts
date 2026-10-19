@@ -562,7 +562,7 @@ export class TeamPresetsController {
    */
   private documentStatus(): TeamPresetsState['status'] {
     const mirrored = this.mirror.getSnapshot()
-    if (mirrored.view === undefined) return mirrored.status === 'unavailable' ? 'unavailable' : 'loading'
+    if (mirrored.view === undefined) return mirrored.error === null ? 'loading' : 'unavailable'
     return this.namespaceView() === undefined ? 'unavailable' : 'ready'
   }
 
@@ -614,7 +614,7 @@ export class TeamPresetsController {
    */
   private formIssue(): TeamPresetsFormIssue | undefined {
     const mirrored = this.mirror.getSnapshot()
-    if (mirrored.view === undefined) return mirrored.status === 'unavailable' ? 'settings-unavailable' : undefined
+    if (mirrored.view === undefined) return mirrored.error === null ? undefined : 'settings-unavailable'
     if (this.namespaceView() === undefined) return 'namespace-missing'
     return this.form.getSnapshot().status === 'ready' ? undefined : 'schema-rejected'
   }

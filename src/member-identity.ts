@@ -187,15 +187,19 @@ interface AliasState {
  * @returns the provider registered under the alias.
  */
 function aliasProvider(alias: string, upstream: SubagentProvider): SubagentProvider {
+  const start = upstream.start
+  const prepareContinuable = upstream.prepareContinuable
   return {
     name: alias,
     capabilities: upstream.capabilities,
     inheritsParentContext: upstream.inheritsParentContext,
     ...upstream.agentRouteDefaults === undefined ? {} : { agentRouteDefaults: upstream.agentRouteDefaults },
-    start: request => upstream.start(request),
-    ...upstream.prepareContinuable === undefined
+    // 0.2.1 made `start` optional on the provider contract (a continuable-only
+    // backend omits it), so the alias mirrors exactly the members it delegates.
+    ...start === undefined ? {} : { start: (request: Parameters<typeof start>[0]) => start(request) },
+    ...prepareContinuable === undefined
       ? {}
-      : { prepareContinuable: request => upstream.prepareContinuable!(request) },
+      : { prepareContinuable: (request: Parameters<NonNullable<SubagentProvider['prepareContinuable']>>[0]) => prepareContinuable(request) },
   }
 }
 
