@@ -25,7 +25,8 @@
     "src/team-skills/store.ts",
     "src/team-skills/manager.ts",
     "src/team-skills/provider.ts",
-    "src/team-skills/service.ts"
+    "src/team-skills/service.ts",
+    "src/team-skills/tools.ts"
   ],
   "references": [
     {
