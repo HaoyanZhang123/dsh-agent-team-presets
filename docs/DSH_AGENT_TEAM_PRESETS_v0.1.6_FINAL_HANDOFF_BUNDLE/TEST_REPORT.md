@@ -102,9 +102,16 @@
 
 控制台：以上流程全程 0 异常。合成鼠标事件曾把宿主指令面板一同打开，改用单一 DOM 激活后不复现。
 
+### Agent 侧 Team Skill 管理工具（round 5）
+
+- 会话根注册 4 个工具：`list_team_skills` / `assign_team_skill` / `unassign_team_skill` / `remove_team_skill`，与页面共用同一 `manager`。
+- 单测覆盖分配/解除与「被绑定后删除被拒并报出持有者」两条路径（`tests/team-skills-tools.spec.ts`）。
+- 注册工具后真机启动正常（`boot ok: true`，控制台 0 异常）。
+- **未在真机会话中让模型实际调用这 4 个工具**：需要开一个会话发消息驱动，留作待补证据。
+
 ### 仍然记录为通过之外的项
 
-- 原生文件夹选择器（导入完整文件夹）未自动化；需要 `DOM.setFileInputFiles` 注入或人工点选。
+- 原生文件夹选择器（导入完整文件夹）**未能自动化**：页面上有 2 个隐藏 `input[type=file]`，`DOM.setFileInputFiles` 返回成功但 `input.files.length` 仍为 0（Chromium 对隐藏/目录型输入的限制），因此「导入完整文件夹」目前只有模块级单测（`buildSkillPackage` + `store.install` + 导入安全规则）覆盖，端到端需人工点选。
 - 分类 CRUD 的页面部分未实现（数据层与纯函数已完成）。
 - Agent 侧 Team Skill 管理工具尚未提供。
 - Desktop 生产环境全部条目仍未执行。
