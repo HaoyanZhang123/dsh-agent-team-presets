@@ -135,7 +135,7 @@ log relative path: [path]
 | S11 | fresh/fork/恢复/退出/热重载/卸载/切 Team 后无残留 Provider | `PASS`（部分） | `NOT_RUN` | release 同步撤销发现用例；宿主侧 fresh/fork 未逐一实测 |
 | S12 | 无/禁用 Skill 服务，旧团队功能仍能加载并有提示 | `PASS` | `NOT_RUN` | unavailable 降级用例；顶层值导入已移除 |
 | S13 | 通过文件/ZIP 导入恶意路径、symlink、ZIP bomb 均拒绝且不污染库 | `PASS` | `NOT_RUN` | 穿越/加密/炸弹/重复/超大用例；symlink 在 store 读取时拒绝 |
-| S14 | UI 与 Agent 双入口共享后端权限、revision/事务和验证 | `PARTIAL` | `NOT_RUN` |  技能页的创建/覆盖/重置/删除阻断已可在页面操作；Agent 侧管理工具仍缺 |
+| S14 | UI 与 Agent 双入口共享后端权限、revision/事务和验证 | `PARTIAL` | `NOT_RUN` |  页面入口已全部可用；Agent 侧工具模块与单测已交付，但因 PTC 呈现交互问题**未接线**，见 TEST_REPORT §7 |
 | S15 | Skill 有成员绑定 → 删除强阻断，展示所有角色依赖 | `PASS` | `NOT_RUN` |  真机：已绑定的技能点删除并确认，宿主一次性列出 `binding: 轻量研发团队 → team-lead` 等全部阻断理由 |
 | S16 | Skill 被活动 Agent 使用 → 删除阻断、资源不消失 | `PASS` | `NOT_RUN` |  真机：阻断理由含 `active: <持有者>`（本轮改为真实 Agent 标识，新增单测覆盖） |
 | S17 | 显式依赖阻断、疑似文本依赖警告；解除依赖后可以事务删除 | `PASS` | `NOT_RUN` | dependency 阻断 + 文本告警用例 |
@@ -151,8 +151,8 @@ log relative path: [path]
 |---|---|---|---|---|
 | M01 | 官方 Agent Skills 必填/可选 frontmatter 兼容与未知字段保留 | `PASS` | `NOT_RUN` | import 用例 |
 | M02 | 不强制额外私有 manifest 写入第三方 SKILL.md | `PASS` | `NOT_RUN` | 原文逐字节保留用例 |
-| M03 | Skill 依赖 required/optional MCP serverName/tool/resource 可保存并展示 | `PARTIAL` | `NOT_RUN` | 数据模型 + store 持久化；**展示 UI 未实现** |
-| M04 | required 缺失有具体阻断/降级提示；optional 缺失仅提示 | `NOT_RUN` | `NOT_RUN` | 未实现 |
+| M03 | Skill 依赖 required/optional MCP serverName/tool/resource 可保存并展示 | `PASS` | `NOT_RUN` |  真机+单测：详情页按依赖逐条展示；MCP 标「已声明」，可执行文件按 PATH 解析为「存在/缺失」 |
+| M04 | required 缺失有具体阻断/降级提示；optional 缺失仅提示 | `PARTIAL` | `NOT_RUN` |  缺失的可执行文件已给出明确警示标签；required/optional 的差异化阻断仍未实现 |
 | M05 | 连接失败、权限拒绝、离线，UI 不假报「已加载」 | `NOT_RUN` | `NOT_RUN` | 未实现 |
 | M06 | 未授权/未分配成员时不启动 stdio、HTTP MCP，不注册额外工具 | `PASS`（结构性） | `NOT_RUN` | 本插件不启动任何 MCP 连接（无相关代码路径） |
 | M07 | 探针确认动态 MCP per-agent 生命周期受官方 API 支持与否 | `PASS`（负结论） | `NOT_RUN` | 0.2.1-rc.2 公开 API 无 per-Agent 动态挂载入口 → **Blocked**，不做全局伪隔离 |
