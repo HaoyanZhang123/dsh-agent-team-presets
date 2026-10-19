@@ -2,6 +2,7 @@
  * Third Team preset page: one captain or member, split into identity, model,
  * tools, and system prompt cards so a narrow Settings panel never crowds.
  */
+import type { TeamSkillsController } from './team-skills-controller.ts';
 import type { ProviderChoice } from './team-presets-controller.ts';
 import type { TeamAgentPreset, TeamCaptainPreset, ToolChoice } from '../types.ts';
 import type { TeamPresetsLocaleKey } from './locales.ts';
@@ -31,6 +32,12 @@ export interface TeamAgentViewProps {
     readonly onChange: (patch: Partial<TeamAgentPreset>) => void;
     /** Removes this member; absent for the captain, which a Team always needs. */
     readonly onDelete?: () => void;
+    /** Team Skill assignment, absent when this build ships no library service. */
+    readonly skills?: TeamSkillsController;
+    /** The Team whose role slot receives the skills. */
+    readonly teamId: string;
+    /** The role identity of this page, or `captain`. */
+    readonly roleId: string;
 }
 /**
  * Render one agent's page.

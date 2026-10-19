@@ -91,7 +91,7 @@ export declare class TeamSkillManager {
      * @param roleId - role identity, or {@link CAPTAIN_ROLE}.
      * @returns whether a binding was removed.
      */
-    unassign(teamId: string, roleId: string): Promise<boolean>;
+    unassign(teamId: string, roleId: string, assetId?: string): Promise<boolean>;
     /**
      * Drop every binding of one Team, used when a Team is deleted.
      * @param teamId - Team identity.

@@ -139,5 +139,5 @@ export declare class TeamSkillService extends TypertRemoteService {
      * @param roleId - role identity.
      * @returns the refreshed library.
      */
-    unassignRole(teamId: string, roleId: string): Promise<TeamSkillLibraryView>;
+    unassignRole(teamId: string, roleId: string, assetId?: string): Promise<TeamSkillLibraryView>;
 }

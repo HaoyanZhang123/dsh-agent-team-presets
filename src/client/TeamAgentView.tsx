@@ -4,7 +4,8 @@
  */
 
 import { Button, Checkbox, Input } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { TeamSkillsController } from './team-skills-controller.ts'
 import { AGENT_COLORS } from './team-presets-controller.ts'
 import type { ProviderChoice } from './team-presets-controller.ts'
 import { FieldPicker } from './FieldPicker.tsx'
@@ -52,6 +53,63 @@ export interface TeamAgentViewProps {
   readonly onChange: (patch: Partial<TeamAgentPreset>) => void
   /** Removes this member; absent for the captain, which a Team always needs. */
   readonly onDelete?: () => void
+  /** Team Skill assignment, absent when this build ships no library service. */
+  readonly skills?: TeamSkillsController
+  /** The Team whose role slot receives the skills. */
+  readonly teamId: string
+  /** The role identity of this page, or `captain`. */
+  readonly roleId: string
+}
+
+/**
+ * The member page's Team Skill grid.
+ *
+ * One card per installed skill, checked when this exact role holds it. The grid
+ * is the only place a skill is assigned, which is what the prototype specifies:
+ * a skill page shows its references, and this page decides them.
+ * @param props - the controller and the role slot being edited.
+ * @returns the section, or nothing while the library is unavailable.
+ */
+function SkillAssignmentGrid(props: { controller: TeamSkillsController; teamId: string; roleId: string; t: (key: TeamPresetsLocaleKey) => string }): React.ReactElement | null {
+  const [state, setState] = useState(props.controller.getSnapshot())
+  useEffect(() => {
+    const unsubscribe = props.controller.subscribe(() => { setState(props.controller.getSnapshot()) })
+    void props.controller.refresh()
+    return unsubscribe
+  }, [props.controller])
+  const assets = state.library?.assets ?? []
+  const held = new Set(assets.filter(asset => asset.bindings.some(row => row.teamId === props.teamId && row.roleId === props.roleId)).map(asset => asset.id))
+  if (state.status === 'unavailable') return null
+  return (
+    <>
+      <div className={css.sepTitle}>{props.t('skillsAssignTitle')}</div>
+      <div className={css.panel}>
+        <p className={css.muted} style={{ marginTop: 0 }}>{props.t('skillsAssignHint')}</p>
+        {assets.length === 0 ? <p className={css.muted}>{props.t('skillsAssignEmpty')}</p> : (
+          <div className={css.skillGrid}>
+            {assets.map(asset => (
+              <label key={asset.id} className={css.skillCard}>
+                <span className={css.skillCardTop}>
+                  <span className={css.skillCardName}>{asset.skillId}</span>
+                  <input
+                    type="checkbox"
+                    checked={held.has(asset.id)}
+                    onChange={(event) => {
+                      if (event.target.checked) void props.controller.assignSkill(props.teamId, props.roleId, asset.id)
+                      else void props.controller.unassignSkill(props.teamId, props.roleId, asset.id)
+                    }}
+                  />
+                </span>
+                <span className={css.skillCardDesc}>{asset.description}</span>
+                <span className={css.skillCardTag}>{asset.origin}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        {state.message === undefined ? null : <p className={css.muted}>{state.message}</p>}
+      </div>
+    </>
+  )
 }
 
 /**
@@ -401,6 +459,10 @@ export function TeamAgentView(props: TeamAgentViewProps) {
           </span>
         </div>
       </section>
+
+      {props.skills === undefined ? null : (
+        <SkillAssignmentGrid controller={props.skills} teamId={props.teamId} roleId={props.roleId} t={props.t} />
+      )}
 
       {props.onDelete === undefined ? null : (
         <div className={css.actionRow}>

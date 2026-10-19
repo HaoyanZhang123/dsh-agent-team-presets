@@ -62,6 +62,7 @@ export type TeamPresetsLocaleKey =
   | 'skillsOverride'
   | 'skillsReset'
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
+  | 'skillsAssignTitle' | 'skillsAssignHint' | 'skillsAssignEmpty'
   | 'skillsTitle'
   | 'skillsSub'
   | 'skillsNote'
@@ -279,6 +280,9 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsDesc: 'What does this skill handle?',
   skillsNewTitle: 'New team skill',
   skillsVersion: 'version',
+  skillsAssignTitle: 'Team Skill assignment',
+  skillsAssignHint: 'Checked skills belong to this member only. They are discovered through this Agent scope, never globally.',
+  skillsAssignEmpty: 'No team skill is installed yet. Add one on the Team skills page.',
   skillsOverrideOn: 'a local override is active',
 }
 
@@ -467,6 +471,9 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsDesc: '这个技能处理什么任务',
   skillsNewTitle: '新建 Team Skill',
   skillsVersion: '版本',
+  skillsAssignTitle: 'Team Skill 分配',
+  skillsAssignHint: '勾选的技能只属于这名成员，通过该 Agent 的作用域发现，不会全局注册。',
+  skillsAssignEmpty: '还没有安装任何团队技能，请先到「团队技能」页添加。',
   skillsOverrideOn: '已启用本地覆盖',
 }
 

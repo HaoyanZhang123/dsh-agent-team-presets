@@ -328,9 +328,9 @@ export class TeamSkillService extends TypertRemoteService {
    * @returns the refreshed library.
    */
   @Remote
-  async unassignRole(teamId: string, roleId: string): Promise<TeamSkillLibraryView> {
+  async unassignRole(teamId: string, roleId: string, assetId?: string): Promise<TeamSkillLibraryView> {
     if (await this.settle() !== undefined) return await this.library()
-    await this.config.manager.unassign(teamId, roleId)
+    await this.config.manager.unassign(teamId, roleId, assetId)
     this.config.resync()
     return this.library()
   }

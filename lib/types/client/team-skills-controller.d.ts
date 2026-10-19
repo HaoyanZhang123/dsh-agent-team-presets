@@ -117,6 +117,20 @@ export declare class TeamSkillsController {
      */
     remove(assetId: string): Promise<TeamSkillDeleteView | undefined>;
     /**
+     * Bind one asset to one role, as the member page's grid does.
+     * @param teamId - Team identity.
+     * @param roleId - role identity, or `captain`.
+     * @param assetId - asset identity.
+     */
+    assignSkill(teamId: string, roleId: string, assetId: string): Promise<void>;
+    /**
+     * Remove one asset from one role.
+     * @param teamId - Team identity.
+     * @param roleId - role identity.
+     * @param assetId - asset identity.
+     */
+    unassignSkill(teamId: string, roleId: string, assetId: string): Promise<void>;
+    /**
      * Bind the selected asset to one role.
      * @param teamId - Team identity.
      * @param roleId - role identity, or `captain`.

@@ -300,6 +300,9 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             catalogueFailed={state.catalogue === 'error'}
             t={t}
             disabled={disabled}
+            {...props.skills === undefined ? {} : { skills: props.skills }}
+            teamId={team.id}
+            roleId={active.slot === 'captain' ? 'captain' : (memberSlot === undefined ? '' : (team.members[memberSlot]?.id ?? team.members[memberSlot]?.name ?? ''))}
             onBack={() => { openTeam(team.id) }}
             onChange={(patch) => {
               if (active.slot === 'captain') props.patchCaptain(teamIndex, captainPatch(patch))

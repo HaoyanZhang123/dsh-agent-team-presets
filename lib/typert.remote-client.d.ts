@@ -22,7 +22,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     overrideSkill: (skillId: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
     readFile: (assetId: string, path: string) => Promise<RemoteResult<{ ok: true; path: string; text: string; } | TeamSkillRefusalView>>
     resetSkill: (assetId: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
-    unassignRole: (teamId: string, roleId: string) => Promise<RemoteResult<TeamSkillLibraryView>>
+    unassignRole: (teamId: string, roleId: string, assetId?: string) => Promise<RemoteResult<TeamSkillLibraryView>>
     writeFile: (assetId: string, path: string, text: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
   }
   interface TypertRemoteMap {
@@ -37,7 +37,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'teamSkills/overrideSkill': (skillId: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
     'teamSkills/readFile': (assetId: string, path: string) => Promise<RemoteResult<{ ok: true; path: string; text: string; } | TeamSkillRefusalView>>
     'teamSkills/resetSkill': (assetId: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
-    'teamSkills/unassignRole': (teamId: string, roleId: string) => Promise<RemoteResult<TeamSkillLibraryView>>
+    'teamSkills/unassignRole': (teamId: string, roleId: string, assetId?: string) => Promise<RemoteResult<TeamSkillLibraryView>>
     'teamSkills/writeFile': (assetId: string, path: string, text: string) => Promise<RemoteResult<TeamSkillDetailView | TeamSkillRefusalView>>
   }
   interface TypertRemoteNamespaceMap {
@@ -58,7 +58,7 @@ export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'teamSkills/overrideSkill': TypertRemoteMethod<{ readonly 'skillId': string }, TeamSkillDetailView | TeamSkillRefusalView>
   readonly 'teamSkills/readFile': TypertRemoteMethod<{ readonly 'assetId': string; readonly 'path': string }, { ok: true; path: string; text: string; } | TeamSkillRefusalView>
   readonly 'teamSkills/resetSkill': TypertRemoteMethod<{ readonly 'assetId': string }, TeamSkillDetailView | TeamSkillRefusalView>
-  readonly 'teamSkills/unassignRole': TypertRemoteMethod<{ readonly 'teamId': string; readonly 'roleId': string }, TeamSkillLibraryView>
+  readonly 'teamSkills/unassignRole': TypertRemoteMethod<{ readonly 'teamId': string; readonly 'roleId': string; readonly 'assetId'?: string }, TeamSkillLibraryView>
   readonly 'teamSkills/writeFile': TypertRemoteMethod<{ readonly 'assetId': string; readonly 'path': string; readonly 'text': string }, TeamSkillDetailView | TeamSkillRefusalView>
 }>
 export default TYPERT_REMOTE

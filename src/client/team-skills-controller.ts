@@ -297,6 +297,33 @@ export class TeamSkillsController {
   }
 
   /**
+   * Bind one asset to one role, as the member page's grid does.
+   * @param teamId - Team identity.
+   * @param roleId - role identity, or `captain`.
+   * @param assetId - asset identity.
+   */
+  async assignSkill(teamId: string, roleId: string, assetId: string): Promise<void> {
+    await this.run(async () => {
+      const answer = unwrap(await this.api().assignRole(teamId, roleId, assetId))
+      this.publish({ library: answer.library })
+      return answer.ok ? 'assigned' : answer.detail
+    })
+  }
+
+  /**
+   * Remove one asset from one role.
+   * @param teamId - Team identity.
+   * @param roleId - role identity.
+   * @param assetId - asset identity.
+   */
+  async unassignSkill(teamId: string, roleId: string, assetId: string): Promise<void> {
+    await this.run(async () => {
+      this.publish({ library: unwrap(await this.api().unassignRole(teamId, roleId, assetId)) })
+      return 'unassigned'
+    })
+  }
+
+  /**
    * Bind the selected asset to one role.
    * @param teamId - Team identity.
    * @param roleId - role identity, or `captain`.
