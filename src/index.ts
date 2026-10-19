@@ -37,6 +37,7 @@ import { isSessionRoot, TeamExecutionMonitor, teammatesBusy } from './execution.
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { registerPresetTools } from './preset-tools.ts'
+import { installShippedSkills } from './skills.ts'
 import { definitionFingerprint, findTeam, selectedTeam, toolMode } from './presets.ts'
 import type { TeamPreset } from './types.ts'
 import TeamPresetsToolCatalog from './tool-catalog.ts'
@@ -100,6 +101,9 @@ export function apply(ctx: Context, config: Config): void {
     },
   )
   ctx.effect(() => () => { providers.dispose() }, 'agent-team-presets: member execution aliases')
+  // The skills the shipped role prompts name. Offered, never required: a
+  // deployment without a skill service keeps loading every Team.
+  installShippedSkills(ctx, message => { ctx.logger.warn(`${LOG}: %s`, message) })
   const quarantine = (agent: Agent, reason: string): void => {
     const previous = quarantines.get(agent)
     if (previous !== undefined) { previous.reason = reason; return }

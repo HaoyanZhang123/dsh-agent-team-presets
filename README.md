@@ -43,7 +43,7 @@ DeepSeek Harness already ships Agent Teams with multi-agent collaboration. In th
 - **Per-member model routes:** assign models and reasoning effort to individual roles without changing the captain's model.
 - **Independent tool policies:** choose all available tools or a custom allow-list for the captain and each member.
 - **Portable presets:** import and export role definitions while keeping deployment-specific routes and tool permissions local.
-- **Built-in starting points:** lightweight, standard, and full-stack software development Teams.
+- **Built-in work modes:** six ready Teams, one per kind of work — discovery, architecture, an established workflow, engineering, an independent audit, and research.
 - **Live settings feedback:** see whether a Team is idle, busy, or awaiting an update in an online Session.
 
 ## Contents
@@ -221,15 +221,33 @@ The editor has three levels: the Team list, one Team, and one captain or member.
 
 ### Built-in presets
 
-A fresh installation seeds three editable Teams:
+A fresh installation seeds six editable Teams, one per kind of work:
 
 | Preset | Intended use |
 |---|---|
-| 轻量研发团队 | Small features and module iterations, with an implementation member and an on-demand technical advisor. |
-| 标准研发团队 | Medium features and significant refactoring, adding an independent reviewer. |
-| 全栈软件研发团队 | Work across Web, desktop, and Android, with implementation, architecture, UI/UX, and review roles. |
+| 需求探索 | A new idea whose goal, technical path, or product direction is still open; read-only research with an independent challenge. |
+| 架构规划 | A settled goal whose systems, module boundaries, and cross-module contracts still have to be designed. |
+| 既定工作流执行 | An established workflow: the user names the next task, and the Team implements, verifies, and delivers it. |
+| 工程研发协作 | Feature work, cross-layer implementation, UI/UX, and ordinary or difficult debugging. |
+| 独立代码与安全审计 | An independent read-only review of named code, configuration, or changes. |
+| 科研协作 | Literature, experiment design, scientific computing, and the interpretation of evidence. |
 
 Their prompts are in Chinese. The same portable documents are available in [contrib/default-presets](<contrib/default-presets>) for manual import.
+
+### Bundled skills
+
+Two role prompts in the shipped Teams name a house method instead of restating it, and
+this plugin ships both methods as skills: `github-repository-presentation` (README
+template, cover, real badge links, Description, Topics, and Release layout) and
+`git-release-hygiene` (Commit, PR, Changelog, version, Tag, and Release delivery).
+Both come from the package's own `assets/skills` and are registered on the
+deployment's skill registry when it composes one, so they arrive and leave with the
+plugin rather than being copied into a user directory.
+
+Skill registration is optional: a deployment that composes no skill service still
+loads every Team, and the role prompts stay correct without the named skill. Skill
+precedence still belongs to the deployment — a project or user skill of the same name
+outranks the bundled copy, exactly as it does for the skills the Harness ships.
 
 Defaults are offered once per profile configuration: deleted presets stay deleted across restarts and upgrades, and edited presets are not overwritten. **Restore defaults** restores the shipped fields while preserving routes and tool policies on matched roles, and leaves user-created Teams alone. It also restores each built-in Team's shipped roster, removing roles you added to that Team; duplicate a customized Team first if you want to keep it. Restored presets are staged until you press **Save**. A deleted preset added back has no previous local route or tool policy to preserve.
 
@@ -395,7 +413,8 @@ Do not publish credentials, private endpoints, full Session logs, or proprietary
 ## Related resources
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — the Host and its plugin system.
-- [Built-in preset documents](<contrib/default-presets>) — portable starting points for your own Teams.
+- [Built-in preset documents](<contrib/default-presets>) — portable copies of the work-mode Teams, for your own use or overrides.
+- [Bundled skill documents](<assets/skills>) — the two methods the shipped role prompts name, as plain `SKILL.md` bundles.
 - [GitHub Releases](https://github.com/bloodarea/dsh-agent-team-presets/releases) — published versions.
 
 <a id="license"></a>

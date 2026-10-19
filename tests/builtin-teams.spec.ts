@@ -1,5 +1,5 @@
 /**
- * The three Team presets this plugin ships: their documents, the one-time
+ * The six Team presets this plugin ships: their documents, the one-time
  * install, and the restore Settings offers.
  *
  * The documents are checked against the copies a reader of this repository can
@@ -11,10 +11,13 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  AUDIT_TEAM_ID,
   BUILTIN_TEAMS,
-  FULLSTACK_TEAM_ID,
-  LIGHTWEIGHT_TEAM_ID,
-  STANDARD_TEAM_ID,
+  DISCOVERY_TEAM_ID,
+  ENGINEERING_TEAM_ID,
+  PLANNING_TEAM_ID,
+  RESEARCH_TEAM_ID,
+  WORKFLOW_TEAM_ID,
   builtinTeamDefinition,
   restoreBuiltinTeams,
   seedBuiltinTeams,
@@ -23,7 +26,7 @@ import { exportTeamPreset, parseTeamPresetText } from '../src/preset-transfer.ts
 import type { TeamPreset } from '../src/types.ts'
 
 /** Every shipped identity, in shipped order. */
-const IDS = [LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID]
+const IDS = [DISCOVERY_TEAM_ID, PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID]
 
 /** One user-created Team the shipped presets must never touch. */
 function userTeam(): TeamPreset {
@@ -69,9 +72,16 @@ function contrib(name: string): unknown {
 }
 
 describe('shipped default Team presets', () => {
-  it('ships the three documents exactly as contrib publishes them', () => {
-    const files = ['lightweight-team.json', 'standard-team.json', 'fullstack-team.json']
-    expect(BUILTIN_TEAMS).toHaveLength(3)
+  it('ships the six documents exactly as contrib publishes them', () => {
+    const files = [
+      'discovery-team.json',
+      'planning-team.json',
+      'workflow-team.json',
+      'engineering-team.json',
+      'audit-team.json',
+      'research-team.json',
+    ]
+    expect(BUILTIN_TEAMS).toHaveLength(6)
     BUILTIN_TEAMS.forEach((entry, index) => {
       expect(exportTeamPreset(builtinTeamDefinition(entry)), entry.id).toEqual(contrib(files[index]!))
     })
@@ -80,18 +90,28 @@ describe('shipped default Team presets', () => {
   it('publishes each contrib copy as a document this plugin imports', () => {
     // The README tells a reader they can import these by hand, so the copies
     // must be readable by the same reader an Import preset click uses.
-    for (const file of ['lightweight-team.json', 'standard-team.json', 'fullstack-team.json']) {
+    for (const file of [
+      'discovery-team.json',
+      'planning-team.json',
+      'workflow-team.json',
+      'engineering-team.json',
+      'audit-team.json',
+      'research-team.json',
+    ]) {
       const text = readFileSync(new URL(`../contrib/default-presets/${file}`, import.meta.url), 'utf8')
       expect(parseTeamPresetText(text), file).toMatchObject({ ok: true })
     }
   })
 
-  it('orders them from the lightest team to the full-stack one', () => {
+  it('orders them the way a working session moves through the work modes', () => {
     expect(BUILTIN_TEAMS.map(entry => entry.id)).toEqual(IDS)
     expect(BUILTIN_TEAMS.map(entry => entry.document.team.name)).toEqual([
-      '轻量研发团队',
-      '标准研发团队',
-      '全栈软件研发团队',
+      '需求探索',
+      '架构规划',
+      '既定工作流执行',
+      '工程研发协作',
+      '独立代码与安全审计',
+      '科研协作',
     ])
   })
 
@@ -126,7 +146,7 @@ describe('shipped default Team presets', () => {
 })
 
 describe('installing the shipped presets once', () => {
-  it('appends all three to a deployment that holds no Team, and marks them', () => {
+  it('appends every shipped preset to a deployment that holds no Team, and marks them', () => {
     const seeded = seedBuiltinTeams([], [])
     expect(seeded.changed).toBe(true)
     expect(seeded.teams.map(team => team.id)).toEqual(IDS)
@@ -142,11 +162,11 @@ describe('installing the shipped presets once', () => {
   })
 
   it('never reinstalls a preset the user deleted', () => {
-    // The user was offered all three and deleted the middle one.
-    const remaining = BUILTIN_TEAMS.filter(entry => entry.id !== STANDARD_TEAM_ID).map(builtinTeamDefinition)
+    // The user was offered every shipped preset and deleted the second one.
+    const remaining = BUILTIN_TEAMS.filter(entry => entry.id !== PLANNING_TEAM_ID).map(builtinTeamDefinition)
     const seeded = seedBuiltinTeams(remaining, IDS)
     expect(seeded.changed).toBe(false)
-    expect(seeded.teams.map(team => team.id)).toEqual([LIGHTWEIGHT_TEAM_ID, FULLSTACK_TEAM_ID])
+    expect(seeded.teams.map(team => team.id)).toEqual(IDS.filter(id => id !== PLANNING_TEAM_ID))
   })
 
   it('never overwrites a shipped preset the user edited', () => {
@@ -155,17 +175,22 @@ describe('installing the shipped presets once', () => {
     // The edited copy stays exactly as it was, and is now marked as offered.
     expect(seeded.teams[0]).toBe(edited)
     expect(seeded.seeded).toEqual(IDS)
-    // The two presets the deployment does not hold are appended behind it.
+    // The presets the deployment does not hold are appended behind it.
     expect(seeded.teams.map(team => team.id)).toEqual(IDS)
     expect(seeded.changed).toBe(true)
   })
 
   it('marks a preset the deployment already holds, without touching it or duplicating it', () => {
     const held = builtinTeamDefinition(BUILTIN_TEAMS[0]!)
-    const seeded = seedBuiltinTeams([held], [STANDARD_TEAM_ID, FULLSTACK_TEAM_ID])
+    const seeded = seedBuiltinTeams([held], [
+      PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID,
+    ])
     expect(seeded.changed).toBe(true)
     expect(seeded.teams).toEqual([held])
-    expect(seeded.seeded).toEqual([STANDARD_TEAM_ID, FULLSTACK_TEAM_ID, LIGHTWEIGHT_TEAM_ID])
+    // The marker is append-only: the newly marked preset joins at the end.
+    expect(seeded.seeded).toEqual([
+      PLANNING_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID, DISCOVERY_TEAM_ID,
+    ])
     // One write is enough: the marker grew once, so the next pass is silent.
     expect(seedBuiltinTeams(seeded.teams, seeded.seeded).changed).toBe(false)
   })
@@ -181,20 +206,20 @@ describe('installing the shipped presets once', () => {
 describe('restoring the shipped presets', () => {
   it('puts an edited shipped preset back at its document, keeping local routes and tool policies', () => {
     const edited = editedShipped()
-    // The other two shipped presets are present and untouched, so only the
-    // edited one is reported as changed.
+    // Every other shipped preset is present and untouched, so only the edited
+    // one is reported as changed.
     const others = BUILTIN_TEAMS.slice(1).map(builtinTeamDefinition)
     const restored = restoreBuiltinTeams([edited, ...others])
-    expect(restored.changed).toEqual([LIGHTWEIGHT_TEAM_ID])
+    expect(restored.changed).toEqual([DISCOVERY_TEAM_ID])
     const team = restored.teams[0]!
-    expect(team.id).toBe(LIGHTWEIGHT_TEAM_ID)
-    expect(team.name).toBe('轻量研发团队')
+    expect(team.id).toBe(DISCOVERY_TEAM_ID)
+    expect(team.name).toBe('需求探索')
     expect(team.description).toBe(BUILTIN_TEAMS[0]!.document.team.description)
     expect(team.captain.description).toBe(BUILTIN_TEAMS[0]!.document.team.captain.description)
     expect(team.captain.systemPrompt).toBe(BUILTIN_TEAMS[0]!.document.team.captain.systemPrompt)
     // The route and the tool policy are local, so the shipped name and prompts
     // come back while the configured model and allow-list stay.
-    const member = team.members.find(entry => entry.name === 'fullstack-advisor')!
+    const member = team.members.find(entry => entry.name === 'technical-scout')!
     expect(member.provider).toBe('deepseek')
     expect(member.model).toBe('deepseek-chat')
     expect(member.reasoningEffort).toBe('high')

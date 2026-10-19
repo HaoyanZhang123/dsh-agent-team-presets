@@ -20,7 +20,8 @@ import { executionStateOf, unnamedTeamsOf } from '../src/client/team-presets-con
 import type { ExternalUpdateNotice, TeamPresetImportPlan } from '../src/client/team-presets-controller.ts'
 import { EXECUTION_NOTICE_KEYS, en, zh } from '../src/client/locales.ts'
 import {
-  BUILTIN_TEAMS, BUILTIN_TEAM_IDS, FULLSTACK_TEAM_ID, LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, builtinTeamDefinition,
+  AUDIT_TEAM_ID, BUILTIN_TEAMS, BUILTIN_TEAM_IDS, DISCOVERY_TEAM_ID, ENGINEERING_TEAM_ID, PLANNING_TEAM_ID,
+  RESEARCH_TEAM_ID, WORKFLOW_TEAM_ID, builtinTeamDefinition,
 } from '../src/builtin-teams.ts'
 import { serializeTeamPreset } from '../src/preset-transfer.ts'
 import { teamAppearance } from '../src/client/appearance.ts'
@@ -791,9 +792,8 @@ describe('restoring the shipped default presets', () => {
     expect(state.teams[0]?.members[0]).toMatchObject({
       provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high', toolMode: 'custom', tools: ['read'],
     })
-    // The two presets that were already at their document are untouched.
-    expect(state.teams[1]).toEqual(stored[1])
-    expect(state.teams[2]).toEqual(stored[2])
+    // The presets that were already at their document are untouched.
+    expect(state.teams.slice(1)).toEqual(stored.slice(1))
     controller.dispose()
   })
 
@@ -804,7 +804,7 @@ describe('restoring the shipped default presets', () => {
     expect(controller.restoreDefaults()).toBe('restored')
     const teams = controller.store.getSnapshot().teams
     expect(teams.map(entry => entry.id))
-      .toEqual(['team-9', STANDARD_TEAM_ID, LIGHTWEIGHT_TEAM_ID, FULLSTACK_TEAM_ID])
+      .toEqual(['team-9', PLANNING_TEAM_ID, DISCOVERY_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID, AUDIT_TEAM_ID, RESEARCH_TEAM_ID])
     // A Team the user created keeps its identity, content, and position.
     expect(teams[0]).toEqual(own)
     controller.dispose()
@@ -865,7 +865,7 @@ describe('restoring the shipped default presets', () => {
     const { controller } = deployment(stored)
     controller.inject().restoreDefaults()
     expect(controller.store.getSnapshot()).toMatchObject({ defaults: 'restored', dirty: true })
-    expect(controller.store.getSnapshot().teams[0]?.id).toBe(LIGHTWEIGHT_TEAM_ID)
+    expect(controller.store.getSnapshot().teams[0]?.id).toBe(DISCOVERY_TEAM_ID)
     controller.dispose()
   })
 })
