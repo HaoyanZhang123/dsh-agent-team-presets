@@ -134,15 +134,20 @@ export function TeamListView(props: TeamListViewProps) {
       </div>
       <div className={css.filterRow}>
         <span className={css.filterLabel}>{t('filterCategory')}</span>
-        {source === 'all' ? null : (
-          <button type="button" className={`${css.chip} ${(source === 'builtin' ? series === 'all' : category === '') ? css.chipActive : ''}`} onClick={() => { if (source === 'builtin') setSeries('all'); else setCategory('') }}>{t('listAll')}</button>
-        )}
+        {/* One dimension, so the two sets are mutually exclusive: a Team cannot both
+            belong to a shipped series and to the reader's own category. Picking one
+            clears the other instead of ANDing into an empty list. */}
+        <button
+          type="button"
+          className={`${css.chip} ${series === 'all' && category === '' ? css.chipActive : ''}`}
+          onClick={() => { setSeries('all'); setCategory('') }}
+        >{t('listAll')}</button>
         {source !== 'custom' ? TEAM_SERIES.map(entry => (
           <button
             key={entry.id}
             type="button"
             className={`${css.chip} ${series === entry.id ? css.chipActive : ''}`}
-            onClick={() => { setSeries(series === entry.id ? 'all' : entry.id) }}
+            onClick={() => { setSeries(series === entry.id ? 'all' : entry.id); setCategory('') }}
           >{entry.id === 'classic-development' ? t('seriesDevelopment') : t('seriesWorkModes')}</button>
         )) : null}
         {source !== 'builtin' ? [...(props.categories ?? [])].sort((left, right) => left.order - right.order).map(entry => (
@@ -150,7 +155,7 @@ export function TeamListView(props: TeamListViewProps) {
             key={entry.id}
             type="button"
             className={`${css.chip} ${category === entry.id ? css.chipActive : ''}`}
-            onClick={() => { setCategory(category === entry.id ? '' : entry.id) }}
+            onClick={() => { setCategory(category === entry.id ? '' : entry.id); setSeries('all') }}
           >{entry.name}</button>
         )) : null}
         {source === 'custom' && (props.categories ?? []).length === 0
