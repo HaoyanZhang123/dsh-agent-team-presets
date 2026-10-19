@@ -106,6 +106,12 @@ export interface TeamEditorViewProps {
   readonly disabled: boolean
   readonly onBack: () => void
   readonly onPatch: (patch: Partial<TeamPreset>) => void
+  /** The reader's own categories, for the membership select. */
+  readonly categories?: readonly { readonly id: string; readonly name: string }[]
+  /** This Team's category, or an empty string when it has none. */
+  readonly categoryId?: string
+  /** Writes the membership; an empty id clears it. */
+  readonly onSetCategory?: (categoryId: string) => void
   readonly onOpenAgent: (slot: AgentSlot) => void
   readonly onAddMember: () => void
   readonly onRemoveMember: (index: number) => void
@@ -201,6 +207,26 @@ export function TeamEditorView(props: TeamEditorViewProps) {
           </ul>
         )}
       </section>
+
+      {props.onSetCategory === undefined ? null : (
+        <section className={css.card}>
+          <span className={css.cardTitle}>{props.t('categoryOf')}</span>
+          <div className={css.field}>
+            <select
+              className={css.input}
+              disabled={props.disabled}
+              value={props.categoryId ?? ''}
+              onChange={(event) => { props.onSetCategory?.(event.target.value) }}
+            >
+              <option value="">{props.t('categoryNone')}</option>
+              {(props.categories ?? []).map(entry => (
+                <option key={entry.id} value={entry.id}>{entry.name}</option>
+              ))}
+            </select>
+            <span className={css.hint}>{props.t('categoryNote')}</span>
+          </div>
+        </section>
+      )}
 
       <MetadataPanel team={props.team} disabled={props.disabled} onPatch={props.onPatch} t={props.t} />
     </>

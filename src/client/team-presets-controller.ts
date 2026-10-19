@@ -888,6 +888,7 @@ export class TeamPresetsController {
       createTeam: () => this.createTeam(),
       addCategory: (name: string) => this.addCategory(name),
       removeCategory: (id: string) => this.removeCategory(id),
+      setCategory: (teamId: string, categoryId: string) => this.setCategory(teamId, categoryId),
       duplicateTeam: (index: number) => this.duplicateTeam(index),
       restoreDefaults: () => { this.restoreDefaults() },
       exportTeam: (index: number) => this.exportTeam(index),
@@ -1564,6 +1565,8 @@ export interface TeamPresetsInjected {
   addCategory: (name: string) => Promise<boolean>
   /** Removes one local category and the memberships that pointed at it. */
   removeCategory: (id: string) => Promise<boolean>
+  /** Puts one Team in one category, or out of every category. */
+  setCategory: (teamId: string, categoryId: string) => Promise<boolean>
   createTeam: () => string
   duplicateTeam: (index: number) => string | undefined
   /** Stage the shipped default presets at their document's content, reporting the outcome on the store. */

@@ -290,6 +290,9 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
               openAgent(team.id, team.members.length)
             }}
             onRemoveMember={(index) => { props.removeMember(teamIndex, index) }}
+            categories={categoriesForList}
+            categoryId={(state.teamCategories ?? []).find(row => row.teamId === team.id)?.categoryId ?? ''}
+            onSetCategory={(categoryId) => { void props.setCategory(team.id, categoryId) }}
           />
         )}
 

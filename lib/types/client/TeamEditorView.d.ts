@@ -18,6 +18,15 @@ export interface TeamEditorViewProps {
     readonly disabled: boolean;
     readonly onBack: () => void;
     readonly onPatch: (patch: Partial<TeamPreset>) => void;
+    /** The reader's own categories, for the membership select. */
+    readonly categories?: readonly {
+        readonly id: string;
+        readonly name: string;
+    }[];
+    /** This Team's category, or an empty string when it has none. */
+    readonly categoryId?: string;
+    /** Writes the membership; an empty id clears it. */
+    readonly onSetCategory?: (categoryId: string) => void;
     readonly onOpenAgent: (slot: AgentSlot) => void;
     readonly onAddMember: () => void;
     readonly onRemoveMember: (index: number) => void;
