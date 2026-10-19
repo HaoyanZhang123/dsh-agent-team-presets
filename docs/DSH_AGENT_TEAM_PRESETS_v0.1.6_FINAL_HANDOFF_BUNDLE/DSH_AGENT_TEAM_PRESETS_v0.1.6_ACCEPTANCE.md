@@ -139,7 +139,7 @@ log relative path: [path]
 | S15 | Skill 有成员绑定 → 删除强阻断，展示所有角色依赖 | `PASS` | `NOT_RUN` |  真机：已绑定的技能点删除并确认，宿主一次性列出 `binding: 轻量研发团队 → team-lead` 等全部阻断理由 |
 | S16 | Skill 被活动 Agent 使用 → 删除阻断、资源不消失 | `PASS` | `NOT_RUN` |  真机：阻断理由含 `active: <持有者>`（本轮改为真实 Agent 标识，新增单测覆盖） |
 | S17 | 显式依赖阻断、疑似文本依赖警告；解除依赖后可以事务删除 | `PASS` | `NOT_RUN` | dependency 阻断 + 文本告警用例 |
-| S18 | 原版官方内置 Skill 只读；编辑创建本地覆盖，不更改资产包 | `PASS` | `NOT_RUN` | 只读拒绝 + `createOverride` 用例 |
+| S18 | 原版官方内置 Skill 只读；编辑创建本地覆盖，不更改资产包 | `PASS` | `NOT_RUN` |  真机：把 override 的 baseVersion 标为落后后，列表行与详情页同时出现「已启用本地覆盖」标签；改回后消失 |
 | S19 | 内置 Skill 整目录 SHA 校验、版本比对、更新、原版恢复、回滚 | `PASS`（部分） | `NOT_RUN` | digest/updateAvailable/`resetOverride` 用例；UI 未实现 |
 | S20 | 运行成员引用版本固定；插件升级/文件保存不能改坏运行成员资源 | `PASS` | `NOT_RUN` | 版本目录不可变用例 |
 | S21 | 旧用户 Skill 覆盖版升级不会丢失、自动覆盖或自动合并 | `PASS` | `NOT_RUN` | `updateAvailable` 标记用例（不合并） |
