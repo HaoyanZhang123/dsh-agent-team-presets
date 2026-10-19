@@ -286,6 +286,23 @@
   min-width: 0;
 }
 
+.field > * {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* The primitive Input renders a wrapper around the real <input>, so sizing the
+ * wrapper alone leaves the inner control free to overflow its card. */
+.field input,
+.field textarea,
+.field select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .fieldLabel {
   display: block;
   margin: 10px 0 4px;
@@ -295,7 +312,32 @@
 }
 
 .input {
+  /* The host does not guarantee border-box, and the primitive input carries its
+   * own border and padding: without this the field overflows its card. */
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+}
+
+/* A raw text input (the metadata tag field) has no primitive around it, so it
+ * needs the same box the other fields have instead of the browser default. */
+.textInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-line-regular, #d8dce1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.textInput:focus-visible {
+  border-color: var(--dsw-alias-state-business-primary, #4587ff);
+  box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, #cfe0ff);
 }
 
 /* A native select keeps the OS chrome, which reads as an unstyled control next to

@@ -71,6 +71,7 @@ export type TeamPresetsLocaleKey =
   | 'categoryRename'
   | 'categoryUp'
   | 'categoryDown'
+  | 'categoryManagePage' | 'categoryTitle' | 'categorySub' | 'categoryTeams' | 'categorySave' | 'categoryRemove'
   | 'categoryNote'
   | 'categoryManage'
   | 'categoryFold'
@@ -334,6 +335,12 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsDeclared: 'declared',
   categoryManage: 'Manage categories',
   categoryRename: 'Rename',
+  categoryManagePage: 'Manage preset categories',
+  categoryTitle: 'Team preset categories',
+  categorySub: 'Local grouping for this browser only. A category never travels with a preset and never reaches the runtime.',
+  categoryTeams: 'teams',
+  categorySave: 'Save',
+  categoryRemove: 'Delete',
   categoryUp: 'Move up',
   categoryDown: 'Move down',
   categoryNote: 'Local grouping only: it is not exported with the preset and never reaches the runtime.',
@@ -572,6 +579,12 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsDeclared: '已声明',
   categoryManage: '管理分类',
   categoryRename: '重命名',
+  categoryManagePage: '管理团队预设分类',
+  categoryTitle: '团队预设分类',
+  categorySub: '仅在本机浏览器生效的分组。分类不会随预设导出，也不会进入运行时。',
+  categoryTeams: '个团队',
+  categorySave: '保存',
+  categoryRemove: '删除',
   categoryUp: '上移',
   categoryDown: '下移',
   categoryNote: '仅本地分组：不会随预设导出，也不会进入运行时。',

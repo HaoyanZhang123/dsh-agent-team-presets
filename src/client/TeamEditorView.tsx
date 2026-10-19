@@ -77,7 +77,7 @@ function MetadataPanel(props: { team: TeamPreset; disabled: boolean; onPatch: (p
           <textarea className={css.prompt} rows={2} disabled={props.disabled} value={fields.summary}
             onChange={(event) => { commit({ ...fields, summary: event.target.value }) }} />
           <label className={css.fieldLabel}>{props.t('metadataTags')}</label>
-          <input className={css.input} disabled={props.disabled} value={fields.tags}
+          <input className={css.textInput} disabled={props.disabled} value={fields.tags}
             onChange={(event) => { commit({ ...fields, tags: event.target.value }) }} />
           <p className={css.hint}>{props.t('metadataTagsHint')}</p>
           <label className={css.fieldLabel}>{props.t('metadataUseCases')}</label>

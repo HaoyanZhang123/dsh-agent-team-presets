@@ -10,6 +10,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { TeamAgentView } from './TeamAgentView.tsx'
 import { TeamEditorView } from './TeamEditorView.tsx'
+import { TeamCategoryManager } from './TeamCategoryManager.tsx'
 import type { AgentSlot } from './TeamEditorView.tsx'
 import { TeamImportDialog } from './TeamImportDialog.tsx'
 import { TeamListView } from './TeamListView.tsx'
@@ -82,6 +83,7 @@ type View =
   | { readonly kind: 'list' }
   | { readonly kind: 'team'; readonly teamId: string }
   | { readonly kind: 'agent'; readonly teamId: string; readonly slot: AgentSlot }
+  | { readonly kind: 'categories' }
 
 /**
  * Read one coordinated external update as the footer's status sentences.
@@ -180,9 +182,11 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
   // silent failure.
   const disabled = !state.writable || state.formIssue !== undefined
   const teamList = state.teams
-  const found = view.kind === 'list' ? undefined : teamList.find(entry => entry.id === view.teamId)
+  // Only the team and agent views address a Team; the categories page stands alone.
+  const addressed = view.kind === 'team' || view.kind === 'agent' ? view.teamId : undefined
+  const found = addressed === undefined ? undefined : teamList.find(entry => entry.id === addressed)
   // A deleted Team or member drops the page back to the level that still exists.
-  const active: View = view.kind === 'list' || found !== undefined ? view : { kind: 'list' }
+  const active: View = addressed === undefined || found !== undefined ? view : { kind: 'list' }
   const team = found
   const teamIndex = team === undefined ? -1 : teamList.indexOf(team)
 
@@ -247,6 +251,20 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
         {props.skills === undefined ? null : <TabButton active={tab === 'skills'} onClick={() => { setTab('skills') }}>{t('tabSkills')}</TabButton>}
       </div>
       <div className={css.page}>
+        {active.kind === 'categories' && (
+          <TeamCategoryManager
+            categories={state.categories}
+            teamCategories={state.teamCategories}
+            disabled={disabled}
+            t={t}
+            onBack={() => { setView({ kind: 'list' }) }}
+            onAdd={(name) => { void props.addCategory(name) }}
+            onRename={(id, name) => { void props.renameCategory(id, name) }}
+            onMove={(id, delta) => { void props.moveCategory(id, delta) }}
+            onRemove={(id) => { void props.removeCategory(id) }}
+          />
+        )}
+
         {active.kind === 'list' && (
           <TeamListView
             teams={teamList}
@@ -254,10 +272,7 @@ export function TeamPresetsSection(props: TeamPresetsSectionProps) {
             disabled={disabled}
             importError={importError}
             categories={categoriesForList}
-            onAddCategory={(name) => { void props.addCategory(name) }}
-            onRemoveCategory={(id) => { void props.removeCategory(id) }}
-            onRenameCategory={(id, name) => { void props.renameCategory(id, name) }}
-            onMoveCategory={(id, delta) => { void props.moveCategory(id, delta) }}
+            onManageCategories={() => { setView({ kind: 'categories' }) }}
             teamCategories={state.teamCategories}
             onOpen={openTeam}
             onCreate={() => { openTeam(props.createTeam()) }}

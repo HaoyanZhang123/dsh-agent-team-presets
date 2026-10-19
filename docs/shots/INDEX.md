@@ -10,5 +10,6 @@ through CDP. The Desktop environment is not covered here.
 | `skill-git-release-hygiene.png` | Team Skill detail page: provenance pills, the same-name notice, resource area with file tree (selected file highlighted) and editor, copy-path / create-copy / delete actions |
 | `member-skill-grid.png` | Member page: Team Skill assignment grid with the assigned count beside the title, bordered panel, and three-column cards carrying name, checkbox, two-line description and origin tag |
 | `skill-delete-dialog.png` | Team Skill delete confirmation: 510px dialog, 15px radius, 20px padding, capped at 85vh, with the blockers the host reported |
+| `category-manager.png` | Team preset categories page: add field, one row per category with its team count, and rename / move / delete per row |
 | `team-editor.png` | Team editor: display-metadata card, the styled category select, and the status notices as bordered blocks above the save bar |
 | `composer-picker.png` | Composer Team picker: the pinned `不使用团队` entry, search field, source chips, and Team rows grouped by series |

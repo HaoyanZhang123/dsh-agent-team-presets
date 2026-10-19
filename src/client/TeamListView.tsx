@@ -36,14 +36,8 @@ export interface TeamListViewProps {
   readonly categories?: readonly { readonly id: string; readonly name: string; readonly order: number }[]
   /** Which Team owns which category. */
   readonly teamCategories?: readonly { readonly teamId: string; readonly categoryId: string }[]
-  /** Adds one category by name. */
-  readonly onAddCategory?: (name: string) => void
-  /** Removes one category and its memberships. */
-  readonly onRemoveCategory?: (id: string) => void
-  /** Renames one category. */
-  readonly onRenameCategory?: (id: string, name: string) => void
-  /** Moves one category up (-1) or down (1). */
-  readonly onMoveCategory?: (id: string, delta: -1 | 1) => void
+  /** Opens the page that manages the Team preset categories. */
+  readonly onManageCategories?: () => void
 }
 
 /**
@@ -58,10 +52,6 @@ export function TeamListView(props: TeamListViewProps) {
   const [source, setSource] = useState<'all' | 'builtin' | 'custom'>('all')
   const [series, setSeries] = useState<'all' | TeamSeries>('all')
   const [category, setCategory] = useState('')
-  const [managing, setManaging] = useState(false)
-  const [newCategory, setNewCategory] = useState('')
-  const [renaming, setRenaming] = useState('')
-  const [renameText, setRenameText] = useState('')
 
   const tokens = queryTokens(query)
   const visible = useMemo(() => props.teams.filter((team) => {
@@ -101,6 +91,9 @@ export function TeamListView(props: TeamListViewProps) {
         >
           {t('restoreDefaults')}
         </Button>
+        {props.onManageCategories === undefined ? null : (
+          <Button size="sm" variant="outline" onClick={props.onManageCategories}>{t('categoryManagePage')}</Button>
+        )}
         <input
           ref={fileInput}
           className={css.fileInput}
@@ -134,11 +127,6 @@ export function TeamListView(props: TeamListViewProps) {
         <button type="button" className={`${css.chip} ${source === 'all' && series === 'all' ? css.chipActive : ''}`} onClick={() => { setSource('all'); setSeries('all') }}>{t('listAll')}</button>
         <button type="button" className={`${css.chip} ${source === 'builtin' ? css.chipActive : ''}`} onClick={() => { setSource('builtin'); setSeries('all') }}>{t('listBuiltin')}</button>
         <button type="button" className={`${css.chip} ${source === 'custom' ? css.chipActive : ''}`} onClick={() => { setSource('custom'); setSeries('all') }}>{t('listCustom')}</button>
-        {props.onAddCategory === undefined ? null : (
-          <button type="button" className={css.chip} onClick={() => { setManaging(value => !value) }}>
-            {managing ? t('categoryFold') : t('categoryManage')}
-          </button>
-        )}
         {(props.categories ?? []).map(entry => (
           <button
             key={entry.id}
@@ -157,52 +145,6 @@ export function TeamListView(props: TeamListViewProps) {
         ))}
       </div>
 
-      {managing ? (
-        <div className={css.categoryPanel}>
-          <input
-            className={css.listSearch}
-            value={newCategory}
-            placeholder={t('categoryName')}
-            onChange={(event) => { setNewCategory(event.target.value) }}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter') return
-              props.onAddCategory?.(newCategory)
-              setNewCategory('')
-            }}
-          />
-          <Button size="sm" variant="outline" onClick={() => { props.onAddCategory?.(newCategory); setNewCategory('') }}>{t('categoryAdd')}</Button>
-          {[...(props.categories ?? [])].sort((left, right) => left.order - right.order).map(entry => (
-            <span key={entry.id} className={css.categoryPill}>
-              {renaming === entry.id ? (
-                <>
-                  <input
-                    className={css.pillInput}
-                    autoFocus
-                    value={renameText}
-                    onChange={(event) => { setRenameText(event.target.value) }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') setRenaming('')
-                      if (event.key !== 'Enter') return
-                      props.onRenameCategory?.(entry.id, renameText)
-                      setRenaming('')
-                    }}
-                  />
-                  <button type="button" className={css.chip} onClick={() => { props.onRenameCategory?.(entry.id, renameText); setRenaming('') }}>✓</button>
-                </>
-              ) : (
-                <>
-                  {entry.name}
-                  <button type="button" className={css.chip} aria-label={`${t('categoryRename')} ${entry.name}`} onClick={() => { setRenaming(entry.id); setRenameText(entry.name) }}>✎</button>
-                  <button type="button" className={css.chip} aria-label={`${t('categoryUp')} ${entry.name}`} onClick={() => { props.onMoveCategory?.(entry.id, -1) }}>↑</button>
-                  <button type="button" className={css.chip} aria-label={`${t('categoryDown')} ${entry.name}`} onClick={() => { props.onMoveCategory?.(entry.id, 1) }}>↓</button>
-                  <button type="button" className={css.chip} onClick={() => { props.onRemoveCategory?.(entry.id) }}>×</button>
-                </>
-              )}
-            </span>
-          ))}
-          {(props.categories ?? []).length === 0 ? <span className={css.hint}>{t('categoryEmpty')}</span> : null}
-        </div>
-      ) : null}
 
       <p className={css.hint}>
         {t('listMatched')} {visible.length} · {t('listNoInject')}

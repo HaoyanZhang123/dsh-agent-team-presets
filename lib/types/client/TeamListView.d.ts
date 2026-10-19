@@ -35,14 +35,8 @@ export interface TeamListViewProps {
         readonly teamId: string;
         readonly categoryId: string;
     }[];
-    /** Adds one category by name. */
-    readonly onAddCategory?: (name: string) => void;
-    /** Removes one category and its memberships. */
-    readonly onRemoveCategory?: (id: string) => void;
-    /** Renames one category. */
-    readonly onRenameCategory?: (id: string, name: string) => void;
-    /** Moves one category up (-1) or down (1). */
-    readonly onMoveCategory?: (id: string, delta: -1 | 1) => void;
+    /** Opens the page that manages the Team preset categories. */
+    readonly onManageCategories?: () => void;
 }
 /**
  * Render the Team list.
