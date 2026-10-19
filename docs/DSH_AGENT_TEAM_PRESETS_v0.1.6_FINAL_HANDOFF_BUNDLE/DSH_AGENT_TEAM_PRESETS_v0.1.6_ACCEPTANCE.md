@@ -89,7 +89,7 @@ log relative path: [path]
 | T06 | 恢复单个官方团队、修改官方团队、复制删除均遵循旧 CRUD 语义 | `PASS`（逻辑） | `NOT_RUN` | 恢复单团队用例；复制/删除 UI 未改（沿用 0.1.5） |
 | T07 | 重复启动/热重载/失败后重试迁移无重复播种、无数据漂移 | `PASS` | `NOT_RUN` | 幂等用例（连跑两次 changed=false） |
 | T08 | 官方来源标记不可被恶意普通导入 JSON 伪造 | `PASS` | `NOT_RUN` | 来源由 `builtinEntry(team.id)` 决定；导入不写来源字段（`team-search.spec.ts`） |
-| T09 | 官方两个系列固定；自定义类别可创建、改名、移动、删除 | `PARTIAL` | `NOT_RUN` |  官方两系列固定；分类可新建/删除/归属（真机 PASS）；改名与拖拽排序未实现 |
+| T09 | 官方两个系列固定；自定义类别可创建、改名、移动、删除 | `PASS` | `NOT_RUN` |  真机：新建/删除/归属/过滤 + 本轮补齐改名（审核→质量审核，配置文件同步）与上移/下移（两个分类顺序互换）；order 存为 0..n-1 |
 | T10 | 删除分类不删除任何团队；恢复默认不清空个人分类 | `PASS`（纯函数） | `NOT_RUN` | `withoutCategory` 用例；恢复默认只改 `teams`/`metadata`，不触碰分类字段 |
 | T11 | metadata 可完全为空；官方预设有区别清晰的初始说明 | `PASS` | `NOT_RUN` | 九个 summary/tags/useCases/quickPrompts 非空且互不重复（用例） |
 | T12 | 添加 10 KB metadata 后运行时 prompt、spawn tool description、快照严格等值 | `PASS` | `NOT_RUN` | `metadata-boundary.spec.ts`（近 16KB，逐字节相等） |

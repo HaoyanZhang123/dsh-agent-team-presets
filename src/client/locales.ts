@@ -64,6 +64,9 @@ export type TeamPresetsLocaleKey =
   | 'skillsBody' | 'tabTeams' | 'tabSkills' | 'skillsHint'
   | 'skillsAssignTitle' | 'skillsAssignHint' | 'skillsAssignEmpty'
   | 'skillsDeclared' | 'skillsFound' | 'skillsMissing'
+  | 'categoryRename'
+  | 'categoryUp'
+  | 'categoryDown'
   | 'categoryNote'
   | 'categoryManage'
   | 'categoryFold'
@@ -320,6 +323,9 @@ export const en: Record<TeamPresetsLocaleKey, string> = {
   skillsAssignTitle: 'Team Skill assignment',
   skillsDeclared: 'declared',
   categoryManage: 'Manage categories',
+  categoryRename: 'Rename',
+  categoryUp: 'Move up',
+  categoryDown: 'Move down',
   categoryNote: 'Local grouping only: it is not exported with the preset and never reaches the runtime.',
   categoryFold: 'Hide categories',
   categoryName: 'New category name',
@@ -550,6 +556,9 @@ export const zh: Record<TeamPresetsLocaleKey, string> = {
   skillsAssignTitle: 'Team Skill 分配',
   skillsDeclared: '已声明',
   categoryManage: '管理分类',
+  categoryRename: '重命名',
+  categoryUp: '上移',
+  categoryDown: '下移',
   categoryNote: '仅本地分组：不会随预设导出，也不会进入运行时。',
   categoryFold: '收起分类',
   categoryName: '新分类名称',

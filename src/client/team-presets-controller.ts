@@ -889,6 +889,8 @@ export class TeamPresetsController {
       addCategory: (name: string) => this.addCategory(name),
       removeCategory: (id: string) => this.removeCategory(id),
       setCategory: (teamId: string, categoryId: string) => this.setCategory(teamId, categoryId),
+      renameCategory: (id: string, name: string) => this.renameCategory(id, name),
+      moveCategory: (id: string, delta: -1 | 1) => this.moveCategory(id, delta),
       duplicateTeam: (index: number) => this.duplicateTeam(index),
       restoreDefaults: () => { this.restoreDefaults() },
       exportTeam: (index: number) => this.exportTeam(index),
@@ -1405,6 +1407,48 @@ export class TeamPresetsController {
   }
 
   /**
+   * Rename one category.
+   * @param id - category identity.
+   * @param name - the new display name.
+   * @returns whether the Host accepted the write.
+   */
+  async renameCategory(id: string, name: string): Promise<boolean> {
+    const trimmed = name.trim()
+    if (trimmed === '') return false
+    const current = this.projection()
+    // Memberships reference ids, so a rename never has to touch a Team.
+    return this.writeCategories(
+      current.categories.map(row => row.id === id ? { ...row, name: trimmed } : row),
+      current.teamCategories,
+    )
+  }
+
+  /**
+   * Move one category earlier or later in the display order.
+   *
+   * Order is a local view concern, so it is stored as a dense 0..n-1 sequence
+   * rather than swapping two arbitrary numbers: a document that was hand-edited
+   * or partially written still normalises on the next move.
+   * @param id - category identity.
+   * @param delta - -1 to move up, 1 to move down.
+   * @returns whether the Host accepted the write.
+   */
+  async moveCategory(id: string, delta: -1 | 1): Promise<boolean> {
+    const current = this.projection()
+    const ordered = [...current.categories].sort((left, right) => left.order - right.order)
+    const from = ordered.findIndex(row => row.id === id)
+    const to = from + delta
+    if (from < 0 || to < 0 || to >= ordered.length) return false
+    const [moved] = ordered.splice(from, 1)
+    if (moved === undefined) return false
+    ordered.splice(to, 0, moved)
+    return this.writeCategories(
+      ordered.map((row, index) => ({ ...row, order: index })),
+      current.teamCategories,
+    )
+  }
+
+  /**
    * Move one Team into one category, or out of every category.
    * @param teamId - Team identity.
    * @param categoryId - category identity, or an empty string for none.
@@ -1567,6 +1611,10 @@ export interface TeamPresetsInjected {
   removeCategory: (id: string) => Promise<boolean>
   /** Puts one Team in one category, or out of every category. */
   setCategory: (teamId: string, categoryId: string) => Promise<boolean>
+  /** Renames one local category. */
+  renameCategory: (id: string, name: string) => Promise<boolean>
+  /** Moves one local category up or down in the display order. */
+  moveCategory: (id: string, delta: -1 | 1) => Promise<boolean>
   createTeam: () => string
   duplicateTeam: (index: number) => string | undefined
   /** Stage the shipped default presets at their document's content, reporting the outcome on the store. */

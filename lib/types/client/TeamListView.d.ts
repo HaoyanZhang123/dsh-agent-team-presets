@@ -28,6 +28,7 @@ export interface TeamListViewProps {
     readonly categories?: readonly {
         readonly id: string;
         readonly name: string;
+        readonly order: number;
     }[];
     /** Which Team owns which category. */
     readonly teamCategories?: readonly {
@@ -38,6 +39,10 @@ export interface TeamListViewProps {
     readonly onAddCategory?: (name: string) => void;
     /** Removes one category and its memberships. */
     readonly onRemoveCategory?: (id: string) => void;
+    /** Renames one category. */
+    readonly onRenameCategory?: (id: string, name: string) => void;
+    /** Moves one category up (-1) or down (1). */
+    readonly onMoveCategory?: (id: string, delta: -1 | 1) => void;
 }
 /**
  * Render the Team list.

@@ -33,13 +33,17 @@ export interface TeamListViewProps {
   /** Writes the chosen Team out as a shareable document. */
   readonly onExport: (teamId: string) => void
   /** The reader's own categories, in display order. */
-  readonly categories?: readonly { readonly id: string; readonly name: string }[]
+  readonly categories?: readonly { readonly id: string; readonly name: string; readonly order: number }[]
   /** Which Team owns which category. */
   readonly teamCategories?: readonly { readonly teamId: string; readonly categoryId: string }[]
   /** Adds one category by name. */
   readonly onAddCategory?: (name: string) => void
   /** Removes one category and its memberships. */
   readonly onRemoveCategory?: (id: string) => void
+  /** Renames one category. */
+  readonly onRenameCategory?: (id: string, name: string) => void
+  /** Moves one category up (-1) or down (1). */
+  readonly onMoveCategory?: (id: string, delta: -1 | 1) => void
 }
 
 /**
@@ -56,6 +60,8 @@ export function TeamListView(props: TeamListViewProps) {
   const [category, setCategory] = useState('')
   const [managing, setManaging] = useState(false)
   const [newCategory, setNewCategory] = useState('')
+  const [renaming, setRenaming] = useState('')
+  const [renameText, setRenameText] = useState('')
 
   const tokens = queryTokens(query)
   const visible = useMemo(() => props.teams.filter((team) => {
@@ -166,10 +172,33 @@ export function TeamListView(props: TeamListViewProps) {
             }}
           />
           <Button size="sm" variant="outline" onClick={() => { props.onAddCategory?.(newCategory); setNewCategory('') }}>{t('categoryAdd')}</Button>
-          {(props.categories ?? []).map(entry => (
+          {[...(props.categories ?? [])].sort((left, right) => left.order - right.order).map(entry => (
             <span key={entry.id} className={css.categoryPill}>
-              {entry.name}
-              <button type="button" className={css.chip} onClick={() => { props.onRemoveCategory?.(entry.id) }}>×</button>
+              {renaming === entry.id ? (
+                <>
+                  <input
+                    className={css.pillInput}
+                    autoFocus
+                    value={renameText}
+                    onChange={(event) => { setRenameText(event.target.value) }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setRenaming('')
+                      if (event.key !== 'Enter') return
+                      props.onRenameCategory?.(entry.id, renameText)
+                      setRenaming('')
+                    }}
+                  />
+                  <button type="button" className={css.chip} onClick={() => { props.onRenameCategory?.(entry.id, renameText); setRenaming('') }}>✓</button>
+                </>
+              ) : (
+                <>
+                  {entry.name}
+                  <button type="button" className={css.chip} aria-label={`${t('categoryRename')} ${entry.name}`} onClick={() => { setRenaming(entry.id); setRenameText(entry.name) }}>✎</button>
+                  <button type="button" className={css.chip} aria-label={`${t('categoryUp')} ${entry.name}`} onClick={() => { props.onMoveCategory?.(entry.id, -1) }}>↑</button>
+                  <button type="button" className={css.chip} aria-label={`${t('categoryDown')} ${entry.name}`} onClick={() => { props.onMoveCategory?.(entry.id, 1) }}>↓</button>
+                  <button type="button" className={css.chip} onClick={() => { props.onRemoveCategory?.(entry.id) }}>×</button>
+                </>
+              )}
             </span>
           ))}
           {(props.categories ?? []).length === 0 ? <span className={css.hint}>{t('categoryEmpty')}</span> : null}

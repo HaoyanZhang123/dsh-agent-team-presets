@@ -466,3 +466,5 @@
 /* Category management, kept inline so it never opens a second dialog. */
 .categoryPanel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid var(--dsw-alias-line-regular, #dfe3e8); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; background: var(--dsw-alias-bg-elevated, #fff); }
 .categoryPill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #dee2e7; border-radius: 999px; padding: 2px 4px 2px 9px; font-size: 12px; }
+
+.pillInput { border: 1px solid #cdd3da; border-radius: 6px; padding: 1px 6px; font-size: 12px; width: 92px; background: #fff; color: inherit; }

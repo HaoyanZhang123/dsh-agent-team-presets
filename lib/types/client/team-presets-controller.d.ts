@@ -612,6 +612,24 @@ export declare class TeamPresetsController {
      */
     removeCategory(id: string): Promise<boolean>;
     /**
+     * Rename one category.
+     * @param id - category identity.
+     * @param name - the new display name.
+     * @returns whether the Host accepted the write.
+     */
+    renameCategory(id: string, name: string): Promise<boolean>;
+    /**
+     * Move one category earlier or later in the display order.
+     *
+     * Order is a local view concern, so it is stored as a dense 0..n-1 sequence
+     * rather than swapping two arbitrary numbers: a document that was hand-edited
+     * or partially written still normalises on the next move.
+     * @param id - category identity.
+     * @param delta - -1 to move up, 1 to move down.
+     * @returns whether the Host accepted the write.
+     */
+    moveCategory(id: string, delta: -1 | 1): Promise<boolean>;
+    /**
      * Move one Team into one category, or out of every category.
      * @param teamId - Team identity.
      * @param categoryId - category identity, or an empty string for none.
@@ -679,6 +697,10 @@ export interface TeamPresetsInjected {
     removeCategory: (id: string) => Promise<boolean>;
     /** Puts one Team in one category, or out of every category. */
     setCategory: (teamId: string, categoryId: string) => Promise<boolean>;
+    /** Renames one local category. */
+    renameCategory: (id: string, name: string) => Promise<boolean>;
+    /** Moves one local category up or down in the display order. */
+    moveCategory: (id: string, delta: -1 | 1) => Promise<boolean>;
     createTeam: () => string;
     duplicateTeam: (index: number) => string | undefined;
     /** Stage the shipped default presets at their document's content, reporting the outcome on the store. */
