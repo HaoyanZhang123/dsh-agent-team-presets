@@ -42,7 +42,7 @@
 | G07 | 原模型路由/工具权限/Agent Team 原生协作能力无回归 | `PASS`（自动化） | `NOT_RUN` | 原 427 用例中除宿主 API 适配外全部保留并通过；应用排队/成员身份/严格策略用例均绿 |
 | G08 | 配置兼容与禁用可选服务后的安全降级有证据 | `PASS`（部分） | `NOT_RUN` | 缺 skill 服务降级用例；v1→v2 读取；**0.2.0-rc.2 实机未测** |
 | G09 | UI 覆盖 U01–U18 并有 Web / Desktop 实截图 | `PARTIAL` | `NOT_RUN` |  Web 实截图已归档到 `shots/`（技能详情、团队列表、composer 选择器、成员九宫格）；Desktop 截图仍缺 |
-| G10 | 对外文档按实际完成情况更新、中文英文无关键矛盾 | `NOT_RUN` | `NOT_RUN` | README/CHANGELOG 未更新（依赖 Desktop 验收） |
+| G10 | 对外文档按实际完成情况更新、中文英文无关键矛盾 | `PARTIAL` | `NOT_RUN` |  README.md 与 README.zh.md 的 Features 已按 0.1.6 实际能力重写（元数据边界、分类与搜索、私有 Team Skills 与覆盖/重置、按成员分配、带保护的删除、依赖检查），中英内容对应；完整文档站与 CHANGELOG 仍未补 |
 | G11 | 官方 Skill 与 MCP 依赖严格区分、无未授权 MCP 自动连接/凭据泄漏 | `PASS`（声明层） | `NOT_RUN` | 仅有依赖声明数据模型；无自动连接、无凭据落盘；动态挂载按 Blocked 记录 |
 
 **硬性判定规则：** Desktop G00 / G02 / G03 / G05 / G06 / G07 / G11 任一 `FAIL`、`BLOCKED` 或 `NOT_RUN`，**不得签署“完整通过，可发布”**。`BLOCKED` 可以交付代码及报告，由维护者决定功能删减/版本策略；不得静默绕开。
@@ -89,7 +89,7 @@ log relative path: [path]
 | T06 | 恢复单个官方团队、修改官方团队、复制删除均遵循旧 CRUD 语义 | `PASS`（逻辑） | `NOT_RUN` | 恢复单团队用例；复制/删除 UI 未改（沿用 0.1.5） |
 | T07 | 重复启动/热重载/失败后重试迁移无重复播种、无数据漂移 | `PASS` | `NOT_RUN` | 幂等用例（连跑两次 changed=false） |
 | T08 | 官方来源标记不可被恶意普通导入 JSON 伪造 | `PASS` | `NOT_RUN` | 来源由 `builtinEntry(team.id)` 决定；导入不写来源字段（`team-search.spec.ts`） |
-| T09 | 官方两个系列固定；自定义类别可创建、改名、移动、删除 | `PARTIAL` | `NOT_RUN` | 系列固定：PASS（用例）。分类的**数据模型/纯函数/清理**：PASS；**页面 CRUD 未实现** |
+| T09 | 官方两个系列固定；自定义类别可创建、改名、移动、删除 | `PARTIAL` | `NOT_RUN` |  官方两系列固定；分类可新建/删除/归属（真机 PASS）；改名与拖拽排序未实现 |
 | T10 | 删除分类不删除任何团队；恢复默认不清空个人分类 | `PASS`（纯函数） | `NOT_RUN` | `withoutCategory` 用例；恢复默认只改 `teams`/`metadata`，不触碰分类字段 |
 | T11 | metadata 可完全为空；官方预设有区别清晰的初始说明 | `PASS` | `NOT_RUN` | 九个 summary/tags/useCases/quickPrompts 非空且互不重复（用例） |
 | T12 | 添加 10 KB metadata 后运行时 prompt、spawn tool description、快照严格等值 | `PASS` | `NOT_RUN` | `metadata-boundary.spec.ts`（近 16KB，逐字节相等） |
@@ -153,13 +153,13 @@ log relative path: [path]
 | M02 | 不强制额外私有 manifest 写入第三方 SKILL.md | `PASS` | `NOT_RUN` | 原文逐字节保留用例 |
 | M03 | Skill 依赖 required/optional MCP serverName/tool/resource 可保存并展示 | `PASS` | `NOT_RUN` |  真机+单测：详情页按依赖逐条展示；MCP 标「已声明」，可执行文件按 PATH 解析为「存在/缺失」 |
 | M04 | required 缺失有具体阻断/降级提示；optional 缺失仅提示 | `PARTIAL` | `NOT_RUN` |  缺失的可执行文件已给出明确警示标签；required/optional 的差异化阻断仍未实现 |
-| M05 | 连接失败、权限拒绝、离线，UI 不假报「已加载」 | `NOT_RUN` | `NOT_RUN` | 未实现 |
+| M05 | 连接失败、权限拒绝、离线，UI 不假报「已加载」 | `PARTIAL` | `NOT_RUN` |  技能库不可用时面板显示 unavailable 文案而不假装已加载（`state.status === 'unavailable'` 分支）；断网/权限拒绝未逐一构造 |
 | M06 | 未授权/未分配成员时不启动 stdio、HTTP MCP，不注册额外工具 | `PASS`（结构性） | `NOT_RUN` | 本插件不启动任何 MCP 连接（无相关代码路径） |
 | M07 | 探针确认动态 MCP per-agent 生命周期受官方 API 支持与否 | `PASS`（负结论） | `NOT_RUN` | 0.2.1-rc.2 公开 API 无 per-Agent 动态挂载入口 → **Blocked**，不做全局伪隔离 |
 | M08 | 如实现动态挂载：仅目标作用域生效、注销准确 | `N/A` | `N/A` | 未实现（M07 Blocked） |
 | M09 | MCP 凭据只走安全引用/环境，UI/JSON/日志/tarball 无明文 | `PASS`（未有凭据） | `NOT_RUN` | 无凭据字段、无连接代码 |
 | M10 | Skill 中 .py/.sh 可读不代表可执行，执行遵循成员 Tools 权限 | `PASS`（结构性） | `NOT_RUN` | 导入/存储从不执行；执行仅经成员工具策略 |
-| M11 | Shell/Python 缺失或 Windows 路径不同，给出明确错误，不改宿主 | `NOT_RUN` | `NOT_RUN` | 未实现运行依赖检查 |
+| M11 | Shell/Python 缺失或 Windows 路径不同，给出明确错误，不改宿主 | `PARTIAL` | `NOT_RUN` |  缺失可执行文件在依赖面板标红为「PATH 中缺失」；Windows 路径差异未在 Windows 上验证 |
 | M12 | 脚本执行、外部 MCP 操作复用 DSH 原生权限审核 | `PASS`（结构性） | `NOT_RUN` | 本插件不提供执行通道 |
 
 ## 7. 跨版本回归与生产恢复
