@@ -231,3 +231,11 @@ round 14 的脚本里**自己点删除**了那个分类。更正后的完整证�
 |---|---|---|---|
 | chips（列表筛选、composer 来源） | `padding:6px 10px; border-radius:7px; font-size:12px` | 原为 `5px 9px` | 改为 **6px 10px**，圆角与字号本就一致 |
 | 设置页卡片（`.card`） | 原型 `--radius:16px` | 宿主 token `--dsw-radius-xl`（20px）、`padding:10px 12px` | **保留宿主 token**：该页面嵌在 Harness 设置窗内，与其它设置卡片（同样 20px）保持一致比贴合独立原型更正确；已在文档说明这是有意偏离 |
+
+### 续（round 7）：盒模型收口与元数据节奏
+
+- **盒模型**：`box-sizing` 已按子树声明（技能页 `.page *`、composer 弹层 `.popover *`）。真机扫描该子树后
+  「content-box 且带内边距」的元素数量为 **0**，同类 77→64 的问题不会在这两页再出现。
+- **元数据面板**：字段标签统一 `margin:10px 0 4px`（实测三个标签均为 `mt 10 / mb 4`），与原型
+  label→control 的 4px 间距一致。
+- **技能详情绑定行**：实测行高 50px、`padding:8px 0`，与原型 member-row 的节奏相同。

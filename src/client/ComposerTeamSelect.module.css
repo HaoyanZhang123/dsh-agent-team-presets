@@ -1,3 +1,6 @@
+/* See TeamSkillsView: sizes here are totals, so the popover subtree is border-box. */
+.popover, .popover *, .popover *::before, .popover *::after { box-sizing: border-box; }
+
 /* The composer tool row's Team chip, matching the sibling permission and
  * model triggers. Colors resolve through `--dsw-alias-*` tokens only. */
 

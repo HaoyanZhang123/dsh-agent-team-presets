@@ -1,3 +1,7 @@
+/* The host does not promise a global border-box rule, and every size in this
+ * file is written as a total (padding included), so the subtree states it once. */
+.page, .page *, .page *::before, .page *::after { box-sizing: border-box; }
+
 /* Team Skill pages. Tokens follow the v0.1.6 native prototype so the plugin
    page reads as part of the settings window rather than as its own product. */
 .page { display: flex; flex-direction: column; gap: 4px; }
