@@ -46,6 +46,46 @@ export function teammatesBusy(ctx: Context, agent: Agent): boolean {
     && (member.status === 'running' || member.status === 'provisioning'))
 }
 
+/**
+ * The tool name that only a Team application registers on one Agent.
+ *
+ * `applyTeamToAgent` registers it through `registerMemberTool`, and no other
+ * path in this plugin — or in the deployment — registers that name on a Session
+ * root. A request header therefore records, durably, whether the Session was
+ * running under a Team when that request was assembled.
+ */
+const TEAM_APPLICATION_MARKER = 'spawn_team_member'
+
+/**
+ * Whether the last request this Session sent was assembled under a Team.
+ *
+ * The latest `request/header` event is the header the Host itself built for the
+ * most recent request, so it follows the live tool surface rather than carrying
+ * a stale flag: deselecting a Team and running again clears the marker, and
+ * applying one restores it.
+ *
+ * POSITIVE EVIDENCE ONLY. `true` proves the Session ran under a Team. `false`
+ * proves nothing: the Host appends the header only after prompt assembly and
+ * request preparation, so a Session can be busy with no header yet, and a
+ * missing marker can simply be the previous task's No-team header. Two further
+ * reasons a real Team can lack the marker are the PTC presentation fold (a
+ * non-native surface exposes only `run_code`) and an `all`-mode Team, which
+ * applies without forcing a native presentation. Callers must therefore treat
+ * `false` as "unknown", never as "No team".
+ * @param agent - the Session-root Agent whose own log is read.
+ * @returns whether the latest request header carried this plugin's Team marker.
+ */
+export function hasTeamApplicationMarker(agent: Agent): boolean {
+  const events = agent.session.ownEvents()
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type !== 'request/header') continue
+    const header = event.data.header as { tools?: readonly { name?: string }[] }
+    return (header.tools ?? []).some(tool => tool.name === TEAM_APPLICATION_MARKER)
+  }
+  return false
+}
+
 /** The applied definition of one Session, as the freezer holds it. */
 export interface AppliedTeam {
   /** Identity of the Team the Session has applied. */

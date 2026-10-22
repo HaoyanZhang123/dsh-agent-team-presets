@@ -33,7 +33,7 @@ import { isPresetMemberProvider, memberProviderMarker, registerMemberProviders }
 import { installNativePresentation, personaBaseline, prepareNativePresentation, readWire } from './presentation.ts'
 import type { Config } from './config.ts'
 import { teamSettingsReconcile } from './settings-reconcile.ts'
-import { isSessionRoot, TeamExecutionMonitor, teammatesBusy } from './execution.ts'
+import { hasTeamApplicationMarker, isSessionRoot, TeamExecutionMonitor, teammatesBusy } from './execution.ts'
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { registerPresetTools } from './preset-tools.ts'
@@ -43,7 +43,7 @@ import { registerTeamSkillTools } from './team-skills/tools.ts'
 import { definitionFingerprint, findTeam, selectedTeam, toolMode } from './presets.ts'
 import type { TeamPreset } from './types.ts'
 import TeamPresetsToolCatalog from './tool-catalog.ts'
-import { descriptorPolicy, guardPolicy, hasLegacyPresetBriefing, policyOf } from './tool-policy.ts'
+import { CAPTAIN_RECOVERY_TOOLS, descriptorPolicy, guardPolicy, hasLegacyPresetBriefing, policyOf } from './tool-policy.ts'
 
 export type * from './types.ts'
 export { Config } from './config.ts'
@@ -76,6 +76,18 @@ export function apply(ctx: Context, config: Config): void {
   const applications = new Map<Agent, TeamApplication>()
   const definitions = new Map<Agent, ReturnType<typeof selectedTeam>>()
   const quarantines = new Map<Agent, { reason: string; dispose: () => void }>()
+  /**
+   * Session roots this activation watched running with no Team at a task boundary.
+   *
+   * This is the only thing that makes "select a Team mid-task" a safe no-op
+   * instead of a quarantine. It is established solely from a boundary this
+   * activation itself observed — never from a first glance at an empty
+   * selection, because an empty selection can equally be a Session whose Team
+   * was deselected while its task ran, and that Session's policy is unknown.
+   */
+  const provenUnteamed = new Set<Agent>()
+  /** Roots whose last Team restore failed, so their quarantine reason is kept. */
+  const restoreFailures = new Set<Agent>()
   const childPolicies = new Map<Agent, () => void>()
   const childEnvelopes = new Map<Agent, ReturnType<typeof policyOf>>()
   /** Teammates whose scoped configuration the durable member runtime installed. */
@@ -115,11 +127,28 @@ export function apply(ctx: Context, config: Config): void {
     },
   )
   ctx.effect(() => () => { providers.dispose() }, 'agent-team-presets: member execution aliases')
+  /**
+   * Deny the tools of one Agent until its capability policy can be proven again.
+   *
+   * The guard refuses every name except the captain's recovery set. A Session
+   * root keeps those ten because they grant no capability and are the only way
+   * its captain can reach the composer action the refusal text recommends; a
+   * child keeps none, because a teammate has no composer and no preset
+   * authority, so any exemption there would be a way to act without a policy.
+   * @param agent - the Agent to quarantine.
+   * @param reason - the refusal every non-exempt tool reports.
+   */
   const quarantine = (agent: Agent, reason: string): void => {
     const previous = quarantines.get(agent)
     if (previous !== undefined) { previous.reason = reason; return }
+    // A quarantine is not evidence of "No team": drop any baseline this Agent
+    // had, so a later busy edge cannot read stale proof.
+    provenUnteamed.delete(agent)
     const state = { reason, dispose: () => {} }
-    state.dispose = agent.ctx.tools.guard(() => state.reason)
+    const recoveryAllowed = isSessionRoot(agent)
+    state.dispose = agent.ctx.tools.guard(exec => recoveryAllowed && CAPTAIN_RECOVERY_TOOLS.has(exec.name)
+      ? undefined
+      : state.reason)
     quarantines.set(agent, state)
   }
   const recovery = 'Choose another valid Team or "No team" in this Session\'s composer Team control. Changes apply once the captain and its teammates are idle.'
@@ -373,10 +402,15 @@ export function apply(ctx: Context, config: Config): void {
     readonly promise: Promise<void>
   }
   const jobs = new Map<Agent, ApplicationJob>()
+  /** Roots whose first application is still queued, so no baseline may be read yet. */
+  const pendingApplications = new Set<Agent>()
   let nextEpoch = 0
   const cancelApplication = (agent: Agent): void => {
     const prior = jobs.get(agent)
     if (prior !== undefined) jobs.set(agent, { epoch: ++nextEpoch, promise: prior.promise })
+    // The abandoned application is no longer pending: a later No-team boundary
+    // must be able to establish the baseline the cancelled one withheld.
+    pendingApplications.delete(agent)
   }
 
   /**
@@ -404,7 +438,14 @@ export function apply(ctx: Context, config: Config): void {
    */
   const refuseTeam = (agent: Agent, team: TeamPreset, reason: string): void => {
     ctx.logger.warn(`${LOG}: Team "%s" was refused for Session "%s": %s`, team.id, agent.session.id, reason)
-    if (!applications.has(agent)) quarantine(agent, `${reason} ${recovery}`)
+    // A restore that already failed left the more specific diagnosis in place;
+    // overwriting it would hide the fact that the previous policy was lost. That
+    // only applies while its guard is still installed: without one, preserving
+    // the wording would skip the quarantine entirely and leave the Session with
+    // no policy at all, so a stale reason must never win over the guard.
+    if (!applications.has(agent) && (!restoreFailures.has(agent) || !quarantines.has(agent))) {
+      quarantine(agent, `${reason} ${recovery}`)
+    }
   }
 
   /**
@@ -441,12 +482,24 @@ export function apply(ctx: Context, config: Config): void {
       agentRoles.set(agent, role)
       teamSkills.syncAgent(agent, role)
     } catch (error: unknown) {
+      // The restore is the last line of defence: the update that got us here was
+      // already refused, so a restore that also fails leaves this Agent with no
+      // provable policy. Release whatever part of the restore installed and
+      // quarantine immediately — `refuseTeam` cannot be relied on, because a
+      // superseded application returns before reaching it and because an error
+      // thrown after `applications.set` would make it believe a policy exists.
+      applications.get(agent)?.dispose()
+      applications.delete(agent)
+      definitions.delete(agent)
       agentRoles.delete(agent)
       teamSkills.releaseAgent(agent)
       ctx.logger.warn(
         `${LOG}: the previous Team "%s" could not be restored for Session "%s": %s`,
         previous.id, agent.session.id, String(error),
       )
+      restoreFailures.add(agent)
+      quarantine(agent, `The previous Team "${previous.id}" could not be restored for this Session (${String(error)}); `
+        + `no tool access is granted until a valid Team applies. ${recovery}`)
     }
   }
 
@@ -556,6 +609,8 @@ export function apply(ctx: Context, config: Config): void {
       teamSkills.syncAgent(agent, captainRole)
       quarantines.get(agent)?.dispose()
       quarantines.delete(agent)
+      provenUnteamed.delete(agent)
+      restoreFailures.delete(agent)
       monitor.invalidate()
     } catch (error: unknown) {
       rollback()
@@ -578,6 +633,11 @@ export function apply(ctx: Context, config: Config): void {
     if (!applications.has(agent)) {
       quarantine(agent, `Team "${team.id}" is being validated for this Session; tool access is paused until it is applied. ${recovery}`)
     }
+    // A queued application is not a proven No-team boundary, and a pending first
+    // application must never be mistaken for the baseline that exempts a later
+    // selection from quarantine.
+    provenUnteamed.delete(agent)
+    pendingApplications.add(agent)
     const prior = jobs.get(agent)?.promise ?? Promise.resolve()
     const promise = prior
       .then(async () => {
@@ -591,7 +651,10 @@ export function apply(ctx: Context, config: Config): void {
         )
       })
     jobs.set(agent, { epoch, promise })
-    void promise.then(() => { monitor.invalidate() })
+    void promise.then(() => {
+      if (jobs.get(agent)?.epoch === epoch) pendingApplications.delete(agent)
+      monitor.invalidate()
+    })
   }
 
   /**
@@ -637,9 +700,45 @@ export function apply(ctx: Context, config: Config): void {
     const busy = startingTask ? teammatesBusy(ctx, agent) : agent.status === 'running' || teammatesBusy(ctx, agent)
     if (busy) {
       // A remount cannot reconstruct the previous frozen root definition from
-      // current Settings. Quarantine until a task boundary, never adopt a newly
-      // widened policy into an already-running task.
-      if (!applications.has(agent) && selectedId !== undefined) quarantine(agent, `Team "${selectedId}" cannot be safely restored into an already-running task; tools are paused until its task boundary. ${recovery}`)
+      // current Settings, so a running task is never handed a newly selected or
+      // newly widened policy: the change waits for the task boundary below.
+      //
+      // What to do about the capability policy is a separate question, and it
+      // turns on whether this Session provably ran without a Team.
+      //
+      // - It has an application: the running task keeps it, untouched.
+      // - No application, but a selection: this activation cannot know which
+      //   policy the task runs under, so refuse until the boundary.
+      // - No application and no selection, but the log proves a Team was applied
+      //   (`hasTeamApplicationMarker`): the user deselected mid-task and the
+      //   plugin was reloaded. Refusing is the only safe answer — falling back to
+      //   the deployment default would hand the task every capability the frozen
+      //   Team excluded.
+      // - No application, no selection, no marker, but this activation watched a
+      //   proven No-team boundary: the Session really was running without a Team
+      //   and the user just picked one. Nothing is widened by waiting, so the
+      //   selection simply applies at the boundary.
+      // - Everything else is unknown. It is deliberately NOT quarantined: that
+      //   shape is "plugin reloaded mid-task in a Session that never had a Team",
+      //   which is exactly the freeze users report. Treating it as suspicious
+      //   would trade a narrow privilege gap for a broad denial of service.
+      //
+      // RESIDUAL WINDOW (known, not fixed here): an applied Team whose last
+      // request header predates the application leaves a negative marker, so
+      // "apply A while idle -> wake -> deselect -> reload before the new header is
+      // built" is still classified as unknown. Closing it needs a durable marker
+      // written before the application is installed, which is a separate change.
+      if (!applications.has(agent)) {
+        const marked = hasTeamApplicationMarker(agent)
+        const proven = provenUnteamed.has(agent) && !pendingApplications.has(agent)
+        if (selectedId !== undefined && proven) return
+        if (selectedId !== undefined) {
+          quarantine(agent, `Team "${selectedId}" cannot be safely restored into an already-running task; tools are paused until its task boundary. ${recovery}`)
+        } else if (marked) {
+          quarantine(agent, 'This Session ran this task under a Team whose definition cannot be restored here, and the Team '
+            + `selection has since been cleared; tools are paused until its task boundary. ${recovery}`)
+        }
+      }
       return
     }
     const team = selectedTeam(config.teams.get(), config.selections.get(), agent.session.id)
@@ -653,11 +752,26 @@ export function apply(ctx: Context, config: Config): void {
       definitions.delete(agent)
       quarantines.get(agent)?.dispose()
       quarantines.delete(agent)
+      // The guard and the half-installed state are gone, so the restore-failure
+      // diagnosis is spent: keeping it would exempt this Agent from a later
+      // quarantine and leave it with no policy at all.
+      restoreFailures.delete(agent)
       if (selectedId !== undefined) {
         quarantine(agent, `Selected Team "${selectedId}" no longer exists. This is not "No team"; tool access stays denied. ${recovery}`)
+        return
+      }
+      // A boundary this activation observed, with no selection, no application,
+      // no quarantine, and no queued first application: the Session is running
+      // without a Team, which is the only fact that makes a mid-task selection a
+      // safe deferral rather than an unprovable one.
+      if (!applications.has(agent) && !quarantines.has(agent) && !pendingApplications.has(agent)) {
+        provenUnteamed.add(agent)
       }
       return
     }
+    // Selecting, editing, or re-applying a Team ends the No-team proof: from here
+    // the Session's policy comes from the stored definition, not from a boundary.
+    provenUnteamed.delete(agent)
     const fingerprint = definitionFingerprint(team)
     if (current !== undefined && current.teamId === team.id && current.fingerprint === fingerprint) {
       cancelApplication(agent)
@@ -757,6 +871,9 @@ export function apply(ctx: Context, config: Config): void {
       for (const dispose of skillTools.values()) dispose()
       skillTools.clear()
       pendingRoster.clear()
+      pendingApplications.clear()
+      provenUnteamed.clear()
+      restoreFailures.clear()
       jobs.clear()
       await members.close()
       await teamSkills.close()
@@ -819,6 +936,9 @@ export function apply(ctx: Context, config: Config): void {
     skillTools.get(agent)?.()
     skillTools.delete(agent)
     pendingRoster.delete(agent)
+    pendingApplications.delete(agent)
+    provenUnteamed.delete(agent)
+    restoreFailures.delete(agent)
     jobs.delete(agent)
     monitor.invalidate()
   })
