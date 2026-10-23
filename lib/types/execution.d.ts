@@ -34,6 +34,26 @@ export declare function isSessionRoot(agent: Agent): boolean;
  * @returns whether a teammate is still working on that Session's Team task.
  */
 export declare function teammatesBusy(ctx: Context, agent: Agent): boolean;
+/**
+ * Whether the last request this Session sent was assembled under a Team.
+ *
+ * The latest `request/header` event is the header the Host itself built for the
+ * most recent request, so it follows the live tool surface rather than carrying
+ * a stale flag: deselecting a Team and running again clears the marker, and
+ * applying one restores it.
+ *
+ * POSITIVE EVIDENCE ONLY. `true` proves the Session ran under a Team. `false`
+ * proves nothing: the Host appends the header only after prompt assembly and
+ * request preparation, so a Session can be busy with no header yet, and a
+ * missing marker can simply be the previous task's No-team header. Two further
+ * reasons a real Team can lack the marker are the PTC presentation fold (a
+ * non-native surface exposes only `run_code`) and an `all`-mode Team, which
+ * applies without forcing a native presentation. Callers must therefore treat
+ * `false` as "unknown", never as "No team".
+ * @param agent - the Session-root Agent whose own log is read.
+ * @returns whether the latest request header carried this plugin's Team marker.
+ */
+export declare function hasTeamApplicationMarker(agent: Agent): boolean;
 /** The applied definition of one Session, as the freezer holds it. */
 export interface AppliedTeam {
     /** Identity of the Team the Session has applied. */

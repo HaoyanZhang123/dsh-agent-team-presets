@@ -20,8 +20,8 @@ import { TeamSkillManager, CAPTAIN_ROLE } from './manager.ts';
 import { TeamSkillRuntime } from './provider.ts';
 import { TeamSkillStore } from './store.ts';
 import type { TeamSkillAsset, TeamPreset } from '../types.ts';
-/** The two skills the package ships under `assets/skills`. */
-export declare const OFFICIAL_SKILL_IDS: readonly ["github-repository-presentation", "git-release-hygiene"];
+/** The skills the package ships under `assets/skills`. */
+export declare const OFFICIAL_SKILL_IDS: readonly ["github-repository-presentation", "git-release-hygiene", "grilling", "research"];
 /** Version stamped on the shipped assets; bumped when the packaged copies change. */
 export declare const OFFICIAL_SKILL_VERSION = "1";
 /**

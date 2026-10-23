@@ -9,6 +9,25 @@ import type { TeamSlotPreset } from './types.ts';
 export declare const PRESET_TOOLS: readonly ["spawn_team_member", "get_team_preset", "update_team_preset"];
 export declare const TEAM_TOOLS: readonly ["spawn_teammate", "send_message", "list_agents", "wait_agent", "interrupt_agent", "team_task_create", "team_task_get", "team_task_list", "team_task_update"];
 /**
+ * The tools a quarantined Session captain may still call.
+ *
+ * A quarantine means this activation cannot prove which capability policy the
+ * running task is under, so it refuses everything that could act. These ten are
+ * the exception because none of them grants a capability: they read and edit
+ * preset definitions, and they coordinate the Team the Session already belongs
+ * to. Without them the captain has no way to reach the very composer action its
+ * refusal text recommends, which is what made the freeze a dead end.
+ *
+ * The list is literal on purpose. It is NOT derived from {@link PRESET_TOOLS} or
+ * {@link TEAM_TOOLS} and is never matched by prefix: `PRESET_TOOLS` contains
+ * `spawn_team_member` and `TEAM_TOOLS` contains `spawn_teammate`, and both of
+ * those create Agents, so neither may be exempted here. `subagent`,
+ * `subagent_fork`, `workflow`, `run_code`, every ordinary capability, and every
+ * unknown name stay refused. A teammate is never exempted: it has no composer
+ * and no preset authority, so its quarantine remains deny-all.
+ */
+export declare const CAPTAIN_RECOVERY_TOOLS: ReadonlySet<string>;
+/**
  * Whether one name is a fixed Team operation this plugin or the Team service
  * registers on an Agent, rather than an inherited capability.
  *

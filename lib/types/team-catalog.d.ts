@@ -39,18 +39,25 @@ export interface OfficialSkillBinding {
     readonly roleName: string;
 }
 /**
- * The two shipped skills, assigned by default only to the `repository-specialist`
- * role of the Teams that own repository delivery work.
+ * The shipped delivery skills, assigned by default only to the
+ * `repository-specialist` role of the Teams that own repository delivery work.
  *
  * A user may add or remove assignments locally; those local changes are not
  * part of the preset document. This declaration is.
  */
 export declare const OFFICIAL_REPOSITORY_SKILLS: readonly OfficialSkillBinding[];
 /**
- * The two shipped skills, assigned by default to the `executor` role
+ * The shipped delivery skills, assigned by default to the `executor` role
  * of software engineering Teams.
  */
 export declare const OFFICIAL_EXECUTOR_SKILLS: readonly OfficialSkillBinding[];
+/**
+ * The method skills assigned by default to the 需求探索 team: grilling to the
+ * captain, and research to the two scouting roles that gather evidence for it.
+ */
+export declare const OFFICIAL_DISCOVERY_SKILLS: readonly OfficialSkillBinding[];
+/** The method skill assigned by default to the 科研协作 team's evidence scout. */
+export declare const OFFICIAL_RESEARCH_SKILLS: readonly OfficialSkillBinding[];
 /** Series display order and stable identity. */
 export declare const TEAM_SERIES: readonly {
     readonly id: TeamSeries;
