@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TeamSkillStore } from '../src/team-skills/store.ts'
-import { TeamSkillManager } from '../src/team-skills/manager.ts'
+import { CAPTAIN_ROLE, TeamSkillManager } from '../src/team-skills/manager.ts'
 import { team, slot } from './fixtures/team-presets.ts'
 import { builtinTeamDefinition, BUILTIN_TEAMS } from '../src/builtin-teams.ts'
 import type { TeamPreset } from '../src/types.ts'
@@ -175,5 +175,40 @@ describe('Team Skill management regressions', () => {
     const executorRole = fullstack.members.find(member => member.name === 'executor')!.id!
     const bound = manager.assetsFor(fullstack.id, executorRole).map(a => a.skillId).sort()
     expect(bound).toEqual(['git-release-hygiene', 'github-repository-presentation'])
+  })
+
+  it('seeds the method skills only on the discovery and research roles that own them', async () => {
+    const { store, manager, setTeams } = await fixture()
+    const discovery = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-discovery')!)
+    const research = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-research')!)
+    setTeams([discovery, research])
+    await install(store, 'builtin:grilling', 'builtin')
+    await install(store, 'builtin:research', 'builtin')
+    await manager.reconcile()
+    const member = (preset: TeamPreset, name: string) => preset.members.find(row => row.name === name)!.id!
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE).map(asset => asset.skillId)).toEqual(['grilling'])
+    expect(manager.list().find(row => row.teamId === discovery.id && row.roleId === CAPTAIN_ROLE)).toMatchObject({ captain: true })
+    expect(manager.assetsFor(discovery.id, member(discovery, 'technical-scout')).map(asset => asset.skillId)).toEqual(['research'])
+    expect(manager.assetsFor(discovery.id, member(discovery, 'product-scout')).map(asset => asset.skillId)).toEqual(['research'])
+    expect(manager.assetsFor(discovery.id, member(discovery, 'critical-analyst'))).toEqual([])
+    expect(manager.assetsFor(research.id, member(research, 'evidence-scout')).map(asset => asset.skillId)).toEqual(['research'])
+    for (const name of ['methodologist', 'research-engineer', 'skeptic']) {
+      expect(manager.assetsFor(research.id, member(research, name)), name).toEqual([])
+    }
+  })
+
+  it('does not restore a seeded method skill after an explicit unbind', async () => {
+    const { root, store, manager, setTeams } = await fixture()
+    const discovery = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-discovery')!)
+    setTeams([discovery])
+    await install(store, 'builtin:grilling', 'builtin')
+    await manager.reconcile()
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE)).toHaveLength(1)
+    await manager.unassign(discovery.id, CAPTAIN_ROLE)
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE)).toEqual([])
+    const reopened = new TeamSkillManager(store, root, { teams: () => [discovery], activeAssetIds: () => new Set(), activeSessions: () => [] })
+    await reopened.open()
+    await reopened.reconcile()
+    expect(reopened.assetsFor(discovery.id, CAPTAIN_ROLE)).toEqual([])
   })
 })

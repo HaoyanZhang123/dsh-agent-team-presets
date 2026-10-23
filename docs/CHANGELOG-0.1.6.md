@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Method Team Skills**: ship `grilling` and `research` as built-in Team Skills.
+  `grilling` is bound by default to the Discovery captain; `research` is bound to the
+  Discovery `technical-scout`/`product-scout` and the Research `evidence-scout`.
+  Both keep the upstream English body and add a DSH adaptation section; see `NOTICE`
+  for the upstream repository, pinned commit, and MIT license.
+
 ## 0.1.6 — unreleased
 
 ### Added

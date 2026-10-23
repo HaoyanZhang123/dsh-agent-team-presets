@@ -51,7 +51,7 @@ describe('portable Team Skill storage', () => {
     await expect(new TeamSkillStore(path).open()).rejects.toThrow(/transaction path/u)
   })
 
-  it('installs the two shipped skills into portable directories and reopens original logical identities', async () => {
+  it('installs all shipped skills into portable directories and reopens original logical identities', async () => {
     const path = await root(); const store = new TeamSkillStore(path); await store.open()
     await store.ensureOfficial(OFFICIAL_SKILL_IDS.map(skillId => ({ skillId, version: '1', directory: join(import.meta.dirname, '..', 'assets', 'skills', skillId) })))
     expect(store.list().map(asset => asset.id).sort()).toEqual(OFFICIAL_SKILL_IDS.map(id => `builtin:${id}`).sort())

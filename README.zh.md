@@ -48,7 +48,7 @@ DeepSeek Harness 原生 Agent Teams 已经具备多智能体协作能力。在�
 - **本地分类与检索：** 独立分类管理页支持创建、重命名、排序和删除自定义分类；支持按团队来源（全部/插件内置/自定义）与分类系列二级联动筛选，并在输入区与设置页实时全文搜索。
 - **插件私有 Team Skill 库：** 支持从文件夹或 ZIP 导入技能至插件私有目录（`~/.dsh/team-skills`），与宿主全局技能完全隔离。
 - **角色作用域技能隔离：** 成员编辑页提供专属技能三列卡片网格，分配给角色的技能在召唤时**严格仅在该 Agent 作用域内注册**，其他成员与队长均不可见。
-- **官方内置技能与本地副本：** 随包自带 `github-repository-presentation` 与 `git-release-hygiene`，默认物化入库并绑定给工程角色；支持创建本地可编辑副本，支持一键「恢复为插件内置版本」，并在官方更新时显示新版本提示。
+- **官方内置技能与本地副本：** 随包自带两个交付技能（`github-repository-presentation`、`git-release-hygiene`）和两个方法技能（`grilling`、`research`），默认物化入库并绑定给工程、需求探索与科研角色；支持创建本地可编辑副本，支持一键「恢复为插件内置版本」，并在官方更新时显示新版本提示。
 - **强阻断保护的删除机制：** 若技能仍被任一团队角色绑定、被运行中成员使用或被其它技能依赖，拒绝删除；模态弹窗直观列出所有持有者（如 `标准研发团队 → executor`）并禁用确认按钮。
 - **依赖真实性检查与 MCP 边界：** 技能声明的 CLI 可执行程序会在宿主 PATH 上实际解析并标注「存在/缺失」（缺失时拒绝分配）；如实展示声明的 MCP 服务（声明式展示，不自动拉起连接，不阻断分配）。
 - **面向智能体的会话工具：** 根会话提供 `list_team_skills`、`assign_team_skill`、`unassign_team_skill`、`remove_team_skill`，以及 `get_team_preset`、`update_team_preset`。
@@ -308,7 +308,7 @@ dsh plugin --profile <profile> add dsh-agent-team-presets
 
 1. **私有存储库：** 技能统一存放在插件专属目录（`~/.dsh/team-skills` 或独立存储域），不污染宿主全局技能列表。
 2. **角色 Agent 作用域隔离：** 成员被队长召唤时，其绑定的专属技能**严格仅在该成员的 Agent Scope 内注册**。其他队员和队长既无法看到、也无法调用该技能。
-3. **官方内置技能：** 随包提供 `github-repository-presentation` 与 `git-release-hygiene`，默认物化进私有库并预绑定给工程团队的 `executor` 和 `repository-specialist`。
+3. **官方内置技能：** 随包提供 4 个内置技能——交付型 `github-repository-presentation`、`git-release-hygiene`，方法型 `grilling`（先澄清再动手）与 `research`（只认一手来源）。默认绑定：工程团队的 `executor`/`repository-specialist` 获得交付技能；需求探索队长获得 `grilling`，其 `technical-scout`/`product-scout` 与科研协作 `evidence-scout` 获得 `research`。
 4. **本地副本与一键恢复：** 内置技能默认只读，支持一键「创建本地可编辑副本」修改文件。插件版本升级时会自动提示 `updateAvailable`，支持随时「恢复为插件内置版本」。
 5. **清晰的来源色标：**
    - 插件内置（Built-in，蓝色）
@@ -433,9 +433,10 @@ npm run bundle
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) —— 宿主与插件系统。
 - [内置预设文档](<contrib/default-presets>) —— 九大团队的 JSON 定义副本，可供查阅或自定义导入。
 - [随包技能文档](<assets/skills>) —— 物化入私有库的官方技能 `SKILL.md` 目录。
+- [方法技能上游](https://github.com/mattpocock/skills) —— `grilling` 与 `research` 的原文来源（MIT，固定 commit 见 [NOTICE](<NOTICE>)）。
 - [GitHub Releases](https://github.com/bloodarea/dsh-agent-team-presets/releases) —— 已发布版本。
 
 <a id="license"></a>
 ## 许可证
 
-[MIT](<LICENSE>)。随包提供的第三方许可见 [THIRD-PARTY-NOTICES.txt](<lib/THIRD-PARTY-NOTICES.txt>)。
+[MIT](<LICENSE>)。随包第三方依赖许可见 [THIRD-PARTY-NOTICES.txt](<lib/THIRD-PARTY-NOTICES.txt>)；随包方法技能的来源与 MIT 许可见 [NOTICE](<NOTICE>)。

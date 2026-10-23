@@ -27,7 +27,15 @@ import {
   restoreBuiltinTeams,
   seedBuiltinTeams,
 } from '../src/builtin-teams.ts'
-import { BUILTIN_TEAM_CATALOG, OFFICIAL_REPOSITORY_SKILLS, builtinEntry, teamSeriesOf } from '../src/team-catalog.ts'
+import {
+  BUILTIN_TEAM_CATALOG,
+  OFFICIAL_DISCOVERY_SKILLS,
+  OFFICIAL_EXECUTOR_SKILLS,
+  OFFICIAL_REPOSITORY_SKILLS,
+  OFFICIAL_RESEARCH_SKILLS,
+  builtinEntry,
+  teamSeriesOf,
+} from '../src/team-catalog.ts'
 import { exportTeamPreset, parseTeamPresetText } from '../src/preset-transfer.ts'
 import type { TeamPreset } from '../src/types.ts'
 
@@ -142,18 +150,28 @@ describe('the official Team catalog', () => {
     }
   })
 
-  it('declares the two shipped skills for software engineering and repository delivery Teams', () => {
+  it('declares the shipped skills only for the Teams whose roles own them', () => {
+    const expected: Record<string, readonly { skillId: string; roleName: string }[]> = {
+      [LIGHTWEIGHT_TEAM_ID]: OFFICIAL_EXECUTOR_SKILLS,
+      [STANDARD_TEAM_ID]: OFFICIAL_EXECUTOR_SKILLS,
+      [FULLSTACK_TEAM_ID]: OFFICIAL_EXECUTOR_SKILLS,
+      [DISCOVERY_TEAM_ID]: OFFICIAL_DISCOVERY_SKILLS,
+      [WORKFLOW_TEAM_ID]: OFFICIAL_REPOSITORY_SKILLS,
+      [ENGINEERING_TEAM_ID]: OFFICIAL_REPOSITORY_SKILLS,
+      [RESEARCH_TEAM_ID]: OFFICIAL_RESEARCH_SKILLS,
+    }
     const owners = BUILTIN_TEAMS.filter(entry => entry.officialSkillBindings.length > 0).map(entry => entry.id)
-    expect(owners).toEqual([LIGHTWEIGHT_TEAM_ID, STANDARD_TEAM_ID, FULLSTACK_TEAM_ID, WORKFLOW_TEAM_ID, ENGINEERING_TEAM_ID])
-    for (const id of owners) {
-      const entry = builtinEntry(id)!
-      const roleNames = new Set(entry.document.team.members.map(member => member.name))
+    expect(owners).toEqual(Object.keys(expected))
+    for (const entry of BUILTIN_TEAMS) {
+      expect(entry.officialSkillBindings, entry.id).toEqual(expected[entry.id] ?? [])
+      const roleNames = new Set([
+        entry.document.team.captain.name,
+        ...entry.document.team.members.map(member => member.name),
+      ])
       for (const binding of entry.officialSkillBindings) {
         // A declaration that names no real role could never resolve locally.
-        expect(roleNames.has(binding.roleName), `${id}:${binding.roleName}`).toBe(true)
+        expect(roleNames.has(binding.roleName), `${entry.id}:${binding.roleName}`).toBe(true)
       }
-      expect(entry.officialSkillBindings.map(binding => binding.skillId).sort())
-        .toEqual(OFFICIAL_REPOSITORY_SKILLS.map(binding => binding.skillId).sort())
     }
   })
 })

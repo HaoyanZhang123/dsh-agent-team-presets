@@ -48,7 +48,7 @@ DeepSeek Harness already ships Agent Teams with multi-agent collaboration. In th
 - **Local categories and search:** organize presets into custom categories via a dedicated category manager; instantly search over name, summary, tags, and use cases in both Settings and the Composer picker.
 - **Private Team Skill library:** import skill folders or ZIP archives into a plugin-owned store (`~/.dsh/team-skills`), completely isolated from global host skills.
 - **Per-agent skill isolation:** a 3-column assignment grid on member pages assigns skills to specific roles. Assigned skills are registered **strictly in that Agent's scope** when summoned—never leaked globally.
-- **Official built-in skills & local overrides:** ships `github-repository-presentation` and `git-release-hygiene` materialized into the private library and pre-bound to engineering roles. Create local editable overrides and one-click restore them to the built-in copy (`恢复为插件内置版本`).
+- **Official built-in skills & local overrides:** ships two delivery skills (`github-repository-presentation`, `git-release-hygiene`) and two method skills (`grilling`, `research`), materialized into the private library and pre-bound to engineering, discovery, and research roles. Create local editable overrides and one-click restore them to the built-in copy (`恢复为插件内置版本`).
 - **Guarded deletion with blocker modal:** deleting a skill bound to any role, in use by an active member, or required as a dependency is refused, with a confirmation modal detailing every blocking holder.
 - **Dependency verification & MCP boundaries:** checks declared CLI executables against host `PATH` (flags found/missing and refuses assignment when absent) and reports declared MCP servers (declarative display; never auto-connected or hard-blocking).
 - **Agent-facing tools:** root sessions provide `list_team_skills`, `assign_team_skill`, `unassign_team_skill`, and `remove_team_skill` alongside `get_team_preset` and `update_team_preset`.
@@ -308,7 +308,7 @@ Traditional skills in Harness are typically registered into the global environme
 
 1. **Private library:** Skills live in a plugin-managed directory (`~/.dsh/team-skills` or storage domain), isolated from host and profile skills.
 2. **Per-Agent registration:** When a Team member is summoned, its assigned skills are registered **exclusively inside that member's Agent scope**. Other members and the captain cannot see or invoke them unless explicitly assigned.
-3. **Official built-in skills:** Shipped skills (`github-repository-presentation` and `git-release-hygiene`) are materialized into the private library and pre-bound to `executor` and `repository-specialist` roles in software engineering presets.
+3. **Official built-in skills:** four shipped skills: delivery (`github-repository-presentation`, `git-release-hygiene`) and method (`grilling` — clarify before acting; `research` — primary sources only). Default bindings: engineering `executor`/`repository-specialist` receive the delivery skills; the Discovery captain receives `grilling`, its `technical-scout`/`product-scout` and the Research `evidence-scout` receive `research`.
 4. **Local overrides & one-click restore:** Built-in skills are read-only by default. Users can create an editable local copy ("本地副本"). If the built-in skill updates in a new plugin version, an `updateAvailable` status is displayed, and users can restore to the built-in copy (`恢复为插件内置版本`) with one click.
 5. **Origin labels and badges:** Skills display clear color-coded origin tags across all views:
    - 插件内置 (Built-in, blue)
@@ -433,9 +433,10 @@ Bug reports and pull requests are welcome at [GitHub Issues](https://github.com/
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — Host and plugin architecture.
 - [Built-in preset documents](<contrib/default-presets>) — Shipped team JSON definitions for reference or custom imports.
 - [Bundled skill documents](<assets/skills>) — Shipped skills (`SKILL.md` bundles) materialized into the private library.
+- [Method skill upstream](https://github.com/mattpocock/skills) — Source of `grilling` and `research` (MIT; pinned commit recorded in [NOTICE](<NOTICE>)).
 - [GitHub Releases](https://github.com/bloodarea/dsh-agent-team-presets/releases) — Published release packages.
 
 <a id="license"></a>
 ## License
 
-[MIT](<LICENSE>). Bundled third-party notices are in [THIRD-PARTY-NOTICES.txt](<lib/THIRD-PARTY-NOTICES.txt>).
+[MIT](<LICENSE>). Bundled dependency notices are in [THIRD-PARTY-NOTICES.txt](<lib/THIRD-PARTY-NOTICES.txt>); source and MIT attribution for the bundled method skills are in [NOTICE](<NOTICE>).

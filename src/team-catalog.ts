@@ -43,8 +43,8 @@ export interface OfficialSkillBinding {
 }
 
 /**
- * The two shipped skills, assigned by default only to the `repository-specialist`
- * role of the Teams that own repository delivery work.
+ * The shipped delivery skills, assigned by default only to the
+ * `repository-specialist` role of the Teams that own repository delivery work.
  *
  * A user may add or remove assignments locally; those local changes are not
  * part of the preset document. This declaration is.
@@ -55,12 +55,27 @@ export const OFFICIAL_REPOSITORY_SKILLS: readonly OfficialSkillBinding[] = [
 ]
 
 /**
- * The two shipped skills, assigned by default to the `executor` role
+ * The shipped delivery skills, assigned by default to the `executor` role
  * of software engineering Teams.
  */
 export const OFFICIAL_EXECUTOR_SKILLS: readonly OfficialSkillBinding[] = [
   { skillId: 'github-repository-presentation', roleName: 'executor' },
   { skillId: 'git-release-hygiene', roleName: 'executor' },
+]
+
+/**
+ * The method skills assigned by default to the 需求探索 team: grilling to the
+ * captain, and research to the two scouting roles that gather evidence for it.
+ */
+export const OFFICIAL_DISCOVERY_SKILLS: readonly OfficialSkillBinding[] = [
+  { skillId: 'grilling', roleName: 'discovery-lead' },
+  { skillId: 'research', roleName: 'technical-scout' },
+  { skillId: 'research', roleName: 'product-scout' },
+]
+
+/** The method skill assigned by default to the 科研协作 team's evidence scout. */
+export const OFFICIAL_RESEARCH_SKILLS: readonly OfficialSkillBinding[] = [
+  { skillId: 'research', roleName: 'evidence-scout' },
 ]
 
 /** Series display order and stable identity. */
@@ -513,7 +528,7 @@ export const BUILTIN_TEAM_CATALOG: readonly BuiltinTeamCatalogEntry[] = [
           ],
           "notes": "默认只读，轻量验证需明确授权。"
     },
-    officialSkillBindings: [],
+    officialSkillBindings: OFFICIAL_DISCOVERY_SKILLS,
   },
   {
     id: 'builtin-planning',
@@ -633,7 +648,7 @@ export const BUILTIN_TEAM_CATALOG: readonly BuiltinTeamCatalogEntry[] = [
           ],
           "notes": "区分事实、推断与未验证假设。"
     },
-    officialSkillBindings: [],
+    officialSkillBindings: OFFICIAL_RESEARCH_SKILLS,
   },
 ]
 

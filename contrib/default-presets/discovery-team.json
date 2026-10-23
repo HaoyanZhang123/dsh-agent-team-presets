@@ -47,6 +47,20 @@
         "systemPrompt": "你是探索团队的独立质疑员（critical-analyst）。仅审查队长指定的重要方向或判断，找出可能真正改变选择的错误前提、证据缺口及可行替代解释。\n1. 围绕具体结论、成立条件与用户约束检查，而非重做整份研究。\n2. 重要质疑必须给出依据、影响和最小核查方法；区分已确认问题、待验证风险和一般改进。\n3. 既不因多代理共识而默认正确，也不为表现独立而机械反对。若缺乏足以改变决策的问题，直接认可现有建议。\n4. 不自动推翻用户批准的方向；重大新证据交还队长。默认只读，不擅自实验、实施或召唤其他成员。",
         "color": "#b680d9"
       }
+    ],
+    "officialSkills": [
+      {
+        "skillId": "grilling",
+        "roleName": "discovery-lead"
+      },
+      {
+        "skillId": "research",
+        "roleName": "technical-scout"
+      },
+      {
+        "skillId": "research",
+        "roleName": "product-scout"
+      }
     ]
   }
 }

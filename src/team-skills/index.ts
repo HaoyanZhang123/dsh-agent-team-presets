@@ -27,8 +27,13 @@ import { TeamSkillStore } from './store.ts'
 import type { TeamSkillAsset, TeamPreset } from '../types.ts'
 import { memberTargets } from '../presets.ts'
 
-/** The two skills the package ships under `assets/skills`. */
-export const OFFICIAL_SKILL_IDS = ['github-repository-presentation', 'git-release-hygiene'] as const
+/** The skills the package ships under `assets/skills`. */
+export const OFFICIAL_SKILL_IDS = [
+  'github-repository-presentation',
+  'git-release-hygiene',
+  'grilling',
+  'research',
+] as const
 
 /** Version stamped on the shipped assets; bumped when the packaged copies change. */
 export const OFFICIAL_SKILL_VERSION = '1'
@@ -141,7 +146,7 @@ export class TeamSkills {
       const entries: { skillId: string; directory: string; version: string }[] = []
       for (const skillId of OFFICIAL_SKILL_IDS) {
         // A package built without the shipped skills is a valid deployment: the
-        // Teams work, only the two official skills are absent.
+        // Teams work, only the official skills are absent.
         try {
           await readdir(join(directory, skillId))
           entries.push({ skillId, directory: join(directory, skillId), version: OFFICIAL_SKILL_VERSION })
