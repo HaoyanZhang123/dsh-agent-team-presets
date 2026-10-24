@@ -39,6 +39,14 @@
   Reachable only from a hand-written settings document; the UI and the import path both assign a
   UUID.
 
+- **A pre-existing local override is no longer bypassed by the seeded defaults.** `overrideSkill`
+  only rewrites the bindings that exist when the override is created, so an override made before a
+  default was first seeded left that role on the shipped copy and silently discarded the user's
+  edits. Seeding now resolves the override for the declared skill, and the seed marker stays keyed by
+  the declaration so an override appearing later cannot resurrect a default the user removed. A
+  drifted override (one whose `officialSkillId` names a different shipped skill) still falls back to
+  the shipped copy rather than delivering the wrong body.
+
 ### Security regressions re-verified for this release
 
 Re-confirmed with executable evidence, not by inspection alone:

@@ -252,4 +252,50 @@ describe('Team Skill management regressions', () => {
     expect(manager.assetsFor(preset.id, CAPTAIN_ROLE).map(asset => asset.skillId)).toEqual(['research'])
     expect(manager.list().find(row => row.teamId === preset.id)).toMatchObject({ roleId: CAPTAIN_ROLE, captain: true })
   })
+
+  it('binds a default to the override that already existed before the default was seeded', async () => {
+    // `overrideSkill` only rewrites the bindings present when the override is
+    // created. An override made first and a default seeded afterwards must
+    // still end up on the user's editable copy, or that role silently receives
+    // the built-in body and every edit the user made is ignored.
+    const { store, manager, setTeams } = await fixture()
+    const discovery = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-discovery')!)
+    setTeams([discovery])
+    await install(store, 'builtin:grilling', 'builtin')
+    const override = await store.createOverride('grilling', 'override:grilling')
+    await manager.reconcile()
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE).map(asset => asset.id)).toEqual([override.id])
+  })
+
+  it('keeps an explicit unbind unrevived after an override appears', async () => {
+    // The seed marker is keyed by the declaration, not by the asset it resolved
+    // to. An override arriving later must not change the key and thereby
+    // resurrect a default the user removed.
+    const { root, store, manager, setTeams } = await fixture()
+    const discovery = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-discovery')!)
+    setTeams([discovery])
+    await install(store, 'builtin:grilling', 'builtin')
+    await manager.reconcile()
+    await manager.unassign(discovery.id, CAPTAIN_ROLE)
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE)).toEqual([])
+    await store.createOverride('grilling', 'override:grilling')
+    const reopened = new TeamSkillManager(store, root, { teams: () => [discovery], activeAssetIds: () => new Set(), activeSessions: () => [] })
+    await reopened.open()
+    await reopened.reconcile()
+    expect(reopened.assetsFor(discovery.id, CAPTAIN_ROLE)).toEqual([])
+  })
+
+  it('falls back to the shipped copy when the override belongs to another skill', async () => {
+    // A drifted override must not be handed to a default that names a different
+    // shipped skill: that would deliver the wrong body under the right name.
+    const { store, manager, setTeams } = await fixture()
+    const discovery = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-discovery')!)
+    setTeams([discovery])
+    await install(store, 'builtin:grilling', 'builtin')
+    await install(store, 'builtin:research', 'builtin')
+    const foreign = await store.createOverride('research', 'override:grilling')
+    await manager.reconcile()
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE).map(asset => asset.id)).toEqual(['builtin:grilling'])
+    expect(foreign.officialSkillId).toBe('research')
+  })
 })

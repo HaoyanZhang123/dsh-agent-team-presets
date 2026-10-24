@@ -131,6 +131,19 @@ export declare class TeamSkillManager {
     hasRole(teamId: string, roleId: string): boolean;
     reconcile(): Promise<void>;
     private reconcileNow;
+    /**
+     * Resolve the asset a catalog default should bind to.
+     *
+     * The shipped copy is the fallback, and it is the only candidate while no
+     * override exists. When the user has created an editable override of that
+     * shipped skill, the override is what they mean by it: `overrideSkill`
+     * rewrites the bindings that exist at creation time, so a default first
+     * seeded afterwards must resolve to the same copy or the two creation orders
+     * would disagree about which body a role receives.
+     * @param skillId - shipped skill identity the default names.
+     * @returns the asset identity to bind, or undefined when neither copy exists.
+     */
+    private seededAssetId;
     private mutate;
     /**
      * Find text mentions of one skill name inside another asset.
