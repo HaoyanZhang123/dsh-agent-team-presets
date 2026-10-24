@@ -45,7 +45,10 @@
   edits. Seeding now resolves the override for the declared skill, and the seed marker stays keyed by
   the declaration so an override appearing later cannot resurrect a default the user removed. A
   drifted override (one whose `officialSkillId` names a different shipped skill) still falls back to
-  the shipped copy rather than delivering the wrong body.
+  the shipped copy rather than delivering the wrong body. A role that already held the shipped copy
+  of a default is moved onto the override once it appears; the seed marker records that the default
+  was offered, not which copy it landed on, so it must not pin a role to a body the user replaced.
+  Only that exact pair migrates — a role pointed at a different asset keeps that choice.
 
 ### Security regressions re-verified for this release
 

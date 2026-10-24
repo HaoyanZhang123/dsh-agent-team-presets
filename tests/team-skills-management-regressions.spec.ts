@@ -298,4 +298,34 @@ describe('Team Skill management regressions', () => {
     expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE).map(asset => asset.id)).toEqual(['builtin:grilling'])
     expect(foreign.officialSkillId).toBe('research')
   })
+
+  it('moves a role from the shipped copy to an override created after the default was seeded', async () => {
+    // The marker records that the default was OFFERED, not which copy it landed
+    // on, so it must not pin a role to a body the user has since replaced.
+    const { store, manager, setTeams } = await fixture()
+    const discovery = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-discovery')!)
+    setTeams([discovery])
+    await install(store, 'builtin:grilling', 'builtin')
+    await manager.reconcile()
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE).map(asset => asset.id)).toEqual(['builtin:grilling'])
+    await store.createOverride('grilling', 'override:grilling')
+    await manager.reconcile()
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE).map(asset => asset.id)).toEqual(['override:grilling'])
+  })
+
+  it('leaves a role on an explicitly chosen asset when an override appears', async () => {
+    // Only the exact (role, shipped copy) pair migrates. A role the user pointed
+    // somewhere else keeps that choice.
+    const { store, manager, setTeams } = await fixture()
+    const discovery = builtinTeamDefinition(BUILTIN_TEAMS.find(entry => entry.id === 'builtin-discovery')!)
+    setTeams([discovery])
+    await install(store, 'builtin:grilling', 'builtin')
+    await install(store, 'builtin:research', 'builtin')
+    await manager.reconcile()
+    await manager.unassign(discovery.id, CAPTAIN_ROLE)
+    expect(await manager.assign({ teamId: discovery.id, roleId: CAPTAIN_ROLE, assetId: 'builtin:research', captain: true })).toMatchObject({ ok: true })
+    await store.createOverride('grilling', 'override:grilling')
+    await manager.reconcile()
+    expect(manager.assetsFor(discovery.id, CAPTAIN_ROLE).map(asset => asset.id)).toEqual(['builtin:research'])
+  })
 })

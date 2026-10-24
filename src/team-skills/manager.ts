@@ -331,6 +331,7 @@ export class TeamSkillManager {
 
   private async reconcileNow(): Promise<void> {
     const before = JSON.stringify([this.bindings, [...this.seeded]])
+    const teams = this.guards.teams()
     this.bindings = this.bindings.filter(row => this.hasRole(row.teamId, row.roleId) && this.store.get(row.assetId) !== undefined)
     // A seed records an explicit unbind only while its role still exists.
     // Removing and restoring a Team or role starts a fresh default assignment.
@@ -338,7 +339,7 @@ export class TeamSkillManager {
       const owner = seedOwner(key)
       return owner !== undefined && this.hasRole(owner[0], owner[1])
     }))
-    for (const team of this.guards.teams()) {
+    for (const team of teams) {
       // A shipped identity always declares its catalog defaults: a record
       // written before this release never carried the field, and the schema's
       // empty default must not read as "the user removed every default".
@@ -374,7 +375,23 @@ export class TeamSkillManager {
         // and a key that followed it would stop matching the marker a user's
         // explicit unbind wrote, resurrecting a default they removed.
         const key = JSON.stringify([team.id, roleId, `builtin:${declaration.skillId}`])
-        if (this.seeded.has(key)) continue
+        const already = this.seeded.has(key)
+        // A role that still holds the shipped copy of a default, in a deployment
+        // that now has an override for it, is moved onto that override: the
+        // marker records that the default was offered, not which copy it landed
+        // on, so it must not pin a role to a body the user has replaced. Only
+        // this exact pair is migrated — a role holding a different asset (an
+        // explicit choice, or another override) is left alone.
+        if (already) {
+          const builtinId = `builtin:${declaration.skillId}`
+          if (assetId !== builtinId) {
+            const stale = this.bindings.findIndex(row => row.teamId === team.id && row.roleId === roleId && row.assetId === builtinId)
+            if (stale >= 0) {
+              this.bindings[stale] = { teamId: team.id, roleId, assetId, ...(roleId === CAPTAIN_ROLE ? { captain: true } : {}) }
+            }
+          }
+          continue
+        }
         this.seeded.add(key)
         if (!this.bindings.some(row => row.teamId === team.id && row.roleId === roleId && row.assetId === assetId)) {
           this.bindings.push({ teamId: team.id, roleId, assetId, ...(roleId === CAPTAIN_ROLE ? { captain: true } : {}) })
