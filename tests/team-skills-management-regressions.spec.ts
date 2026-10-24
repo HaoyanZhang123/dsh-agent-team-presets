@@ -211,4 +211,45 @@ describe('Team Skill management regressions', () => {
     await reopened.reconcile()
     expect(reopened.assetsFor(discovery.id, CAPTAIN_ROLE)).toEqual([])
   })
+
+  it('never grants a declared default to the captain slot through a member named like the sentinel', async () => {
+    // A member's role identity falls back to its display name when the record
+    // carries no id, and `captain` is also the sentinel that addresses the
+    // captain slot. A stored document holding a member literally named
+    // `captain` therefore cannot be addressed without also matching the
+    // captain, so the declaration is dropped rather than landing on the
+    // captain: a member's default skill appearing on the captain is the exact
+    // role leak the per-role table exists to prevent.
+    const { store, manager, setTeams } = await fixture()
+    const colliding = {
+      ...team([slot({ name: 'captain' }), slot({ id: 'scout', name: 'scout' })], { name: 'real-lead' }),
+      officialSkills: [
+        { skillId: 'research', roleName: 'captain' },
+        { skillId: 'research', roleName: 'scout' },
+      ],
+    } as TeamPreset
+    setTeams([colliding])
+    await install(store, 'builtin:research', 'builtin')
+    await manager.reconcile()
+    expect(manager.assetsFor(colliding.id, CAPTAIN_ROLE)).toEqual([])
+    expect(manager.list().some(row => row.captain === true)).toBe(false)
+    // The unambiguous member still receives its declared default, so the drop
+    // is scoped to the collision rather than to the whole declaration list.
+    expect(manager.assetsFor(colliding.id, 'scout').map(asset => asset.skillId)).toEqual(['research'])
+  })
+
+  it('still resolves a captain declaration addressed by the captain own name', async () => {
+    // The counterpart: when the declared name really is the captain's, the
+    // sentinel slot is the correct target and must keep receiving the default.
+    const { store, manager, setTeams } = await fixture()
+    const preset = {
+      ...team([slot({ id: 'scout', name: 'scout' })], { name: 'real-lead' }),
+      officialSkills: [{ skillId: 'research', roleName: 'real-lead' }],
+    } as TeamPreset
+    setTeams([preset])
+    await install(store, 'builtin:research', 'builtin')
+    await manager.reconcile()
+    expect(manager.assetsFor(preset.id, CAPTAIN_ROLE).map(asset => asset.skillId)).toEqual(['research'])
+    expect(manager.list().find(row => row.teamId === preset.id)).toMatchObject({ roleId: CAPTAIN_ROLE, captain: true })
+  })
 })

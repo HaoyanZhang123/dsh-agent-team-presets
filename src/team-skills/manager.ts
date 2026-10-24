@@ -347,9 +347,18 @@ export class TeamSkillManager {
         ?? team.officialSkills
         ?? []
       for (const declaration of declarations) {
-        const member = team.members.find(member => member.name === declaration.roleName)
-        const roleId = member === undefined ? (team.captain.name === declaration.roleName ? CAPTAIN_ROLE : undefined) : member.id ?? member.name
         const assetId = `builtin:${declaration.skillId}`
+        // A declared role name addresses the captain slot or one member, never
+        // both. `CAPTAIN_ROLE` is a sentinel rather than a role name, so a
+        // member whose own stored identity happens to read as that sentinel
+        // cannot be addressed without also matching the captain: the
+        // declaration is dropped instead of being granted to the captain's
+        // slot, because a member's default skill appearing on the captain is
+        // exactly the role leak this table exists to prevent.
+        const isCaptain = team.captain.name === declaration.roleName
+        const member = isCaptain ? undefined : team.members.find(member => member.name === declaration.roleName)
+        const memberRole = member === undefined ? undefined : member.id ?? member.name
+        const roleId = isCaptain ? CAPTAIN_ROLE : memberRole === CAPTAIN_ROLE ? undefined : memberRole
         if (roleId === undefined || this.store.get(assetId) === undefined) continue
         const key = JSON.stringify([team.id, roleId, assetId])
         if (this.seeded.has(key)) continue
