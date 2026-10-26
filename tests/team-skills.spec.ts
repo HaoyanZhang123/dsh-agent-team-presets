@@ -11,7 +11,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
@@ -121,7 +121,9 @@ describe('importing a skill folder', () => {
   })
 
   it('keeps a resolved path inside its asset root', () => {
-    expect(resolveInside('/tmp/skill', 'a/b.txt')).toBe('/tmp/skill/a/b.txt')
+    // The resolved path is native to the host: asserting a POSIX literal made
+    // this test fail on Windows for the correct implementation.
+    expect(resolveInside('/tmp/skill', 'a/b.txt')).toBe(resolve('/tmp/skill', 'a', 'b.txt'))
     expect(() => resolveInside('/tmp/skill', '../other.txt')).toThrow()
   })
 })

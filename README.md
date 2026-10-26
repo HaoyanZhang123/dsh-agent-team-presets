@@ -320,7 +320,7 @@ Traditional skills in Harness are typically registered into the global environme
 - **Folder and ZIP import:** Import external skill folders or `.zip` packages directly in the Web GUI.
 - **Directory scan:** Scans candidate folders in the import path, reporting eligibility and reasons for any rejected folder. Users can copy the absolute library path with one click.
 - **Dependency checks and MCP boundaries:**
-  - **CLI executables:** Declared CLI executables in `SKILL.md` are resolved against host `PATH`. Missing required executables are flagged and assignment is refused (`dependency-missing`).
+  - **CLI executables:** Declared CLI executables in `SKILL.md` are resolved against host `PATH`, using `PATHEXT` on Windows. Directories and non-executable files do not satisfy the dependency. Missing required executables are flagged and assignment is refused (`dependency-missing`).
   - **MCP servers (declarative only, not auto-connected):** Declared MCP servers are strictly declarative dependencies displayed in the UI (`skillsDeclared`). The plugin **never connects, launches, or manages** external MCP servers automatically (their lifecycle belongs to the Harness environment and profile). Because MCP connectivity is an environment-level fact, declared MCP servers are reported as `unverified` rather than hard-blocking role assignment. When an MCP server is configured and running in the Harness profile, its exposed tools (`mcp__<server>__<name>`) appear under the MCP tool group in the role's tool configuration and can be authorized via tool policies.
 - **Guarded deletion:** Deletion is strongly guarded. If a skill is currently bound to any team role, used by a running member, or required by another skill, deletion is blocked. The confirmation dialog explicitly lists every holding team and member role (e.g. `标准研发团队 → executor`), keeping the confirm button disabled until bindings are cleared.
 
@@ -416,7 +416,7 @@ The plugin integrates via Cordis and Harness lifecycle extension points without 
 <a id="development"></a>
 ## Development and contributing
 
-Source development requires a compatible, dependency-installed [Harness checkout](https://github.com/deepseek-ai/deepseek-harness):
+Source development requires a compatible, dependency-installed [Harness checkout](https://github.com/deepseek-ai/deepseek-harness) with its Host types and generated Typert Remote artifacts built first (the Harness `build:lib:host` pipeline provides them):
 
 ```sh
 export DSH_CHECKOUT=/absolute/path/to/deepseek-harness

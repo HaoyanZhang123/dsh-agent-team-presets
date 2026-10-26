@@ -320,7 +320,7 @@ dsh plugin --profile <profile> add dsh-agent-team-presets
 - **文件夹与 ZIP 导入：** 支持在前端直接导入外部技能文件夹或 `.zip` 压缩包。
 - **目录扫描检测：** 扫描导入目录下的子文件夹，逐个检查有效性并给出拒绝原因；支持一键复制私有库绝对路径。
 - **依赖检查与 MCP 边界：**
-  - **CLI 可执行程序：** 自动检查 `SKILL.md` 中声明的命令行工具是否在宿主 `PATH` 上存在，缺失时标记并在分配时阻断（`dependency-missing`）。
+  - **CLI 可执行程序：** 按宿主 `PATH` 查找 `SKILL.md` 声明的命令行工具，Windows 同时遵循 `PATHEXT`；目录和不可执行文件不能满足依赖。缺失时标记并在分配时阻断（`dependency-missing`）。
   - **MCP 服务边界（声明式展示，不自动拉起）：** 技能声明的 MCP 服务仅作依赖声明与信息展示，插件**不会自动拉起、配置或连接**外部 MCP 服务（MCP 服务的生命周期由宿主环境与 Profile 决定）。由于 MCP 服务连接状态属于宿主环境级事实，插件将其如实标记为 `unverified`（未核实）进行提示，而不会在私有库层强行阻断角色分配。若宿主环境中已接入相应 MCP 服务，其提供的工具将在成员工具配置的 MCP 分组下可见并可通过工具策略勾选授权。
 - **强阻断保护的删除：** 技能只要被任何团队角色分配、被活跃成员占用或被其它技能依赖，删除即被强阻断。删除弹窗会完整列出所有阻断持有者（如 `标准研发团队 → executor`），此时确认删除按钮强制置灰禁用。
 
@@ -416,7 +416,7 @@ Configuration for "agent-team-presets" is overridden by a home patch or command-
 <a id="development"></a>
 ## 开发与贡献
 
-源码开发需要一份兼容、已安装依赖的 [Harness 源码](https://github.com/deepseek-ai/deepseek-harness)：
+源码开发需要一份兼容、已安装依赖的 [Harness 源码](https://github.com/deepseek-ai/deepseek-harness)，并先完成其 Host 类型与 Typert Remote 产物生成（Harness 的 `build:lib:host` 流程提供这些前置产物）：
 
 ```sh
 export DSH_CHECKOUT=/absolute/path/to/deepseek-harness
