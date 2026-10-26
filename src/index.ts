@@ -163,6 +163,14 @@ export function apply(ctx: Context, config: Config): void {
     ctx.logger.warn(`${LOG}: %s`, reason)
     quarantine(agent, reason)
   }
+  /**
+   * Registration this member must finish before it may take a request.
+   *
+   * Populated only while {@link initializeChild} runs on a creation edge; the
+   * caller awaits it so a member never spends its first turn on an empty
+   * catalog caused by a provider that had not been registered yet.
+   */
+  let installation: Promise<void> | undefined
   const initializeChild = (agent: Agent, live: boolean): void => {
     if (isSessionRoot(agent) || childPolicies.has(agent) || managedMembers.has(agent)) return
     // The child's OWN establishing descriptor comes first: it is where the Host
@@ -224,10 +232,15 @@ export function apply(ctx: Context, config: Config): void {
         const claimedTeam = findTeam(config.teams.get(), claim.record.teamId)
         const role = claim.record.roleId
           ?? (claimedTeam === undefined ? claim.record.memberName : roleOfMember(claimedTeam, claim.record.memberName))
+        installation = undefined
         if (role !== undefined) {
           const assignment = { teamId: claim.record.teamId, roleId: role, captain: false }
           agentRoles.set(agent, assignment)
-          teamSkills.syncAgent(agent, assignment)
+          // Registration must finish before this member can take a request: the
+          // host publishes the catalog from a step boundary, so a member that
+          // starts running first would see an empty catalog for its whole first
+          // turn. The creation edge awaits it; a settings-driven resync does not.
+          installation = teamSkills.syncAgent(agent, assignment)
         }
         // Ordinary descendants of this member must still see its strict policy,
         // so an escape through a provider path stays refused.
@@ -916,7 +929,12 @@ export function apply(ctx: Context, config: Config): void {
   })
   ctx.on('agent/created', async ({ agent }) => {
     if (isSessionRoot(agent)) { reconcile(agent); return }
+    installation = undefined
     initializeChild(agent, false)
+    // A member must not take its first request on an empty catalog: the host
+    // publishes the catalog from a step boundary, so the registration this
+    // creation edge started has to exist before the transaction completes.
+    if (installation !== undefined) await installation
     // A member the runtime just claimed is known by its exact Team identity, so
     // the durable binding is written inside this awaited creation transaction.
     if (managedMembers.has(agent)) {

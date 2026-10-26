@@ -100,7 +100,19 @@ export declare class TeamSkills {
      * @param role - the role it fills, or undefined when it fills none.
      * @returns after the registration matches the current bindings.
      */
-    syncAgent(agent: Agent, role: TeamSkillRole | undefined): void;
+    /**
+     * Install one Agent's assignment, resolving once the registration exists.
+     *
+     * Resolving matters at a creation edge: the host reads the model-facing
+     * catalog from a step boundary, and an Agent that starts before the provider
+     * is registered spends its first turn believing nothing was assigned. A
+     * caller at a creation edge awaits this; a caller reacting to an edited
+     * setting does not need to, because that Agent is already running.
+     * @param agent - the Agent whose visible skills change.
+     * @param role - the assignment, or undefined to release the registration.
+     * @returns after the intended registration is installed.
+     */
+    syncAgent(agent: Agent, role: TeamSkillRole | undefined): Promise<void>;
     /**
      * Release one Agent's registration.
      * @param agent - the disposed Agent.

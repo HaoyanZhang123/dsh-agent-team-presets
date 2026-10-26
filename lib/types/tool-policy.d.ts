@@ -6,6 +6,16 @@
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools';
 import type { TeamSlotPreset } from './types.ts';
+/**
+ * The host tool that publishes the model-facing skill catalog and loads a body.
+ *
+ * This is not one capability among many: the host emits the catalog only while
+ * this exact definition is visible to the Agent. A policy that hides it removes
+ * the whole catalog, so every assigned Team Skill becomes unreachable even
+ * though its provider is registered. Callers therefore treat it as a
+ * precondition of an assignment rather than an optional tool.
+ */
+export declare const SKILL_TOOL_NAME = "skill";
 export declare const PRESET_TOOLS: readonly ["spawn_team_member", "get_team_preset", "update_team_preset"];
 export declare const TEAM_TOOLS: readonly ["spawn_teammate", "send_message", "list_agents", "wait_agent", "interrupt_agent", "team_task_create", "team_task_get", "team_task_list", "team_task_update"];
 /**
@@ -38,6 +48,16 @@ export declare const CAPTAIN_RECOVERY_TOOLS: ReadonlySet<string>;
  * @returns whether the name is a fixed own-layer Team operation.
  */
 export declare function isOwnLayerTool(name: string): boolean;
+/**
+ * Whether a slot's policy leaves the skill catalog reachable.
+ *
+ * `all` always does. A custom allow-list only does when it names the skill
+ * tool, because the host withholds the catalog from an Agent that cannot see
+ * that definition.
+ * @param slot - the configured captain or member.
+ * @returns whether an assigned Team Skill could actually reach the model.
+ */
+export declare function reachesSkillCatalog(slot: TeamSlotPreset): boolean;
 export interface StrictToolPolicy {
     readonly teamId: string;
     readonly mode: 'all' | 'custom';
