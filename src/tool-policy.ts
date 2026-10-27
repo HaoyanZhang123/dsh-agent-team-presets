@@ -71,23 +71,6 @@ export function isOwnLayerTool(name: string): boolean {
   return OWN_TOOLS.has(name)
 }
 
-/**
- * Whether a slot's policy leaves the skill catalog reachable.
- *
- * `all` always does. A custom allow-list only does when it names the skill
- * tool, because the host withholds the catalog from an Agent that cannot see
- * that definition.
- * @param slot - the configured captain or member.
- * @returns whether an assigned Team Skill could actually reach the model.
- */
-export function reachesSkillCatalog(slot: TeamSlotPreset): boolean {
-  // A stored Team may predate the field or arrive from a document that omits it;
-  // treating an absent list as empty would read as "custom with nothing allowed"
-  // and refuse assignments these Teams could actually serve.
-  const tools = Array.isArray(slot.tools) ? slot.tools : []
-  return toolMode({ ...slot, tools }) === 'all' || tools.includes(SKILL_TOOL_NAME)
-}
-
 export interface StrictToolPolicy {
   readonly teamId: string
   readonly mode: 'all' | 'custom'
@@ -114,7 +97,29 @@ export function inheritedFilter(agent: Agent, policy: StrictToolPolicy): ToolRes
       if (agent.ctx.tools.get(name, agent) === undefined) throw error
     }
   }
+  // The skill tool is not a capability: it publishes the catalog and loads
+  // instruction text. Hiding it does not restrict what a role can DO, it
+  // silently drops every Team Skill assigned to that role, because the host
+  // withholds the whole catalog from an Agent that cannot see this definition.
+  // It is therefore admitted whenever the deployment composes it, which is what
+  // makes an assignment usable instead of merely stored.
+  if (!inherited.includes(SKILL_TOOL_NAME) && composes(agent, SKILL_TOOL_NAME)) inherited.push(SKILL_TOOL_NAME)
   return { allow: inherited }
+}
+
+/**
+ * Whether this Agent can see one global tool at all.
+ * @param agent - the Agent whose surface is probed.
+ * @param name - the global tool name.
+ * @returns whether an allow-list naming it would be honoured.
+ */
+function composes(agent: Agent, name: string): boolean {
+  try {
+    agent.ctx.tools.restrict({ allow: [name] })()
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -171,6 +176,9 @@ export function guardPolicy(agent: Agent, policy: StrictToolPolicy, role: GuardR
     // whether this layer registered them, exactly as the inherited preflight
     // already classifies them.
     if (OWN_TOOLS.has(exec.name)) return undefined
+    // Admitting the call is what keeps an assigned Team Skill reachable; the
+    // inherited filter above admits the definition for the same reason.
+    if (exec.name === SKILL_TOOL_NAME) return undefined
     if (policy.mode === 'custom' && !allowed.has(exec.name)) {
       return `Team preset "${policy.teamId}" tool policy denies "${exec.name}".`
     }

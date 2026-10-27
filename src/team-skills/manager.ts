@@ -22,7 +22,7 @@ import { access, readFile, stat } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { atomicWriteJson } from './store.ts'
 import { assertNoSymlinks } from './paths.ts'
-import { reachesSkillCatalog, SKILL_TOOL_NAME } from '../tool-policy.ts'
+
 import { BUILTIN_TEAM_CATALOG, BUILTIN_TEAM_IDS } from '../team-catalog.ts'
 import { constants } from 'node:fs'
 import type {
@@ -105,8 +105,6 @@ export interface TeamSkillGuardContext {
 /** Why one assignment was refused. */
 export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-team' | 'unknown-role' | 'asset-missing'
   | `dependency-missing: ${string}`
-  /** The role's tool policy hides the skill tool, so the catalog could never be published. */
-  | `skill-tool-hidden: ${string}`
 
 /** Result of one assignment attempt. */
 export type TeamSkillAssignResult =
@@ -210,13 +208,6 @@ export class TeamSkillManager {
       if (!this.guards.teams().some(team => team.id === input.teamId)) return { ok: false, reason: 'unknown-team' }
       if (!this.hasRole(input.teamId, input.roleId) || (input.captain === true && input.roleId !== CAPTAIN_ROLE)) return { ok: false, reason: 'unknown-role' }
       if (this.store.get(input.assetId) === undefined) return { ok: false, reason: 'unknown-asset' }
-      // An assignment the model could never see is not an assignment. The host
-      // withholds the whole catalog from an Agent whose tool policy hides the
-      // skill tool, so a role in that state would silently discard every skill
-      // bound to it. Refuse here, where the configuration is being written,
-      // instead of installing a binding that cannot take effect.
-      const hidden = this.skillCatalogRefusal(input.teamId, input.roleId)
-      if (hidden !== undefined) return { ok: false, reason: `skill-tool-hidden: ${hidden}` }
       const binding: TeamSkillBinding = {
         teamId: input.teamId, roleId: input.roleId, assetId: input.assetId,
         ...(input.roleId === CAPTAIN_ROLE ? { captain: true } : {}),
@@ -376,30 +367,6 @@ export class TeamSkillManager {
     const dependents = this.store.list().filter(asset => asset.id !== assetId && asset.dependencies.otherSkills.includes(assetId)).map(asset => asset.id)
     if (dependents.length > 0) blockers.push({ kind: 'dependency', dependents })
     return blockers
-  }
-
-  /**
-   * Why one role could never see an assigned skill, when its policy hides the tool.
-   *
-   * The host publishes the model-facing catalog only while the exact `skill`
-   * definition stays visible to that Agent, so a custom allow-list without it
-   * makes every binding on this role invisible. The check reads the stored
-   * definition rather than a live Agent: an assignment is written before any
-   * member exists, and a configuration that cannot work must be refused at the
-   * point it is saved.
-   * @param teamId - Team identity.
-   * @param roleId - role identity, or {@link CAPTAIN_ROLE}.
-   * @returns the refusal text, or undefined when the catalog stays reachable.
-   */
-  skillCatalogRefusal(teamId: string, roleId: string): string | undefined {
-    const team = this.guards.teams().find(candidate => candidate.id === teamId)
-    if (team === undefined) return undefined
-    const slot = roleId === CAPTAIN_ROLE
-      ? team.captain
-      : team.members.find(member => (member.id ?? member.name) === roleId)
-    if (slot === undefined) return undefined
-    if (reachesSkillCatalog(slot)) return undefined
-    return `role "${roleId}" of Team "${teamId}" uses a custom tool allow-list that omits "${SKILL_TOOL_NAME}", so the host would never publish the skill catalog to it; add "${SKILL_TOOL_NAME}" to that role's allowed tools, or assign no Team Skill to it`
   }
 
   hasRole(teamId: string, roleId: string): boolean {

@@ -359,6 +359,7 @@ Root sessions register tools allowing agents to inspect and update presets and s
 - **Default: all tools**: No allow-list restriction beyond deployment permissions and role rules.
 - **Custom allowed tools**: Permits only selected tool names. Coordination tools (`send_message`, `list_agents`, `team_task_*`) must be explicitly allowed if needed.
 - Captain and member policies are independent. Granting a tool to the captain does not grant it to members.
+- **The `skill` tool is always admitted.** It publishes the catalog and loads instruction text rather than granting a capability, and the Host withholds that whole catalog from an Agent that cannot see it. A custom allow-list therefore cannot remove it; without this rule an assigned Team Skill would be stored and never reachable.
 
 ### Security boundaries
 

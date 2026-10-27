@@ -48,16 +48,6 @@ export declare const CAPTAIN_RECOVERY_TOOLS: ReadonlySet<string>;
  * @returns whether the name is a fixed own-layer Team operation.
  */
 export declare function isOwnLayerTool(name: string): boolean;
-/**
- * Whether a slot's policy leaves the skill catalog reachable.
- *
- * `all` always does. A custom allow-list only does when it names the skill
- * tool, because the host withholds the catalog from an Agent that cannot see
- * that definition.
- * @param slot - the configured captain or member.
- * @returns whether an assigned Team Skill could actually reach the model.
- */
-export declare function reachesSkillCatalog(slot: TeamSlotPreset): boolean;
 export interface StrictToolPolicy {
     readonly teamId: string;
     readonly mode: 'all' | 'custom';

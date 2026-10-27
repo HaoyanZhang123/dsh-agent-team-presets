@@ -32,9 +32,7 @@ export interface TeamSkillGuardContext {
     readonly activeSessions: (assetId: string) => readonly string[];
 }
 /** Why one assignment was refused. */
-export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-team' | 'unknown-role' | 'asset-missing' | `dependency-missing: ${string}`
-/** The role's tool policy hides the skill tool, so the catalog could never be published. */
- | `skill-tool-hidden: ${string}`;
+export type TeamSkillAssignFailure = 'unknown-asset' | 'unknown-team' | 'unknown-role' | 'asset-missing' | `dependency-missing: ${string}`;
 /** Result of one assignment attempt. */
 export type TeamSkillAssignResult = {
     readonly ok: true;
@@ -130,20 +128,6 @@ export declare class TeamSkillManager {
      */
     remove(assetId: string): Promise<TeamSkillDeleteOutcome>;
     private deleteBlockers;
-    /**
-     * Why one role could never see an assigned skill, when its policy hides the tool.
-     *
-     * The host publishes the model-facing catalog only while the exact `skill`
-     * definition stays visible to that Agent, so a custom allow-list without it
-     * makes every binding on this role invisible. The check reads the stored
-     * definition rather than a live Agent: an assignment is written before any
-     * member exists, and a configuration that cannot work must be refused at the
-     * point it is saved.
-     * @param teamId - Team identity.
-     * @param roleId - role identity, or {@link CAPTAIN_ROLE}.
-     * @returns the refusal text, or undefined when the catalog stays reachable.
-     */
-    skillCatalogRefusal(teamId: string, roleId: string): string | undefined;
     hasRole(teamId: string, roleId: string): boolean;
     reconcile(): Promise<void>;
     private reconcileNow;

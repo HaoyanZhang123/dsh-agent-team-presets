@@ -4,9 +4,9 @@
  * Registering a provider in one Agent scope is necessary but not sufficient: the
  * host publishes the model-facing catalog from `agent/pre-step`, and it reads
  * that catalog only while the exact `skill` tool definition stays visible to the
- * same Agent. A Team tool policy that excludes `skill` therefore leaves the
- * assignment installed and permanently invisible, which the model cannot
- * distinguish from "nothing was ever assigned".
+ * same Agent. A policy that hides that definition therefore leaves an assignment
+ * installed and invisible, so the plugin admits the tool for every Team policy:
+ * the catalog is not a capability, and an assignment has to be usable.
  *
  * These cases run the real registry, the real tool and the real waterfall; a
  * stub would prove only that this file can call itself.
@@ -118,22 +118,24 @@ describe('an assigned Team Skill reaches the model', () => {
     expect(await publishedSkillNames(ctx, agent)).toContain("release-check")
   })
 
-  it('publishes nothing once a Team policy hides the skill tool', async () => {
+  it('keeps the catalog reachable under a custom allow-list that omits the skill tool', async () => {
     const { ctx, root, agent } = await setup()
     const { store, manager } = await bindAsset(root)
     const runtime = new TeamSkillRuntime(ctx, store, () => {})
     await runtime.sync({ agent, assets: manager.assetsFor('team-1', 'reviewer') })
-    // The real restriction path an applied Team installs: an allow-list that
-    // names the skill tool keeps the catalog; one that omits it removes it.
-    const withoutSkill = inheritedFilter(agent, policyOf('team-1', slot({ toolMode: 'custom', tools: ['read_file'] })))
-    const hidden = agent.ctx.tools.restrict({ allow: ["read_file"] })
-    expect(await publishedSkillNames(ctx, agent)).not.toContain("release-check")
-    hidden()
-    expect(withoutSkill?.allow ?? []).not.toContain("skill")
+    // The policy layer an applied Team installs, not a hand-made restriction:
+    // what a role may DO stays limited to the allow-list, but the catalog that
+    // delivers its assigned skills must survive.
+    const policy = policyOf('team-1', slot({ toolMode: 'custom', tools: ['read_file'] }))
+    const filter = inheritedFilter(agent, policy)
+    expect(filter?.allow).toContain("skill")
+    expect(filter?.allow).toContain("read_file")
+    const dispose = agent.ctx.tools.restrict(filter!)
     expect(await publishedSkillNames(ctx, agent)).toContain("release-check")
+    dispose()
   })
 
-  it('refuses to bind a skill to a role whose allow-list hides the skill tool', async () => {
+  it('binds to a custom role without asking the operator to allow the skill tool', async () => {
     const { root } = await setup()
     const store = new TeamSkillStore(root)
     await store.open()
@@ -142,22 +144,16 @@ describe('an assigned Team Skill reaches the model', () => {
     await store.install(built.skill, { id: ASSET_ID, origin: 'custom', version: '1' })
     const manager = new TeamSkillManager(store, root, {
       teams: () => [team([
-        slot({ name: "hidden", id: "hidden", toolMode: "custom", tools: ["read_file"] }),
-        slot({ name: "visible", id: "visible", toolMode: "custom", tools: ["read_file", "skill"] }),
-        slot({ name: "open", id: "open" }),
+        // A role that restricts itself to one unrelated tool. Mounting a skill
+        // here is the ordinary case the operator expects to work.
+        slot({ name: "restricted", id: "restricted", toolMode: "custom", tools: ["read_file"] }),
       ], { name: "captain" })],
       activeAssetIds: () => new Set(), activeSessions: () => [],
     })
     await manager.open()
-    const refused = await manager.assign({ teamId: "team-1", roleId: "hidden", assetId: ASSET_ID })
-    expect(refused.ok).toBe(false)
-    if (refused.ok) throw new Error("unreachable")
-    expect(refused.reason).toContain("skill-tool-hidden")
-    expect(refused.reason).toContain("skill")
-    // The same asset binds normally wherever the catalog stays reachable.
-    expect((await manager.assign({ teamId: "team-1", roleId: "visible", assetId: ASSET_ID })).ok).toBe(true)
-    expect((await manager.assign({ teamId: "team-1", roleId: "open", assetId: ASSET_ID })).ok).toBe(true)
-    expect(manager.list().map(row => row.roleId).sort()).toEqual(["open", "visible"])
+    const assigned = await manager.assign({ teamId: "team-1", roleId: "restricted", assetId: ASSET_ID })
+    expect(assigned.ok).toBe(true)
+    expect(manager.assetsFor("team-1", "restricted").map(asset => asset.id)).toEqual([ASSET_ID])
   })
 
   it('resolves syncAgent only after the provider is registered', async () => {
