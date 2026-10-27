@@ -32,7 +32,7 @@ import { TeamSkillManager } from '../src/team-skills/manager.ts'
 import { TeamSkillRuntime } from '../src/team-skills/provider.ts'
 import { TeamSkills } from '../src/team-skills/index.ts'
 import { TeamSkillStore } from '../src/team-skills/store.ts'
-import { inheritedFilter, policyOf } from '../src/tool-policy.ts'
+import { guardPolicy, inheritedFilter, policyOf } from '../src/tool-policy.ts'
 import { toolMode } from '../src/presets.ts'
 import { captainSlot, slot, team } from './fixtures/team-presets.ts'
 
@@ -50,7 +50,7 @@ const BODY = '---\nname: release-check\ndescription: Verify a release before tag
 const ASSET_ID = 'custom:release-check'
 
 /** Boot the smallest composition that can produce a real model-facing catalog. */
-async function setup(): Promise<{ ctx: Context; root: string; agent: Agent }> {
+async function setup(options: { skillTool?: boolean } = {}): Promise<{ ctx: Context; root: string; agent: Agent }> {
   const ctx = new Context()
   contexts.push(ctx)
   const root = await mkdtemp(join(tmpdir(), "team-skill-visibility-"))
@@ -58,7 +58,7 @@ async function setup(): Promise<{ ctx: Context; root: string; agent: Agent }> {
   // The testkit already mounts SystemPrompt, ToolRuntime and AgentRegistry.
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   await ctx.plugin(SkillRegistry)
-  await ctx.plugin(toolSkill)
+  if (options.skillTool !== false) await ctx.plugin(toolSkill)
   // A second global tool, so an allow-list can keep the catalog while naming
   // something else, and lose the catalog when it omits the skill tool.
   await ctx.plugin({
@@ -171,5 +171,31 @@ describe('an assigned Team Skill reaches the model', () => {
     expect(subsystem.manager.list().length).toBeGreaterThan(0)
     await subsystem.close()
     expect(store.list().length).toBeGreaterThan(0)
+  })
+
+  it('installs the persisted member policy and still publishes the catalog', async () => {
+    const { ctx, root, agent } = await setup()
+    const { store, manager } = await bindAsset(root)
+    const runtime = new TeamSkillRuntime(ctx, store, () => {})
+    await runtime.sync({ agent, assets: manager.assetsFor("team-1", "reviewer") })
+    // Exactly what member-runtime installs from a durable record: the stored
+    // allow-list is copied verbatim, then a guard and a restriction are added.
+    const record = { teamId: "team-1", mode: "custom" as const, allow: ["read_file"] }
+    const policy = { teamId: record.teamId, mode: record.mode, allow: [...record.allow] }
+    const disposeGuard = guardPolicy(agent, policy, { role: "member", presentation: "caller" })
+    const filter = inheritedFilter(agent, policy)
+    const disposeRestrict = agent.ctx.tools.restrict(filter!)
+    expect(await publishedSkillNames(ctx, agent)).toContain("release-check")
+    disposeRestrict()
+    disposeGuard()
+  })
+
+  it('does not name the skill tool when the deployment composes no skill tool', async () => {
+    const { ctx, agent } = await setup({ skillTool: false })
+    // Naming an absent global tool would make the real restriction throw and
+    // break the role, so the filter must simply omit it.
+    const filter = inheritedFilter(agent, { teamId: "team-1", mode: "custom", allow: ["read_file"] })
+    expect(filter?.allow).toEqual(["read_file"])
+    expect(() => agent.ctx.tools.restrict(filter!).call(undefined)).not.toThrow()
   })
 })
